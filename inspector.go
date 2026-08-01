@@ -340,7 +340,7 @@ var stopWords = map[string]bool{
 }
 
 // computeProjStats sums word counts across the WHOLE project folder: manifest
-// chapters plus any loose/Resources .md files, so a writing goal set at the
+// chapters plus any loose/Resources files, so a writing goal set at the
 // project level tracks total output regardless of which file words land in
 // (design §4 — a goal split across files still counts toward the total).
 func computeProjStats(dir string, v manuscriptView, wc *wordCountCache) projStats {
@@ -352,9 +352,7 @@ func computeProjStats(dir string, v manuscriptView, wc *wordCountCache) projStat
 		ps.words += wc.count(filepath.Join(dir, ch.file))
 	}
 	for _, e := range v.loose {
-		if strings.HasSuffix(e.name, ".md") {
-			ps.words += wc.count(filepath.Join(dir, e.name))
-		}
+		ps.words += wc.count(filepath.Join(dir, e.name))
 	}
 	return ps
 }

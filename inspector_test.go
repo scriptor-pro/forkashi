@@ -35,8 +35,8 @@ func TestComputeProjStatsManuscript(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("one two three"), 0o644) // 3
 	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("four five"), 0o644)     // 2
-	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six seven eight"), 0o644)  // 3 (loose .md)
-	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("loose note words"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six seven eight"), 0o644)  // 3 (loose)
+	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("loose note words"), 0o644) // 3 (loose)
 	v := resolveManuscript(dir, readEntries(dir))
 	ps := computeProjStats(dir, v, newWordCountCache())
 	if !ps.manuscript {
@@ -45,10 +45,9 @@ func TestComputeProjStatsManuscript(t *testing.T) {
 	if ps.chapters != 2 {
 		t.Fatalf("chapters = %d, want 2", ps.chapters)
 	}
-	// Now aggregates chapters (3+2) AND loose .md files (3) = 8 total words.
-	// (notes.txt is not counted because it's not .md)
-	if ps.words != 8 {
-		t.Fatalf("project words = %d, want 8 (01-a.md[3] + 02-b.md[2] + notes.md[3])", ps.words)
+	// Now aggregates ALL files: chapters (3+2) + loose files (3+3) = 11 total words.
+	if ps.words != 11 {
+		t.Fatalf("project words = %d, want 11 (01-a.md[3] + 02-b.md[2] + notes.md[3] + notes.txt[3])", ps.words)
 	}
 }
 
