@@ -35,6 +35,7 @@ func TestComputeProjStatsManuscript(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("one two three"), 0o644) // 3
 	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("four five"), 0o644)     // 2
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six seven eight"), 0o644)  // 3 (loose .md)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("loose note words"), 0o644)
 	v := resolveManuscript(dir, readEntries(dir))
 	ps := computeProjStats(dir, v, newWordCountCache())
@@ -44,8 +45,10 @@ func TestComputeProjStatsManuscript(t *testing.T) {
 	if ps.chapters != 2 {
 		t.Fatalf("chapters = %d, want 2", ps.chapters)
 	}
-	if ps.words != 5 {
-		t.Fatalf("project words = %d, want 5 (chapters only, loose excluded)", ps.words)
+	// Now aggregates chapters (3+2) AND loose .md files (3) = 8 total words.
+	// (notes.txt is not counted because it's not .md)
+	if ps.words != 8 {
+		t.Fatalf("project words = %d, want 8 (01-a.md[3] + 02-b.md[2] + notes.md[3])", ps.words)
 	}
 }
 
@@ -358,5 +361,58 @@ func TestFramedPanelActionNoOverflow(t *testing.T) {
 		if !strings.Contains(top, "+") {
 			t.Fatalf("width %d dropped the action", w)
 		}
+	}
+}
+
+func TestComputeProjStatsAggregatesChaptersAndLoose(t *testing.T) {
+	dir := t.TempDir()
+	// A manifest-driven chapter.
+	if err := os.WriteFile(filepath.Join(dir, "chapter-one.md"), []byte("un deux trois quatre cinq"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A loose Resources file, not listed in any manifest.
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six sept huit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v := manuscriptView{
+		source:   sourceManifest,
+		chapters: []chapterRef{{file: "chapter-one.md", title: "Chapter One"}},
+		loose:    []fileEntry{{name: "notes.md"}},
+	}
+	wc := newWordCountCache()
+
+	ps := computeProjStats(dir, v, wc)
+
+	// 5 words in the chapter + 3 in the loose file = 8 total.
+	if ps.words != 8 {
+		t.Fatalf("expected words=8 (chapters + loose combined), got %d", ps.words)
+	}
+	if !ps.manuscript {
+		t.Fatalf("expected manuscript=true when chapters are present")
+	}
+	if ps.chapters != 1 {
+		t.Fatalf("expected chapters=1, got %d", ps.chapters)
+	}
+}
+
+func TestComputeProjStatsLooseOnly(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "draft.md"), []byte("un deux"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := manuscriptView{
+		source: sourceNone,
+		loose:  []fileEntry{{name: "draft.md"}},
+	}
+	wc := newWordCountCache()
+
+	ps := computeProjStats(dir, v, wc)
+
+	if ps.words != 2 {
+		t.Fatalf("expected words=2, got %d", ps.words)
+	}
+	if ps.manuscript {
+		t.Fatalf("expected manuscript=false when there are no chapters")
 	}
 }

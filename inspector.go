@@ -339,22 +339,22 @@ var stopWords = map[string]bool{
 	// their overuse is the point.
 }
 
-// computeProjStats sums the resolved manuscript's chapter word counts (or, for a
-// plain folder, its loose docs) using the existing word-count cache.
+// computeProjStats sums word counts across the WHOLE project folder: manifest
+// chapters plus any loose/Resources .md files, so a writing goal set at the
+// project level tracks total output regardless of which file words land in
+// (design §4 — a goal split across files still counts toward the total).
 func computeProjStats(dir string, v manuscriptView, wc *wordCountCache) projStats {
 	if wc == nil {
 		return projStats{}
 	}
-	if len(v.chapters) > 0 {
-		ps := projStats{manuscript: true, chapters: len(v.chapters)}
-		for _, ch := range v.chapters {
-			ps.words += wc.count(filepath.Join(dir, ch.file))
-		}
-		return ps
+	ps := projStats{manuscript: len(v.chapters) > 0, chapters: len(v.chapters)}
+	for _, ch := range v.chapters {
+		ps.words += wc.count(filepath.Join(dir, ch.file))
 	}
-	ps := projStats{}
 	for _, e := range v.loose {
-		ps.words += wc.count(filepath.Join(dir, e.name))
+		if strings.HasSuffix(e.name, ".md") {
+			ps.words += wc.count(filepath.Join(dir, e.name))
+		}
 	}
 	return ps
 }
