@@ -3,7 +3,14 @@ package main
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
+
+// grammarStyle is the shared decoration style for grammar findings (green underline,
+// distinct from the red spellcheck underline), used both by the editor decorator and
+// the inspector's toggle label.
+var grammarStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#50fa7b")).Underline(true)
 
 // grammarFinding is one issue located within a source line (RUNE offsets within that
 // line), produced by an optional on-device "deep grammar" backend (Tier 2). Rune
@@ -24,8 +31,8 @@ type grammarChecker interface {
 }
 
 // newGrammarChecker is the constructor the model calls at startup. It is a package var
-// so tests in the pure-Go build can inject a fake without cgo.
-var newGrammarChecker = appleGrammarChecker
+// so tests can inject a fake.
+var newGrammarChecker = grammalecteChecker
 
 // fmIssue is one issue as reported by the Foundation Models bridge (the wrong substring
 // verbatim + a correction); JSON-decoded from the Swift side.

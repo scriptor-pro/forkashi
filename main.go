@@ -558,7 +558,6 @@ func (m *model) applyDecorator() {
 	a := m.analysis
 	posOn := a.adverb || a.adjective || a.passive
 	grammarOn := a.grammar
-	cursorLine := m.editor.CurrentLine()
 	apple := m.appleFindings[m.currentFile] // Tier 2 (Apple) findings, gated by grammar
 	build := func(line string, idx int) []textarea.Decoration {
 		var d []textarea.Decoration
@@ -566,9 +565,9 @@ func (m *model) applyDecorator() {
 			d = append(d, spellDecorator(line)...)
 		}
 		if grammarOn {
-			d = append(d, grammarDecorator(line, line == cursorLine)...)
-			// Apple findings share the green grammar underline; keyed by line index,
-			// clamped against stale offsets (cleared on edit, but guard anyway).
+			// Findings from the active grammarChecker backend (Grammalecte in this
+			// fork); keyed by line index, clamped against stale offsets (cleared on
+			// edit, but guard anyway).
 			nr := len([]rune(line))
 			for _, f := range apple {
 				if f.Line == idx && f.Start >= 0 && f.Start < f.End && f.End <= nr {
@@ -685,8 +684,8 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	return w, sugg, true
 }
 
-// grammarFindingUnderCursor returns the grammar finding spanning the cursor: an Apple
-// (Tier 2) finding if one covers it, else a live heuristic (Tier 1) finding on the line.
+// grammarFindingUnderCursor returns the grammar finding spanning the cursor,
+// reported by the active grammarChecker backend (Grammalecte in this fork).
 func (m *model) grammarFindingUnderCursor() (grammarFinding, bool) {
 	if !m.analysis.grammar {
 		return grammarFinding{}, false
@@ -697,12 +696,6 @@ func (m *model) grammarFindingUnderCursor() (grammarFinding, bool) {
 	nr := len([]rune(cur))
 	for _, f := range m.appleFindings[m.currentFile] {
 		if f.Line == line && col >= f.Start && col <= f.End && f.Start < f.End && f.End <= nr {
-			return f, true
-		}
-	}
-	for _, f := range grammarFindings(cur, true) { // cursor line → terminal-punct suppressed
-		if col >= f.Start && col <= f.End && f.Start < f.End && len(f.Replacements) > 0 {
-			f.Line = line
 			return f, true
 		}
 	}

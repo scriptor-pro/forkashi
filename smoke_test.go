@@ -1817,50 +1817,6 @@ func TestActionRowHiddenWithoutBackend(t *testing.T) {
 	}
 }
 
-func TestGrammarCursorLineTracksLiveCursor(t *testing.T) {
-	old := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(0) // truecolor: grammar green emits an exact 38;2;80;250;123
-	t.Cleanup(func() { lipgloss.SetColorProfile(old) })
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("first line no period\nsecond line no period"), 0o644)
-	t.Setenv("OKASHI_DIR", dir)
-	m := initialModel()
-	m.screen = screenWriting
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
-	m = nm.(model)
-	m.loadFile(filepath.Join(dir, "01-a.md"))
-	m.analysis.grammar = true
-	m.applyDecorator()
-	// A row is "flagged" iff it carries the grammar green (38;2;80;250;123) — not just
-	// any SGR, since the cursor row always has the cursor's reverse video.
-	flagged := func(view, lineText string) bool {
-		for _, row := range strings.Split(view, "\n") {
-			if strings.Contains(ansi.Strip(row), lineText) {
-				return strings.Contains(row, "80;250;123")
-			}
-		}
-		return false
-	}
-	// Cursor on line 0 → line 0 (cursor line) suppressed, line 1 flagged.
-	m.editor.MoveToLine(0)
-	v0 := m.View()
-	if flagged(v0, "first line no period") {
-		t.Fatal("cursor line 0 should be suppressed, but it was flagged")
-	}
-	if !flagged(v0, "second line no period") {
-		t.Fatal("non-cursor line 1 should be flagged")
-	}
-	// Move the cursor to line 1 → suppression must FLIP (the staleness regression).
-	m.editor.MoveToLine(1)
-	v1 := m.View()
-	if flagged(v1, "second line no period") {
-		t.Fatal("after moving, cursor line 1 should be suppressed (stale-cursorLine regression)")
-	}
-	if !flagged(v1, "first line no period") {
-		t.Fatal("after moving, line 0 should now be flagged")
-	}
-}
-
 func TestAppleClickToFix(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("The cat are sleeping now"), 0o644)
@@ -1966,27 +1922,6 @@ func TestCursorGrammarHint(t *testing.T) {
 	}
 }
 
-func TestGrammarHeuristicHintAndFix(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("I could of gone home"), 0o644)
-	t.Setenv("OKASHI_DIR", dir)
-	m := initialModel()
-	m.screen = screenWriting
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
-	m = nm.(model)
-	m.loadFile(filepath.Join(dir, "01-a.md"))
-	m.analysis.grammar = true // no Apple findings — heuristic only
-	m.editor.MoveToLine(0)
-	m.editor.SetCursor(5) // inside "could of"
-	w, sugg, reason, ok := m.cursorGrammarHint()
-	if !ok || len(sugg) == 0 || sugg[0] != "could have" || reason == "" {
-		t.Fatalf("heuristic hint: ok=%v w=%q sugg=%v reason=%q", ok, w, sugg, reason)
-	}
-	m.applyGrammarHint(0)
-	if got := m.editor.CurrentLine(); got != "I could have gone home" {
-		t.Fatalf("apply heuristic fix: %q", got)
-	}
-}
 
 type fakeRecheckCk struct{}
 
