@@ -33,9 +33,9 @@ func TestComputeDocStats(t *testing.T) {
 
 func TestComputeProjStatsManuscript(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("one two three"), 0o644) // 3
-	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("four five"), 0o644)     // 2
-	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six seven eight"), 0o644)  // 3 (loose)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("one two three"), 0o644)      // 3
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("four five"), 0o644)          // 2
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("six seven eight"), 0o644)   // 3 (loose)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("loose note words"), 0o644) // 3 (loose)
 	v := resolveManuscript(dir, readEntries(dir))
 	ps := computeProjStats(dir, v, newWordCountCache())

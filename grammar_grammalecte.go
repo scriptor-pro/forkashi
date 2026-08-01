@@ -56,8 +56,8 @@ func (g *grammalecteBackend) Available() bool {
 }
 
 type grammalecteResponse struct {
-	Error string                  `json:"error"`
-	Data  []grammalecteParagraph  `json:"data"`
+	Error string                 `json:"error"`
+	Data  []grammalecteParagraph `json:"data"`
 }
 
 type grammalecteParagraph struct {

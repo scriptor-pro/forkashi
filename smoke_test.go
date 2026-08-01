@@ -1922,7 +1922,6 @@ func TestCursorGrammarHint(t *testing.T) {
 	}
 }
 
-
 type fakeRecheckCk struct{}
 
 func (fakeRecheckCk) Name() string                           { return "Apple Intelligence" }
