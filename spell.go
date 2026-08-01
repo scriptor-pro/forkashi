@@ -14,10 +14,10 @@ import (
 	"okashi/internal/textarea"
 )
 
-//go:embed assets/en.aff
+//go:embed assets/fr.aff
 var affData string
 
-//go:embed assets/en.dic
+//go:embed assets/fr.dic
 var dicData string
 
 var (

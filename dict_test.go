@@ -12,24 +12,24 @@ func TestPersonalDictionaryEngine(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	personalLoaded = false
 	personalWords = map[string]bool{}
-	if spellOK("Aramil") {
+	if spellOK("Xanadu") {
 		t.Skip("base dictionary already knows the test word")
 	}
-	if !addToDictionary("Aramil") {
+	if !addToDictionary("Xanadu") {
 		t.Fatal("add failed")
 	}
-	if !spellOK("Aramil") || !spellOK("aramil") {
+	if !spellOK("Xanadu") || !spellOK("xanadu") {
 		t.Fatal("added word must pass spellOK (both cases)")
 	}
 	// persisted + reloaded
 	personalLoaded = false
 	personalWords = map[string]bool{}
 	loadPersonalDictionary()
-	if !inPersonalDict("aramil") {
+	if !inPersonalDict("xanadu") {
 		t.Fatal("word not persisted/reloaded")
 	}
 	// skips numeric / all-caps / duplicate
-	if addToDictionary("ABC") || addToDictionary("123") || addToDictionary("Aramil") {
+	if addToDictionary("ABC") || addToDictionary("123") || addToDictionary("Xanadu") {
 		t.Fatal("should skip all-caps/numeric/duplicate")
 	}
 }
@@ -39,7 +39,7 @@ func TestAddToDictionaryViaSuggestion(t *testing.T) {
 	personalLoaded = false
 	personalWords = map[string]bool{}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("The Aramil walked."), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("La Xanadu marche."), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
@@ -47,7 +47,7 @@ func TestAddToDictionaryViaSuggestion(t *testing.T) {
 	m = nm.(model)
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 	m.analysis.spell = true
-	if spellOK("Aramil") {
+	if spellOK("Xanadu") {
 		t.Skip("base dictionary already knows the test word")
 	}
 	m.editor.MoveToLine(0)
@@ -58,7 +58,7 @@ func TestAddToDictionaryViaSuggestion(t *testing.T) {
 		t.Fatalf("suggestion bar should end with the +dict slot: %v", m.suggestions)
 	}
 	m.applySuggestion(len(m.suggestions) - 1)
-	if !spellOK("Aramil") {
+	if !spellOK("Xanadu") {
 		t.Fatal("the word should be known after add")
 	}
 }
