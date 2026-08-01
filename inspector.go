@@ -268,14 +268,22 @@ func computeDocStats(text string) docStats {
 	ds.sentMean, ds.sentStdDev = sentenceStats(text)
 	sentences := splitSentencesFR(text)
 	if len(sentences) > 0 && ds.words > 0 {
-		totalSyllables := 0
-		for _, w := range wordTokenRe.FindAllString(text, -1) {
-			totalSyllables += syllableCountFR(w)
+		// syllablesPerWord must divide by the SAME token count used to sum totalSyllables
+		// (wordTokenRe tokens), not ds.words (strings.Fields). The two counters diverge on
+		// hyphenated compounds ("peut-être" is 1 Fields word but 2 wordTokenRe tokens: "peut",
+		// "être") and on pure-digit "words" like "1958" (1 Fields word, 0 wordTokenRe tokens).
+		// Mixing bases skews the ratio and can shift the score across a whole label tier.
+		tokens := wordTokenRe.FindAllString(text, -1)
+		if len(tokens) > 0 {
+			totalSyllables := 0
+			for _, w := range tokens {
+				totalSyllables += syllableCountFR(w)
+			}
+			wordsPerSentence := float64(ds.words) / float64(len(sentences))
+			syllablesPerWord := float64(totalSyllables) / float64(len(tokens))
+			ds.readabilityScore = clampScore(kandelMolesScore(wordsPerSentence, syllablesPerWord))
+			ds.readabilityLabel = readabilityLabel(ds.readabilityScore)
 		}
-		wordsPerSentence := float64(ds.words) / float64(len(sentences))
-		syllablesPerWord := float64(totalSyllables) / float64(ds.words)
-		ds.readabilityScore = clampScore(kandelMolesScore(wordsPerSentence, syllablesPerWord))
-		ds.readabilityLabel = readabilityLabel(ds.readabilityScore)
 	}
 	ds.overused = overusedWords(text, 5)
 	return ds

@@ -532,3 +532,36 @@ func TestComputeDocStatsIncludesReadabilityScore(t *testing.T) {
 		t.Fatal("readabilityLabel should not be empty for non-trivial text")
 	}
 }
+
+func TestComputeDocStatsSyllablesPerWordUsesConsistentTokenBase(t *testing.T) {
+	// Régression : le numérateur (syllabes totales) était sommé sur les tokens de
+	// wordTokenRe ([\p{L}']+, qui découpe "peut-être" en 2 tokens : "peut" et "être"), mais
+	// le dénominateur utilisait ds.words (strings.Fields, qui compte "peut-être" comme 1 seul
+	// mot). Sur un texte avec des mots composés à tiret, cette incohérence de base gonflait
+	// syllablesPerWord et faussait le score de lisibilité.
+	//
+	// Le score doit être calculé comme s'il utilisait directement les tokens de wordTokenRe
+	// au numérateur ET au dénominateur — on le recalcule ici indépendamment et on compare.
+	text := "En 1958, Kandel-Moles publièrent leur formule. C'est-à-dire il y a longtemps déjà."
+	ds := computeDocStats(text)
+
+	sentences := splitSentencesFR(text)
+	tokens := wordTokenRe.FindAllString(text, -1)
+	totalSyllables := 0
+	for _, w := range tokens {
+		totalSyllables += syllableCountFR(w)
+	}
+	wantWordsPerSentence := float64(ds.words) / float64(len(sentences))
+	wantSyllablesPerWord := float64(totalSyllables) / float64(len(tokens))
+	wantScore := clampScore(kandelMolesScore(wantWordsPerSentence, wantSyllablesPerWord))
+
+	if diff := ds.readabilityScore - wantScore; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("readabilityScore = %v, want %v (syllablesPerWord must divide by len(wordTokenRe tokens), not ds.words)", ds.readabilityScore, wantScore)
+	}
+
+	// ds.words itself (the user-facing word count) must remain the strings.Fields count —
+	// only the internal syllables/word ratio changes base, not the displayed word count.
+	if ds.words != wordCount(text) {
+		t.Fatalf("ds.words = %d, want %d (wordCount/strings.Fields — must not change)", ds.words, wordCount(text))
+	}
+}
