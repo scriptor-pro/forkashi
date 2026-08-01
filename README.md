@@ -1,17 +1,29 @@
-# okashi
+# forkashi
+
+**forkashi** is a personal French-language fork of
+[okashi](https://github.com/snackztime/okashi), a distraction-free
+terminal writing app for long-form manuscripts. This fork adapts it for
+French: a French spellchecking dictionary, French grammar checking via
+[Grammalecte](https://www.grammalecte.net/), a project-wide aggregated
+writing goal, and `.odt` export — see
+[`docs/superpowers/specs/2026-08-01-forkashi-v1-design.md`](docs/superpowers/specs/2026-08-01-forkashi-v1-design.md)
+for the full rationale. Everything else below describes the underlying
+okashi app, whose interface stays in English in this fork for now.
 
 **Write a whole book in your terminal, in plain Markdown.** okashi is a
 distraction-free writing app for long-form manuscripts — split your work into
 chapters it keeps in order, brainstorm in an outline, read the whole thing
-through, and export an agent-ready `.docx` or an elegant PDF. No database, no
-proprietary bundle, no lock-in: it's just `.md` files in ordinary folders.
+through, and export an agent-ready `.docx`, `.odt`, or an elegant PDF. No
+database, no proprietary bundle, no lock-in: it's just `.md` files in
+ordinary folders.
 
 For writers who live in the terminal (vim, Markdown, plain text) and want a real
 manuscript workflow — ordered chapters, a corkboard, word-count goals, snapshots —
 without leaving the keyboard or handing their prose to someone else's cloud.
 
 Plain `.md` files · manuscript-aware sidebar · live word counts · outline &
-corkboard · RTF / PDF / DOCX export · full-screen focus — all from the command line.
+corkboard · RTF / PDF / DOCX / ODT export · full-screen focus — all from the
+command line.
 
 <!-- Generate with `vhs demo.tape` (see demo.tape). -->
 ![okashi — opening a chapter and toggling the Tufte preview](docs/demo.gif)
@@ -20,41 +32,72 @@ corkboard · RTF / PDF / DOCX export · full-screen focus — all from the comma
 
 ## Install
 
-### Prebuilt binary (macOS & Linux)
+forkashi is a personal fork with no prebuilt releases — build it from
+source. It needs **Go 1.25+** (`go version` to check).
 
-Download the archive for your OS/architecture from the
-[Releases](https://github.com/snackztime/okashi/releases) page, extract it, and put
-`okashi` on your `PATH`:
+### Linux
 
-```sh
-# pick the file matching your OS/arch on the Releases page (darwin/linux, arm64/amd64)
-tar -xzf okashi_*_darwin_arm64.tar.gz
-sudo mv okashi /usr/local/bin/
-okashi --version
-```
-
-On macOS, if Gatekeeper blocks the unsigned binary, clear the quarantine flag once:
+Most distro package managers lag behind (Debian/Ubuntu stable, for
+instance, ship Go 1.19–1.21). If `go version` reports something older than
+1.25, install a current toolchain manually rather than waiting on your
+distro:
 
 ```sh
-xattr -d com.apple.quarantine /usr/local/bin/okashi   # or: right-click → Open
+# check what you have first
+go version
+
+# if it's too old, install a fresh Go 1.25.x under your home directory
+# (no root needed) — see https://go.dev/dl/ for the current patch release
+curl -LO https://go.dev/dl/go1.25.12.linux-amd64.tar.gz
+tar -C "$HOME/.local" -xzf go1.25.12.linux-amd64.tar.gz
+echo 'export PATH="$HOME/.local/go/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+go version   # should now report go1.25.12
 ```
 
-### From source (Go 1.25)
+Then build:
 
 ```sh
-git clone https://github.com/snackztime/okashi
-cd okashi
-go build -o okashi .     # build the binary
-go run .                # or run without installing
+git clone https://github.com/scriptor-pro/forkashi
+cd forkashi
+make build        # or: go build -o forkashi .
+./forkashi --version
 ```
 
-### Homebrew
+`make build` (and plain `go build`) produce a `forkashi` binary in the
+repo root — move it onto your `PATH` if you want it available everywhere:
 
-Coming soon.
+```sh
+sudo mv forkashi /usr/local/bin/
+```
+
+### macOS
+
+```sh
+git clone https://github.com/scriptor-pro/forkashi
+cd forkashi
+go build -o forkashi .
+./forkashi --version
+```
+
+The `make apple` target (NSSpellChecker + Foundation Models grammar
+backend, Xcode required) still builds, but in this fork the grammar
+backend is wired to [Grammalecte](https://www.grammalecte.net/) regardless
+of build tags — see `grammar_backend.go` — so `make apple` is not
+currently the way to get grammar checking here.
+
+### From source, either OS
+
+```sh
+go run .          # run without installing a binary
+```
 
 ---
 
 ## Quick start
+
+Below, `okashi` refers to whatever's on your `PATH` — that's the
+`forkashi` binary you built above, whichever name you gave it:
 
 ```sh
 okashi              # open the writing app
@@ -118,7 +161,7 @@ green, changed words highlighted) so you can see exactly what a draft changed.
 
 | Key | Action |
 |-----|--------|
-| `ctrl+e` | Export (RTF · PDF · DOCX) |
+| `ctrl+e` | Export (RTF · PDF · DOCX · ODT) |
 | `ctrl+p` | Markdown preview |
 | `t` | Toggle Tufte view (inside preview) |
 
@@ -202,8 +245,9 @@ Press `ctrl+e` to export. Choose a style:
 | `m` | Manuscript | Double-spaced manuscript format for agents/editors (submit the `.docx`) |
 | `t` | Tufte | Elegant serif, for a readable or printable copy |
 
-Both styles produce a `.rtf`, a `.pdf`, and a `.docx`, written to `<project>/export/`.
-(`.docx` is what most agents and editors ask for.)
+Both styles produce a `.rtf`, a `.pdf`, a `.docx`, and a `.odt`, written to
+`<project>/export/`. (`.docx` is what most agents and editors ask for;
+`.odt` opens directly in LibreOffice/OpenOffice Writer.)
 When invoked from the outline, the full manuscript is exported (all chapters
 concatenated). When invoked from the editor, only the current document is
 exported.
@@ -235,6 +279,24 @@ as you write.
 okashi keeps a per-project **word-count history**. The Goals tab shows a recent sparkline
 and your current **streak**; press `g` (in the sidebar) to open the full **writing-history
 heatmap** — a contributions-style grid of how much you wrote each day.
+
+---
+
+## French spelling & grammar (forkashi)
+
+Spellcheck uses a French Hunspell dictionary
+([Dicollecte](https://www.grammalecte.net/), "toutes variantes" — classic
+and 1990-reform spellings both accepted) built into the binary; it works
+out of the box.
+
+Grammar checking calls a locally running
+[Grammalecte](https://www.grammalecte.net/) server over HTTP
+(`localhost:8080` by default; override with `OKASHI_GRAMMALECTE_HOST` /
+`OKASHI_GRAMMALECTE_PORT`). Start it yourself before launching forkashi —
+see [Grammalecte's own docs](https://www.grammalecte.net/) for the server
+mode setup. If the server isn't running, forkashi just runs without
+grammar checking rather than failing — check the "Check grammar" row in
+the sidebar's inspector to see whether it connected.
 
 ---
 
@@ -336,6 +398,10 @@ acting as Meta:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Code: MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Michael Pentz
+(original okashi); forkashi is a fork of that codebase under the same
+license.
 
-Copyright (c) 2026 Michael Pentz.
+The bundled French dictionary (`assets/fr.aff`, `assets/fr.dic`) is
+[Dicollecte](https://www.grammalecte.net/), licensed separately under
+MPL 2.0 — see [`assets/fr.LICENSE`](assets/fr.LICENSE).
