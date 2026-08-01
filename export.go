@@ -88,5 +88,15 @@ func (m *model) runExport(st ExportStyle) {
 		m.status = "export failed: " + err.Error()
 		return
 	}
-	m.status = "exported " + slug + ".rtf + .pdf + .docx to export/"
+	odtPath := filepath.Join(outDir, slug+".odt")
+	odtBytes, err := writeODT(doc, st, meta)
+	if err != nil {
+		m.status = "export failed (odt): " + err.Error()
+		return
+	}
+	if err := atomicWrite(odtPath, odtBytes, 0o644); err != nil {
+		m.status = "export failed: " + err.Error()
+		return
+	}
+	m.status = "exported " + slug + ".rtf + .pdf + .docx + .odt to export/"
 }
