@@ -378,6 +378,15 @@ func initialModel() model {
 
 	vp := viewport.New(defaultColumnWidth, 1) // real size set in layout()
 
+	// Probe the grammar backend's availability once, here, at startup — not on every
+	// render. If unavailable (no Grammalecte server running), fall back to nil so
+	// m.grammarChecker != nil keeps meaning "backend is actually usable" everywhere it's
+	// checked (the analysis action row, the click handlers, the inspector label).
+	gc := newGrammarChecker()
+	if gc != nil && !gc.Available() {
+		gc = nil
+	}
+
 	m := model{
 		files:          fl,
 		editor:         ta,
@@ -398,7 +407,7 @@ func initialModel() model {
 		status:         "",
 		icons:          resolveIcons(),
 		goalsAll:       loadGoals(goalsPath()),
-		grammarChecker: newGrammarChecker(),
+		grammarChecker: gc,
 		appleFindings:  map[string][]grammarFinding{},
 		snippets:       newSnippetCache(),
 		searchInput:    newSearchInput(),
