@@ -140,8 +140,10 @@ func renderOutline(text string, width int) string {
 
 type docStats struct {
 	words, chars, paragraphs int
-	readSecs                 int        // estimated reading time at 238 wpm
+	readSecs                 int        // estimated reading time at 210 wpm (French silent-reading estimate)
 	sentMean, sentStdDev     float64    // sentence length in words (mean ± population stddev)
+	readabilityScore         float64    // Kandel-Moles score, clamped to [0, 100]; 0 when doc has no sentences
+	readabilityLabel         string     // 7-tier label for readabilityScore ("" when no sentences)
 	overused                 []wordFreq // top repeated content words
 }
 
@@ -259,20 +261,81 @@ func computeDocStats(text string) docStats {
 			ds.paragraphs++
 		}
 	}
-	ds.readSecs = ds.words * 60 / 238 // ~238 wpm silent adult reading
+	// ~210 wpm French silent-reading estimate — a less rigorously sourced figure than the
+	// prior 238 wpm (Brysbaert 2019 meta-analysis, English-specific); midpoint of a 180-230
+	// wpm range found for French. Revisit if a better-sourced French figure surfaces.
+	ds.readSecs = ds.words * 60 / 210
 	ds.sentMean, ds.sentStdDev = sentenceStats(text)
+	sentences := splitSentencesFR(text)
+	if len(sentences) > 0 && ds.words > 0 {
+		totalSyllables := 0
+		for _, w := range wordTokenRe.FindAllString(text, -1) {
+			totalSyllables += syllableCountFR(w)
+		}
+		wordsPerSentence := float64(ds.words) / float64(len(sentences))
+		syllablesPerWord := float64(totalSyllables) / float64(ds.words)
+		ds.readabilityScore = clampScore(kandelMolesScore(wordsPerSentence, syllablesPerWord))
+		ds.readabilityLabel = readabilityLabel(ds.readabilityScore)
+	}
 	ds.overused = overusedWords(text, 5)
 	return ds
 }
 
-var sentenceSplitRe = regexp.MustCompile(`[.!?]+`)
+// frAbbreviations lists common French abbreviations whose trailing period must NOT be
+// treated as a sentence end (splitSentencesFR checks for these immediately before a
+// period). Kept as a closed heuristic list, not a linguistic abbreviation detector —
+// consistent with the rest of this file's "cheap, useful signal" approach.
+var frAbbreviations = []string{
+	"M", "Mme", "Mlle", "Dr", "etc", "cf", "p", "ex", "ch", "art", "vol", "éd", "trad", "av", "apr", "J.-C",
+}
+
+// sentenceEndRe matches one or more sentence-ending punctuation marks (. ! ? or the
+// ellipsis character …), collapsing a run of them (e.g. "...", "?!") into a single split
+// point rather than one split per character.
+var sentenceEndRe = regexp.MustCompile(`(?:\.{3}|…|[.!?])+`)
+
+// endsWithAbbreviation reports whether s (text immediately preceding a sentence-ending
+// match) ends with one of frAbbreviations, meaning the period is part of the abbreviation
+// and does not end the sentence.
+func endsWithAbbreviation(s string) bool {
+	trimmed := strings.TrimRight(s, " \t")
+	for _, abbr := range frAbbreviations {
+		if strings.HasSuffix(trimmed, abbr) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitSentencesFR splits text into sentences, treating runs of terminal punctuation
+// (. ! ? ... …) as one boundary and skipping boundaries that immediately follow a known
+// French abbreviation (M., etc., p., ...). A closed-list heuristic, not a full sentence
+// tokenizer — no handling of nested quotes or abbreviations at a true sentence end.
+func splitSentencesFR(text string) []string {
+	var sentences []string
+	last := 0
+	matches := sentenceEndRe.FindAllStringIndex(text, -1)
+	for _, m := range matches {
+		start, end := m[0], m[1]
+		if endsWithAbbreviation(text[last:start]) {
+			continue
+		}
+		sentences = append(sentences, text[last:end])
+		last = end
+	}
+	if last < len(text) {
+		sentences = append(sentences, text[last:])
+	}
+	return sentences
+}
 
 // sentenceStats returns the mean and population standard deviation of sentence length (in
-// words), splitting on runs of . ! ? — an approximation (abbreviations end a "sentence"),
-// but a cheap, useful signal for prose rhythm.
+// words), using splitSentencesFR — a heuristic split (abbreviations end a "sentence" was
+// the old failure mode; French abbreviations are now excluded), but still a cheap, useful
+// signal for prose rhythm rather than a full sentence tokenizer.
 func sentenceStats(text string) (mean, std float64) {
 	var lens []float64
-	for _, s := range sentenceSplitRe.Split(text, -1) {
+	for _, s := range splitSentencesFR(text) {
 		if n := len(strings.Fields(s)); n > 0 {
 			lens = append(lens, float64(n))
 		}
@@ -291,6 +354,88 @@ func sentenceStats(text string) (mean, std float64) {
 		v += d * d
 	}
 	return mean, math.Sqrt(v / float64(len(lens)))
+}
+
+// frVowels are the letters (lowercase) counted as vowel-group starts for the syllable
+// heuristic: base vowels plus accented forms. This is an orthographic proxy, not a
+// phonetic analysis — consistent with how Flesch/Kandel-Moles themselves count syllables
+// (consecutive-vowel-group counting, not true syllabification).
+var frVowels = map[rune]bool{
+	'a': true, 'e': true, 'i': true, 'o': true, 'u': true, 'y': true,
+	'é': true, 'è': true, 'ê': true, 'à': true, 'â': true,
+	'ù': true, 'û': true, 'î': true, 'ï': true, 'ô': true, 'œ': true, 'æ': true,
+}
+
+// syllableCountFR estimates a word's syllable count by counting runs of consecutive
+// vowel-group letters, then applying the French "e muet" rule: a word-final unaccented
+// "e" does not count as its own syllable if the word has at least one other vowel group.
+// Heuristic, not phonetic — matches the level of approximation Kandel-Moles itself uses.
+func syllableCountFR(word string) int {
+	runes := []rune(strings.ToLower(word))
+	if len(runes) == 0 {
+		return 0
+	}
+	groups := 0
+	inGroup := false
+	for _, r := range runes {
+		if frVowels[r] {
+			if !inGroup {
+				groups++
+				inGroup = true
+			}
+		} else {
+			inGroup = false
+		}
+	}
+	// E muet final: a trailing unaccented "e" that formed its own trailing vowel group
+	// doesn't count, as long as the word has another vowel group.
+	if groups > 1 && runes[len(runes)-1] == 'e' {
+		groups--
+	}
+	if groups == 0 {
+		groups = 1 // every word counts as at least one syllable
+	}
+	return groups
+}
+
+// kandelMolesScore computes the Kandel & Moles (1958) French adaptation of the Flesch
+// Reading Ease formula. Higher is easier to read. The raw formula can exceed [0,100] on
+// extreme texts — callers should clamp for display (standard Flesch/Kandel-Moles
+// convention).
+func kandelMolesScore(wordsPerSentence, syllablesPerWord float64) float64 {
+	return 207 - 1.015*wordsPerSentence - 73.6*syllablesPerWord
+}
+
+// readabilityLabel maps a Kandel-Moles score to the standard 7-tier French interpretation
+// scale.
+func readabilityLabel(score float64) string {
+	switch {
+	case score >= 80:
+		return "Très facile"
+	case score >= 70:
+		return "Facile"
+	case score >= 60:
+		return "Assez facile"
+	case score >= 50:
+		return "Moyen"
+	case score >= 40:
+		return "Assez difficile"
+	case score >= 30:
+		return "Difficile"
+	default:
+		return "Très difficile"
+	}
+}
+
+// clampScore bounds a raw readability score to [0, 100] for display.
+func clampScore(score float64) float64 {
+	if score < 0 {
+		return 0
+	}
+	if score > 100 {
+		return 100
+	}
+	return score
 }
 
 var wordTokenRe = regexp.MustCompile(`[\p{L}']+`)
@@ -469,6 +614,10 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 			b.WriteString("\n\n" + sectionHeader("Readability", width) + "\n")
 			b.WriteString("  " + kvStrRow("Reading time", fmtReadTime(doc.readSecs), width-2) + "\n")
 			b.WriteString("  " + kvStrRow("Avg sentence", fmt.Sprintf("%.0f±%.0f wd", doc.sentMean, doc.sentStdDev), width-2))
+			if doc.readabilityLabel != "" {
+				score := fmt.Sprintf("%.0f · %s", doc.readabilityScore, doc.readabilityLabel)
+				b.WriteString("\n  " + kvStrRow("Score", score, width-2))
+			}
 			if len(doc.overused) > 0 {
 				b.WriteString("\n\n" + sectionHeader("Overused", width) + "\n")
 				for i, wf := range doc.overused {

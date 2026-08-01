@@ -415,3 +415,120 @@ func TestComputeProjStatsLooseOnly(t *testing.T) {
 		t.Fatalf("expected manuscript=false when there are no chapters")
 	}
 }
+
+func TestSplitSentencesFR(t *testing.T) {
+	// Une abréviation suivie d'un point ne doit pas terminer la phrase.
+	got := splitSentencesFR("M. Dupont est arrivé. Il a souri.")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 sentences, got %d: %+v", len(got), got)
+	}
+
+	got = splitSentencesFR("Voir p. 12 pour plus de détails. La suite au chapitre suivant.")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 sentences (abbreviation 'p.' should not split), got %d: %+v", len(got), got)
+	}
+
+	// Une ellipse (trois points ou caractère unique) est UN SEUL séparateur de fin de
+	// phrase (comme '.', '!' ou '?'), pas un par point : le texte a 3 fins de phrase
+	// ("hésita...", "décida.", "rapide.") donc 3 segments, mais le premier segment doit
+	// rester intact ("Il hésita...") plutôt que d'être fragmenté en 3 par un split naïf
+	// caractère par caractère sur "...".
+	got = splitSentencesFR("Il hésita... puis se décida. Ce fut rapide.")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sentences with '...' as one separator (not fragmented per dot), got %d: %+v", len(got), got)
+	}
+	if strings.TrimSpace(got[0]) != "Il hésita..." {
+		t.Fatalf("expected first sentence to be %q (ellipsis kept as one boundary), got %q", "Il hésita...", strings.TrimSpace(got[0]))
+	}
+
+	got = splitSentencesFR("Il hésita… puis se décida. Ce fut rapide.")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sentences with '…' as one separator, got %d: %+v", len(got), got)
+	}
+	if strings.TrimSpace(got[0]) != "Il hésita…" {
+		t.Fatalf("expected first sentence to be %q (ellipsis kept as one boundary), got %q", "Il hésita…", strings.TrimSpace(got[0]))
+	}
+
+	// Cas limite documenté comme hors périmètre par le design : un point d'abréviation en
+	// fin de phrase réelle (« ...etc. Puis... ») n'est pas distingué d'un point
+	// d'abréviation en milieu de phrase — la liste fermée d'abréviations skippe le point
+	// dans les deux cas, donc le texte reste une seule phrase ici.
+	got = splitSentencesFR("Il a tout vendu : meubles, livres, etc. Puis il est parti.")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 sentence ('etc.' always treated as abbreviation, known heuristic limitation), got %d: %+v", len(got), got)
+	}
+}
+
+func TestSentenceStatsUsesRobustSplit(t *testing.T) {
+	// Avant la correction, "M. Dupont est arrivé. Il a souri." aurait été compté comme 3
+	// phrases (split naïf sur chaque point) au lieu de 2 — vérifie que sentenceStats
+	// utilise bien le nouveau découpage.
+	mean, _ := sentenceStats("M. Dupont est arrivé. Il a souri à tout le monde présent.")
+	// 2 phrases : "M. Dupont est arrivé" (4 mots) + "Il a souri à tout le monde présent" (8 mots)
+	// moyenne = 6
+	if mean != 6 {
+		t.Fatalf("sentenceStats mean = %v, want 6 (2 sentences via robust split, not 3 via naive split)", mean)
+	}
+}
+
+func TestSyllableCountFR(t *testing.T) {
+	cases := []struct {
+		word string
+		want int
+	}{
+		{"chat", 1},     // une voyelle
+		{"maison", 2},   // ai + o
+		{"éléphant", 3}, // é, é, a (an compte comme un groupe)
+		{"table", 1},    // e muet final ne compte pas (a, puis e final exclu)
+		{"vie", 1},      // i, e final ne compte pas car mot a déjà une voyelle
+	}
+	for _, c := range cases {
+		if got := syllableCountFR(c.word); got != c.want {
+			t.Errorf("syllableCountFR(%q) = %d, want %d", c.word, got, c.want)
+		}
+	}
+}
+
+func TestKandelMolesScore(t *testing.T) {
+	// Score = 207 - 1.015*(mots/phrases) - 73.6*(syllabes/mots)
+	// Exemple : 10 mots/phrase, 2 syllabes/mot en moyenne
+	// = 207 - 1.015*10 - 73.6*2 = 207 - 10.15 - 147.2 = 49.65
+	got := kandelMolesScore(10, 2)
+	want := 49.65
+	if diff := got - want; diff > 0.01 || diff < -0.01 {
+		t.Fatalf("kandelMolesScore(10, 2) = %v, want ~%v", got, want)
+	}
+}
+
+func TestReadabilityLabel(t *testing.T) {
+	cases := []struct {
+		score float64
+		want  string
+	}{
+		{95, "Très facile"},
+		{75, "Facile"},
+		{65, "Assez facile"},
+		{55, "Moyen"},
+		{45, "Assez difficile"},
+		{35, "Difficile"},
+		{10, "Très difficile"},
+		// bornes exactes
+		{80, "Très facile"},
+		{79.9, "Facile"},
+	}
+	for _, c := range cases {
+		if got := readabilityLabel(c.score); got != c.want {
+			t.Errorf("readabilityLabel(%v) = %q, want %q", c.score, got, c.want)
+		}
+	}
+}
+
+func TestComputeDocStatsIncludesReadabilityScore(t *testing.T) {
+	ds := computeDocStats("Le chat mange la souris. Le chien dort près du feu chaud.")
+	if ds.readabilityScore <= 0 || ds.readabilityScore > 100 {
+		t.Fatalf("readabilityScore = %v, want a value clamped to (0, 100]", ds.readabilityScore)
+	}
+	if ds.readabilityLabel == "" {
+		t.Fatal("readabilityLabel should not be empty for non-trivial text")
+	}
+}
