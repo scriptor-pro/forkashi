@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -61,15 +62,24 @@ func TestOverusedWordsThresholdAndShortWords(t *testing.T) {
 }
 
 func TestComputeDocStatsReadability(t *testing.T) {
-	ds := computeDocStats("One two three four. Five six seven eight.") // 8 words
-	if ds.words != 8 {
-		t.Fatalf("words = %d, want 8", ds.words)
+	// 10 sentences of 10 words each = 100 words. 100 is chosen (rather than a smaller count)
+	// so the 210 wpm reading-speed constant is actually exercised: 100*60/238 = 25 but
+	// 100*60/210 = 28 — these differ, so the assertion below locks in the real constant
+	// instead of passing by integer-division coincidence (as 8 words did, where
+	// 8*60/238 == 8*60/210 == 2 regardless of which constant the code used).
+	sentence := "Un deux trois quatre cinq six sept huit neuf dix."
+	text := strings.TrimSpace(strings.Repeat(sentence+" ", 10))
+	ds := computeDocStats(text)
+	if ds.words != 100 {
+		t.Fatalf("words = %d, want 100", ds.words)
 	}
-	if ds.readSecs != 8*60/238 {
-		t.Fatalf("readSecs = %d, want %d", ds.readSecs, 8*60/238)
+	// Production uses a 210 wpm French silent-reading estimate (see computeDocStats).
+	const frWPM = 210
+	if ds.readSecs != 100*60/frWPM {
+		t.Fatalf("readSecs = %d, want %d (210 wpm)", ds.readSecs, 100*60/frWPM)
 	}
-	if ds.sentMean != 4 {
-		t.Fatalf("sentMean = %v, want 4", ds.sentMean)
+	if ds.sentMean != 10 {
+		t.Fatalf("sentMean = %v, want 10", ds.sentMean)
 	}
 }
 
