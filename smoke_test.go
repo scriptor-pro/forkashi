@@ -1212,7 +1212,7 @@ func TestInspectorTabClick(t *testing.T) {
 
 func TestSuggestMenuReplacesWord(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("bnjour chat"), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
@@ -1220,15 +1220,15 @@ func TestSuggestMenuReplacesWord(t *testing.T) {
 	m = nm.(model)
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 	m.editor.MoveToLine(0)
-	m.editor.SetCursor(1) // cursor inside "teh"
+	m.editor.SetCursor(1) // cursor inside "bnjour"
 	// ctrl+r opens the menu.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
 	m = nm.(model)
 	if !m.suggesting {
 		t.Fatalf("ctrl+r on a misspelled word should open the menu; status=%q", m.status)
 	}
-	if len(m.suggestions) == 0 || m.suggestions[0] != "the" {
-		t.Fatalf("expected suggestions led by \"the\", got %v", m.suggestions)
+	if len(m.suggestions) == 0 || m.suggestions[0] != "bonjour" {
+		t.Fatalf("expected suggestions led by \"bonjour\", got %v", m.suggestions)
 	}
 	// enter applies the top suggestion.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -1236,14 +1236,14 @@ func TestSuggestMenuReplacesWord(t *testing.T) {
 	if m.suggesting {
 		t.Fatal("enter should close the menu")
 	}
-	if got := m.editor.Value(); got != "the cat" {
-		t.Fatalf("after applying, value = %q, want \"the cat\"", got)
+	if got := m.editor.Value(); got != "bonjour chat" {
+		t.Fatalf("after applying, value = %q, want \"bonjour chat\"", got)
 	}
 }
 
 func TestSuggestMenuCorrectWordNoMenu(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("the cat"), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("le chat"), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
@@ -1261,7 +1261,7 @@ func TestSuggestMenuCorrectWordNoMenu(t *testing.T) {
 
 func TestCursorSpellHint(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("bnjour chat"), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
@@ -1269,7 +1269,7 @@ func TestCursorSpellHint(t *testing.T) {
 	m = nm.(model)
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 	m.editor.MoveToLine(0)
-	m.editor.SetCursor(1) // inside "teh"
+	m.editor.SetCursor(1) // inside "bnjour"
 
 	// Spell OFF → no hint.
 	m.analysis.spell = false
@@ -1279,11 +1279,11 @@ func TestCursorSpellHint(t *testing.T) {
 	// Spell ON, cursor on misspelled word → hint with suggestions.
 	m.analysis.spell = true
 	w, sugg, ok := m.cursorSpellHint()
-	if !ok || w != "teh" || len(sugg) == 0 {
-		t.Fatalf("expected hint for teh, got w=%q sugg=%v ok=%v", w, sugg, ok)
+	if !ok || w != "bnjour" || len(sugg) == 0 {
+		t.Fatalf("expected hint for bnjour, got w=%q sugg=%v ok=%v", w, sugg, ok)
 	}
 	// Cursor on a correct word → no hint.
-	m.editor.SetCursor(5) // inside "cat"
+	m.editor.SetCursor(8) // inside "chat"
 	if _, _, ok := m.cursorSpellHint(); ok {
 		t.Fatal("no hint on a correctly-spelled word")
 	}
@@ -1334,7 +1334,7 @@ func TestFramedInspectorClickAlignment(t *testing.T) {
 
 func TestStatusShowsSpellHint(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("bnjour chat"), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
@@ -1345,8 +1345,8 @@ func TestStatusShowsSpellHint(t *testing.T) {
 	m.editor.MoveToLine(0)
 	m.editor.SetCursor(1)
 	out := ansi.Strip(m.View())
-	if !strings.Contains(out, "✗ teh") || !strings.Contains(out, "the") {
-		t.Fatalf("status should show the spell hint for teh:\n%s", out)
+	if !strings.Contains(out, "✗ bnjour") || !strings.Contains(out, "bonjour") {
+		t.Fatalf("status should show the spell hint for bnjour:\n%s", out)
 	}
 }
 
