@@ -124,6 +124,37 @@ func TestExportEmitsDOCX(t *testing.T) {
 	}
 }
 
+func TestExportEmitsODT(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "02-the-letter.md"), []byte("She wrote **back**."), 0o644)
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.files.SetDir(proj)
+	m.currentFile = filepath.Join(proj, "02-the-letter.md")
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	m = nm.(model)
+	if !m.exportPrompt {
+		t.Fatal("ctrl+e should raise the export chooser")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = nm.(model)
+	// single-doc title = sectionTitle -> "the letter" -> slug "the-letter"
+	odtPath := filepath.Join(proj, "export", "the-letter.odt")
+	b, err := os.ReadFile(odtPath)
+	if err != nil {
+		t.Fatalf("expected an ODT at %s: %v", odtPath, err)
+	}
+	if !hasZipEntry(b, "content.xml") {
+		t.Fatalf("ODT at %s is not a valid zip or missing content.xml", odtPath)
+	}
+}
+
 func TestExportCancel(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
