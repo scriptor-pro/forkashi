@@ -305,10 +305,22 @@ var sentenceEndRe = regexp.MustCompile(`(?:\.{3}|…|[.!?])+`)
 // endsWithAbbreviation reports whether s (text immediately preceding a sentence-ending
 // match) ends with one of frAbbreviations, meaning the period is part of the abbreviation
 // and does not end the sentence.
+//
+// The check requires a word boundary before the abbreviation: it compares the LAST
+// whitespace-delimited token of s against frAbbreviations, not an arbitrary trailing
+// substring. A naive strings.HasSuffix(trimmed, abbr) would also match ordinary words that
+// merely end with the same letters as a short abbreviation — e.g. "trop", "loup", "coup",
+// "beaucoup" all end in "p" (the abbreviation for "page"), and "match", "riche" end in "ch"
+// (the abbreviation for "chapitre"), which would wrongly suppress real sentence breaks.
 func endsWithAbbreviation(s string) bool {
 	trimmed := strings.TrimRight(s, " \t")
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return false
+	}
+	lastWord := fields[len(fields)-1]
 	for _, abbr := range frAbbreviations {
-		if strings.HasSuffix(trimmed, abbr) {
+		if lastWord == abbr {
 			return true
 		}
 	}

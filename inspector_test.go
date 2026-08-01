@@ -459,6 +459,36 @@ func TestSplitSentencesFR(t *testing.T) {
 	}
 }
 
+func TestSplitSentencesFRDoesNotMatchOrdinaryWordsEndingLikeAbbreviations(t *testing.T) {
+	// Régression : endsWithAbbreviation utilisait strings.HasSuffix sur la chaîne entière,
+	// donc "trop" (se terminant par "p", l'abréviation de "page"), "loup" et "match" (se
+	// terminant par "ch", l'abréviation de "chapitre") étaient à tort traités comme des
+	// abréviations, fusionnant la phrase suivante au lieu de la séparer.
+	got := splitSentencesFR("Il en fit trop. Le loup rôdait dans la forêt sombre. Elle rentra vite.")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sentences ('trop.' and 'loup.' are real sentence ends, not abbreviations), got %d: %+v", len(got), got)
+	}
+	if strings.TrimSpace(got[0]) != "Il en fit trop." {
+		t.Fatalf("expected first sentence %q, got %q", "Il en fit trop.", strings.TrimSpace(got[0]))
+	}
+
+	got = splitSentencesFR("Quel beau match. Il rentra chez lui.")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 sentences ('match.' ends in 'ch' but is not the abbreviation 'ch.'), got %d: %+v", len(got), got)
+	}
+
+	got = splitSentencesFR("Il a fait beaucoup. Elle a fait sa part. La riche idée.")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sentences ('beaucoup.', 'part.' are not abbreviations), got %d: %+v", len(got), got)
+	}
+
+	// Les vraies abréviations doivent continuer à ne PAS terminer la phrase.
+	got = splitSentencesFR("M. Dupont est arrivé. Voir ch. 3 pour la suite.")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 sentences (real abbreviations 'M.' and 'ch.' must still not split), got %d: %+v", len(got), got)
+	}
+}
+
 func TestSentenceStatsUsesRobustSplit(t *testing.T) {
 	// Avant la correction, "M. Dupont est arrivé. Il a souri." aurait été compté comme 3
 	// phrases (split naïf sur chaque point) au lieu de 2 — vérifie que sentenceStats
