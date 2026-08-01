@@ -21,17 +21,30 @@ type grammarFinding struct {
 	Replacements     []string
 }
 
-// grammarChecker is an optional on-device deep-grammar backend (NSSpellChecker or Apple
-// Intelligence). It exists only in the build-tagged macOS build; the default (pure-Go)
-// build's appleGrammarChecker() returns nil and okashi runs the heuristics alone.
+// grammarChecker is an optional deep-grammar backend. In forkashi the default (and only
+// wired-in) implementation is grammalecteBackend, talking to a locally running Grammalecte
+// HTTP server (see grammar_grammalecte.go). It is genuinely optional: initialModel() probes
+// Available() once at startup and downgrades to nil when no server is reachable, so a nil
+// m.grammarChecker means "no backend usable right now" and every call site that gates on
+// `m.grammarChecker != nil` degrades silently instead of failing at click time.
 type grammarChecker interface {
-	Name() string                                // "Apple Intelligence" | "system checker"
+	Name() string                                // "Grammalecte" | "Apple Intelligence" | ...
 	Available() bool                             // runtime availability
 	Check(text string) ([]grammarFinding, error) // whole-document → per-line findings
 }
 
 // newGrammarChecker is the constructor the model calls at startup. It is a package var
 // so tests can inject a fake.
+//
+// This fork deliberately wires in grammalecteChecker (French grammar via Grammalecte) as
+// the ONE default backend, bypassing the Tier 2 macOS backend (appleGrammarChecker in
+// grammar_apple_darwin.go / grammar_apple_stub.go) entirely — even on a `darwin && cgo &&
+// applegrammar` build, since this var is untagged and always wins. That's intentional: this
+// fork's purpose is French-language support, and NSSpellChecker/Apple Intelligence don't
+// give useful French grammar checking, so Grammalecte is the right default everywhere
+// rather than only off-macOS. See docs/superpowers/specs/2026-08-01-forkashi-v1-design.md
+// §3. The Apple backend and its build tag are left in place (unused, but still compiling
+// and independently tested) rather than deleted, in case a future revert wants it back.
 var newGrammarChecker = grammalecteChecker
 
 // fmIssue is one issue as reported by the Foundation Models bridge (the wrong substring

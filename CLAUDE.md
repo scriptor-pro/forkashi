@@ -215,6 +215,12 @@ with the companion app's copy.
   only. NEVER let cgo leak into the default build — everything routes through the `grammarChecker`
   interface + the `newGrammarChecker` var. Distribution: pure-Go bottle everywhere + an
   Apple-silicon bottle (Foundation Models gates at runtime via `okashi_fm_available`).
+  **forkashi note:** this fork sets `newGrammarChecker = grammalecteChecker` (untagged) in
+  `grammar_backend.go`, so the Grammalecte HTTP backend is the default grammar checker even
+  on an `applegrammar` build — the Tier 2 Apple backend described above is bypassed in favor
+  of French-language support via Grammalecte (see
+  `docs/superpowers/specs/2026-08-01-forkashi-v1-design.md` §3). The Apple backend still
+  exists and is still tested, it's just not wired into `initialModel()` in this fork.
 - Key deps (all pure Go): `bubbletea`, `bubbles`, `lipgloss`, `glamour`, `x/ansi`,
   `yuin/goldmark` (parsing — shared-contract governed, pin it), `codeberg.org/go-pdf/fpdf`
   (PDF export — the maintained fork, NOT the archived `github.com/go-pdf/fpdf`), `x/text`
