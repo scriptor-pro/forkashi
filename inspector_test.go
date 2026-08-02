@@ -73,10 +73,10 @@ func TestInspectorViewRendersWords(t *testing.T) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
 	}
-	// Non-manuscript omits the Chapters line.
+	// Non-manuscript omits the Chapitres line.
 	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "", goalStats{}, analysisState{})
-	if strings.Contains(plain, "Chapters") {
-		t.Fatal("non-manuscript inspector should omit 'Chapters'")
+	if strings.Contains(plain, "Chapitres") {
+		t.Fatal("non-manuscript inspector should omit 'Chapitres'")
 	}
 }
 
