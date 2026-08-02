@@ -265,7 +265,7 @@ func (m model) notesView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ sélectionner · a ajouter · e éditer · d supprimer · esc retour")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ sélectionner · a ajouter · e éditer · d supprimer · esc retour · F1 aide")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

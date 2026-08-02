@@ -412,7 +412,7 @@ func (m model) moverView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, errLine))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ parcourir · entrée ouvrir/sélectionner · .. → sources · esc annuler")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ parcourir · entrée ouvrir/sélectionner · .. → sources · esc annuler · F1 aide")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

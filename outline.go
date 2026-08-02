@@ -181,7 +181,7 @@ func markBeatPromoted(line string) string {
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
 	header := sectionHeader("PLAN · "+title, m.width)
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("shift/alt+↑↓ déplacer beat · ctrl+p promouvoir · esc terminé")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("shift/alt+↑↓ déplacer beat · ctrl+p promouvoir · esc terminé · F1 aide")
 	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, body,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))

@@ -410,9 +410,9 @@ func (m model) searchView() string {
 	} else if len(m.searchHits) == 0 {
 		note = "(aucun résultat)"
 	}
-	footText := note + " · ↑↓ sélectionner · ⏎ ouvrir · Tab portée · ctrl+r remplacer · esc retour"
+	footText := note + " · ↑↓ sélectionner · ⏎ ouvrir · Tab portée · ctrl+r remplacer · esc retour · F1 aide"
 	if m.replaceMode {
-		footText = "⏎ remplacer tout dans ce chapitre · esc annuler"
+		footText = "⏎ remplacer tout dans ce chapitre · esc annuler · F1 aide"
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
 	b.WriteString(foot)

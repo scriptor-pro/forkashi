@@ -318,9 +318,9 @@ func (m model) snapshotsView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	hint := "↑↓ sélection · space aperçu · d diff vs actuel · D diff deux · ⏎ restaurer · n nouveau · esc retour"
+	hint := "↑↓ sélection · space aperçu · d diff vs actuel · D diff deux · ⏎ restaurer · n nouveau · esc retour · F1 aide"
 	if s.markA >= 0 {
-		hint = "A marqué (" + s.snaps[s.markA].when.Format("15:04:05") + ") · D sur un autre pour diff · esc efface"
+		hint = "A marqué (" + s.snaps[s.markA].when.Format("15:04:05") + ") · D sur un autre pour diff · esc efface · F1 aide"
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render(hint)
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
