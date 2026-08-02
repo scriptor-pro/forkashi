@@ -83,7 +83,7 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 			out, err = nil, fmt.Errorf("pdf render failed: %v", r)
 		}
 	}()
-	pdf := fpdf.New("P", "pt", "Letter", "")
+	pdf := fpdf.New("P", "pt", "A4", "")
 	cfg := pdfStyle{font: "Courier", bodySize: 12, titleSize: 14, lineHeight: 24, indent: "     "}
 	if st == StyleTufte {
 		registerETBook(pdf)
@@ -144,8 +144,8 @@ func writeTitlePagePDF(pdf *fpdf.Fpdf, st ExportStyle, meta Meta, words int) {
 	for _, ln := range left {
 		pdf.CellFormat(0, 14, pdfEnc(st, ln), "", 1, "L", false, 0, "")
 	}
-	// Title + byline near the vertical middle (Letter is 792pt tall).
-	pdf.SetY(360)
+	// Title + byline near the vertical middle (A4 is 841.89pt tall).
+	pdf.SetY(383)
 	pdf.CellFormat(0, 14, pdfEnc(st, meta.Title), "", 1, "C", false, 0, "")
 	if meta.Author != "" {
 		pdf.CellFormat(0, 14, pdfEnc(st, "by "+meta.Author), "", 1, "C", false, 0, "")
