@@ -118,7 +118,7 @@ func newNotesArea(val string) textarea.Model {
 func (m *model) enterNotes() {
 	file, ok := m.files.selectedFile()
 	if !ok {
-		m.status = "select a file to add notes"
+		m.status = "sélectionnez un fichier pour ajouter des notes"
 		return
 	}
 	m.notes = notesModel{file: file, notes: loadNotes(file)}
@@ -127,7 +127,7 @@ func (m *model) enterNotes() {
 
 func (m *model) notesSave() {
 	if err := saveNotes(m.notes.file, m.notes.notes); err != nil {
-		m.status = "notes save failed: " + err.Error()
+		m.status = "échec de l'enregistrement des notes : " + err.Error()
 	}
 }
 
@@ -233,7 +233,7 @@ func (m model) notesView() string {
 
 	var rows []string
 	if len(n.notes) == 0 {
-		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (no notes — press a to add one)"))
+		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (aucune note — appuyez sur a pour en ajouter une)"))
 	} else {
 		for i, nt := range n.notes {
 			first := nt.Text
@@ -252,20 +252,20 @@ func (m model) notesView() string {
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body))
 	if n.adding || n.editing {
-		lbl := "new note"
+		lbl := "nouvelle note"
 		if n.editing {
-			lbl = "edit note"
+			lbl = "modifier la note"
 		}
-		edit := framedPanel(lbl, n.area.View(), max(40, min(m.width-8, 72)), 5, "esc save")
+		edit := framedPanel(lbl, n.area.View(), max(40, min(m.width-8, 72)), 5, "esc enregistrer")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, edit))
 		return b.String()
 	}
 	if n.confirmDelete {
-		bar := lipgloss.NewStyle().Foreground(accent).Render("delete this note? y delete · esc cancel")
+		bar := lipgloss.NewStyle().Foreground(accent).Render("supprimer cette note ? y supprimer · esc annuler")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ select · a add · e edit · d delete · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ sélectionner · a ajouter · e éditer · d supprimer · esc retour")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
