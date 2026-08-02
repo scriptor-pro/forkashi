@@ -227,7 +227,7 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "y":
 			if err := m.commitStructure(); err != nil {
-				m.status = "commit failed: " + err.Error()
+				m.status = "échec de l'enregistrement : " + err.Error()
 				m.structureConfirm = false
 				return m, nil
 			}
