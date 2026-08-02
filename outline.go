@@ -17,7 +17,7 @@ func (m *model) enterOutline() {
 	outlinePath := filepath.Join(m.files.dir, "outline.md")
 	if _, err := os.Stat(outlinePath); err != nil {
 		if werr := atomicWrite(outlinePath, []byte("- \n"), 0o644); werr != nil {
-			m.status = "couldn't create outline: " + werr.Error()
+			m.status = "impossible de créer le plan : " + werr.Error()
 			return
 		}
 		m.files.SetDir(m.files.dir) // surface outline.md in the sidebar
@@ -99,7 +99,7 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) moveOutlineBeat(dir int) {
 	out, nc, ok := moveBeat(strings.Split(m.editor.Value(), "\n"), m.editor.Line(), dir)
 	if !ok {
-		m.status = "move: put the cursor on a beat"
+		m.status = "déplacer : placez le curseur sur un beat"
 		return
 	}
 	m.editor.SetValue(strings.Join(out, "\n"))
@@ -115,26 +115,26 @@ func (m *model) promoteOutlineBeat() {
 	lines := strings.Split(m.editor.Value(), "\n")
 	b, ok := blockAt(lines, m.editor.Line())
 	if !ok {
-		m.status = "promote: put the cursor on a beat"
+		m.status = "promouvoir : placez le curseur sur un beat"
 		return
 	}
 	if beatIsPromoted(lines[b.start]) {
-		m.status = "already promoted"
+		m.status = "déjà promu"
 		return
 	}
 	title := beatTitle(lines[b.start])
 	if title == "" {
-		m.status = "promote: the beat has no title"
+		m.status = "promouvoir : ce beat n'a pas de titre"
 		return
 	}
 	dir := m.files.dir
 	mani, present, err := readManifest(dir)
 	if err != nil {
-		m.status = "can't promote — this manuscript's manifest.json is unreadable (corrupt or a newer version)"
+		m.status = "promotion impossible — le manifest.json de ce manuscrit est illisible (corrompu ou version plus récente)"
 		return
 	}
 	if !present {
-		m.status = "promote only works inside a manuscript — this is a plain folder"
+		m.status = "la promotion ne fonctionne que dans un manuscrit — ceci est un simple dossier"
 		return
 	}
 	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
@@ -146,12 +146,12 @@ func (m *model) promoteOutlineBeat() {
 	}
 	file := uniqueChapterFile(dir, taken)
 	if werr := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); werr != nil {
-		m.status = "promote failed: " + werr.Error()
+		m.status = "échec de la promotion : " + werr.Error()
 		return
 	}
 	mani.Items = append(mani.Items, manifestItem{File: file, Title: title})
 	if werr := writeManifest(dir, mani); werr != nil {
-		m.status = "promote failed: " + werr.Error()
+		m.status = "échec de la promotion : " + werr.Error()
 		return
 	}
 	if notes := beatNotes(lines, b); len(notes) > 0 {
@@ -170,7 +170,7 @@ func (m *model) promoteOutlineBeat() {
 	m.editor.SetValue(strings.Join(lines, "\n"))
 	m.dirty = true
 	m.save()
-	m.status = "promoted “" + title + "”"
+	m.status = "« " + title + " » promu"
 }
 
 // markBeatPromoted rewrites a top-level beat line to a checked task item, preserving its marker.
@@ -180,8 +180,8 @@ func markBeatPromoted(line string) string {
 
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
-	header := sectionHeader("OUTLINE · "+title, m.width)
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("shift/alt+↑↓ move beat · ctrl+p promote · esc done")
+	header := sectionHeader("PLAN · "+title, m.width)
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("shift/alt+↑↓ déplacer beat · ctrl+p promouvoir · esc terminé")
 	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, body,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))

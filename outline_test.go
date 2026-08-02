@@ -191,7 +191,7 @@ func TestOutlinePromoteNeedsManuscript(t *testing.T) {
 
 	nm, _ = m.updateOutline(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
 	m = nm.(model)
-	if m.status == "" || !strings.Contains(m.status, "manuscript") {
+	if m.status == "" || !strings.Contains(m.status, "manuscrit") {
 		t.Fatalf("promote in a non-manuscript should warn, status=%q", m.status)
 	}
 	if _, present, _ := readManifest(dir); present {
