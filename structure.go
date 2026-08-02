@@ -16,7 +16,7 @@ type structAdd struct {
 // structureAddChoices is [new blank chapter] followed by the manuscript's loose Resources (on-disk
 // .md not currently listed in the buffer nor pending-new), de-slug-titled.
 func (m model) structureAddChoices() []structAdd {
-	out := []structAdd{{file: "", label: "＋ new blank chapter"}}
+	out := []structAdd{{file: "", label: "＋ nouveau chapitre vide"}}
 	listed := map[string]bool{}
 	for _, it := range m.structureItems {
 		listed[it.File] = true
@@ -64,7 +64,7 @@ func (m *model) applyAdd(c structAdd) {
 		}
 		f := uniqueChapterFile(m.structureDir, taken)
 		m.structurePendingNew[f] = true
-		it = manifestItem{File: f, Title: "Untitled"}
+		it = manifestItem{File: f, Title: "Sans titre"}
 	} else { // promote an existing loose Resource
 		it = manifestItem{File: c.file, Title: sectionTitle(c.file)}
 	}
