@@ -290,8 +290,8 @@ func TestSidebarShowsTitlesAndCounts(t *testing.T) {
 	if !strings.Contains(view, "opening") || strings.Contains(view, "01-opening") {
 		t.Fatalf("manuscript pane should show stripped title 'opening', not raw filename:\n%s", view)
 	}
-	if !strings.Contains(view, "3m") {
-		t.Fatalf("manuscript pane should show the section word count '3m':\n%s", view)
+	if !strings.Contains(view, "3 m") {
+		t.Fatalf("manuscript pane should show the section word count '3 m':\n%s", view)
 	}
 }
 
