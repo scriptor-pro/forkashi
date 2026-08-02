@@ -19,8 +19,9 @@ type userConfig struct {
 // distinguish "unset" (nil → fall through to env/default) from an explicit value (e.g.
 // smartquotes:false is not the same as omitted).
 type projectSettings struct {
-	Width       *int  `json:"width,omitempty"`
-	Smartquotes *bool `json:"smartquotes,omitempty"`
+	Width       *int    `json:"width,omitempty"`
+	Smartquotes *bool   `json:"smartquotes,omitempty"`
+	Cover       *string `json:"cover,omitempty"`
 }
 
 // effectiveSettings is the resolved result after overlaying defaults ← env ← file, per field.
@@ -28,6 +29,7 @@ type effectiveSettings struct {
 	Author, Contact string
 	Width           int
 	Smartquotes     bool
+	Cover           string
 }
 
 // userConfigPath is the personal config path, or "" if there is no usable config dir.
@@ -132,6 +134,9 @@ func mergeSettings(uc userConfig, ps projectSettings) effectiveSettings {
 	}
 	if ps.Smartquotes != nil {
 		eff.Smartquotes = *ps.Smartquotes
+	}
+	if ps.Cover != nil {
+		eff.Cover = *ps.Cover
 	}
 	return eff
 }

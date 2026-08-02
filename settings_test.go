@@ -117,3 +117,20 @@ func TestResolveSettingsReadsProjectFile(t *testing.T) {
 		t.Fatalf("resolveSettings width = %d, want 55", eff.Width)
 	}
 }
+
+func TestMergeSettingsCover(t *testing.T) {
+	uc := userConfig{}
+	cover := "cover.jpg"
+	ps := projectSettings{Cover: &cover}
+	eff := mergeSettings(uc, ps)
+	if eff.Cover != "cover.jpg" {
+		t.Errorf("Cover = %q, want %q", eff.Cover, "cover.jpg")
+	}
+}
+
+func TestMergeSettingsCoverUnsetIsEmpty(t *testing.T) {
+	eff := mergeSettings(userConfig{}, projectSettings{})
+	if eff.Cover != "" {
+		t.Errorf("Cover with no ps.Cover set = %q, want empty", eff.Cover)
+	}
+}
