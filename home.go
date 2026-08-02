@@ -186,8 +186,8 @@ func buildHomeItems(recents []string, workspace string, pinned []string) []homeI
 	// New document / New project now live as the inline `+` on the FILES / LIBRARY panels
 	// (design §4); the action row is Move files + Browse.
 	items = append(items,
-		homeItem{kind: homeMoveFiles, label: "Move files"},
-		homeItem{kind: homeOpenOther, label: "Browse all files"},
+		homeItem{kind: homeMoveFiles, label: "Déplacer des fichiers"},
+		homeItem{kind: homeOpenOther, label: "Parcourir tous les fichiers"},
 	)
 	return items
 }
@@ -408,7 +408,7 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.addingSource = false
 				m.nameInput.Blur()
-				m.status = "add source cancelled"
+				m.status = "ajout de source annulé"
 				return m, nil
 			case "enter":
 				m.addingSource = false
@@ -429,7 +429,7 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "y", "enter":
 				m.removeActiveSource()
 			default:
-				m.status = "removal cancelled"
+				m.status = "suppression annulée"
 			}
 			return m, nil
 		}
@@ -453,15 +453,15 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			m.addingSource = true
 			m.nameInput.SetValue("")
-			m.nameInput.Placeholder = "/path/to/folder"
+			m.nameInput.Placeholder = "/chemin/vers/dossier"
 			m.nameInput.Focus()
 			return m, textinput.Blink
 		case "d":
 			if m.activeSource >= 0 && m.activeSource < len(m.sources) && m.sources[m.activeSource].Kind != sourceKindPrimary {
 				m.confirmRemoveSource = true
-				m.status = "remove source \"" + m.sources[m.activeSource].Name + "\"? y = remove · re-add with a"
+				m.status = "supprimer la source \"" + m.sources[m.activeSource].Name + "\"? y = supprimer · ré-ajouter avec a"
 			} else {
-				m.status = "the primary source can't be removed"
+				m.status = "la source principale ne peut pas être supprimée"
 			}
 		case "p":
 			if m.homeRegion == regionLibrary {
@@ -482,7 +482,7 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if it.kind == homeProject || it.kind == homeFolder {
 						m.properties = newPropertiesModel(it.path)
 						m.screen = screenProperties
-						m.status = "properties"
+						m.status = "propriétés"
 					}
 				}
 			}
@@ -748,14 +748,14 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 	var rows []lrow
 	idx := 0
 	if len(projects) > 0 {
-		rows = append(rows, lrow{header: true, text: "PROJECTS"})
+		rows = append(rows, lrow{header: true, text: "PROJETS"})
 		for _, p := range projects {
 			rows = append(rows, lrow{text: "› " + p.label, libIdx: idx})
 			idx++
 		}
 	}
 	if len(folders) > 0 {
-		rows = append(rows, lrow{header: true, text: "FOLDERS"})
+		rows = append(rows, lrow{header: true, text: "DOSSIERS"})
 		for _, f := range folders {
 			rows = append(rows, lrow{text: "› " + f.label, libIdx: idx})
 			idx++
@@ -764,14 +764,14 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 	// The loose/Notes entry renders last, under its own OTHER header. Its label already
 	// carries the "◦ " marker.
 	if len(other) > 0 {
-		rows = append(rows, lrow{header: true, text: "OTHER"})
+		rows = append(rows, lrow{header: true, text: "AUTRE"})
 		for _, o := range other {
 			rows = append(rows, lrow{text: o.label, libIdx: idx})
 			idx++
 		}
 	}
 	if len(rows) == 0 {
-		return []string{homeDim("no projects — + to create")}, nil
+		return []string{homeDim("aucun projet — + pour créer")}, nil
 	}
 	// Find the active row (the selected library item) and window around it.
 	activeRow := 0
@@ -800,7 +800,7 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 // two lines (name+count, dim snippet) + cells.
 func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	if len(m.homeFiles) == 0 {
-		return []string{homeDim("no files — ctrl+n for a doc")}, nil
+		return []string{homeDim("aucun fichier — ctrl+n pour un doc")}, nil
 	}
 	active := 0
 	if m.homeRegion == regionFiles {
@@ -872,7 +872,7 @@ func (m *model) cycleSource(dir int) {
 			m.librarySelected = 0
 			m.recomputeHomeFiles()
 			m.resetHomeSelection()
-			m.status = "source: " + m.sources[nxt].Name
+			m.status = "source : " + m.sources[nxt].Name
 			return
 		}
 	}
@@ -881,9 +881,9 @@ func (m *model) cycleSource(dir int) {
 // homeColumns returns the browse boxes to show (responsive) with their widths + titles. RECENT is
 // no longer a column — it renders as a full-width strip above these (see recentStrip/homeContent).
 func (m model) homeColumns() (regions []homeRegion, titles []string, widths []int) {
-	libTitle := "LIBRARY"
+	libTitle := "BIBLIOTHÈQUE"
 	if len(m.sources) > 1 && m.activeSource >= 0 && m.activeSource < len(m.sources) {
-		libTitle = "LIBRARY · " + m.sources[m.activeSource].Name + " ▾"
+		libTitle = "BIBLIOTHÈQUE · " + m.sources[m.activeSource].Name + " ▾"
 	}
 	// Responsive widths: grow both columns with the terminal, capped, keeping a margin. The browse
 	// block is centered by the caller, so we target a share of the width rather than filling it.
@@ -892,7 +892,7 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 	filesW := min(max(avail*3/5, homeFilesBoxMin), homeFilesBoxMax) // FILES ~60% of the pair
 	libW := min(max(avail-filesW, homeLibraryBoxMin), homeLibraryBoxMax)
 	if libW+homeColGap+filesW <= m.width { // both fit
-		return []homeRegion{regionLibrary, regionFiles}, []string{libTitle, "FILES"}, []int{libW, filesW}
+		return []homeRegion{regionLibrary, regionFiles}, []string{libTitle, "FICHIERS"}, []int{libW, filesW}
 	}
 	// Too narrow for two columns → FILES only, as wide as fits.
 	only := m.width - 2*margin
@@ -902,7 +902,7 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 	if only > homeFilesBoxMax {
 		only = homeFilesBoxMax
 	}
-	return []homeRegion{regionFiles}, []string{"FILES"}, []int{only}
+	return []homeRegion{regionFiles}, []string{"FICHIERS"}, []int{only}
 }
 
 // pinnedStrip lays the pinned items horizontally across one full-width row (contentW columns),
@@ -960,7 +960,7 @@ func (m model) pinnedStrip(contentW int) ([]string, []innerCell) {
 func (m model) recentStrip(contentW int) ([]string, []innerCell) {
 	rec := m.recents()
 	if len(rec) == 0 {
-		return []string{homeDim("(no recent files)")}, nil
+		return []string{homeDim("(aucun fichier récent)")}, nil
 	}
 	const sep = "   "
 	label := func(i int) string { return "› " + rec[i].label }
@@ -1065,7 +1065,7 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 	if m.regionCount(regionPinned) > 0 {
 		pinnedInner, pinnedCells := m.pinnedStrip(blockW - 4)
 		pinnedTop := len(lines)
-		pinnedBox := framedPanel("PINNED", strings.Join(pinnedInner, "\n"), blockW, 3, "")
+		pinnedBox := framedPanel("ÉPINGLÉS", strings.Join(pinnedInner, "\n"), blockW, 3, "")
 		lines = append(lines, strings.Split(pinnedBox, "\n")...)
 		for _, c := range pinnedCells {
 			cells = append(cells, homeCell{
@@ -1081,7 +1081,7 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 	// RECENT strip — a full-width row above the LIBRARY/FILES columns.
 	stripInner, stripCells := m.recentStrip(blockW - 4)
 	stripTop := len(lines)
-	strip := framedPanel("RECENT", strings.Join(stripInner, "\n"), blockW, 3, "")
+	strip := framedPanel("RÉCENTS", strings.Join(stripInner, "\n"), blockW, 3, "")
 	lines = append(lines, strings.Split(strip, "\n")...)
 	for _, c := range stripCells {
 		cells = append(cells, homeCell{
@@ -1173,7 +1173,7 @@ func (m model) homeView() string {
 	lines, _, blockW := m.homeContent()
 	block := lipgloss.NewStyle().Width(blockW).Render(strings.Join(lines, "\n"))
 	if m.addingSource {
-		prompt := "add source ▸ " + m.nameInput.View()
+		prompt := "ajouter une source ▸ " + m.nameInput.View()
 		bottom := statusStyle.Width(m.width).Render(prompt)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
@@ -1187,7 +1187,7 @@ func (m model) homeView() string {
 			bottom,
 		)
 	}
-	hint := statusStyle.Width(m.width).Align(lipgloss.Center).Render("F1 · ?  keybindings")
+	hint := statusStyle.Width(m.width).Align(lipgloss.Center).Render("F1 · ?  raccourcis")
 	center := m.height - 1
 	if m.freshWorkspace() {
 		center -= 4 // reserve rows for the tagline + primer
@@ -1197,10 +1197,10 @@ func (m model) homeView() string {
 	)
 	if m.freshWorkspace() {
 		tagline := lipgloss.NewStyle().Foreground(accent).Align(lipgloss.Center).Width(m.width).Render(
-			"write a whole book in plain Markdown — chapters, outline, export")
+			"écrivez un livre entier en Markdown — chapitres, plan, export")
 		primer := lipgloss.NewStyle().Foreground(subtle).Align(lipgloss.Center).Width(m.width).Render(
-			"manuscript  ordered chapters (a book)   ·   category  a plain folder of notes\n" +
-				"+  new manuscript or folder   ·   ctrl+n  new doc   ·   open Demo/ to explore")
+			"manuscrit  chapitres ordonnés (un livre)   ·   catégorie  un simple dossier de notes\n" +
+				"+  nouveau manuscrit ou dossier   ·   ctrl+n  nouveau doc   ·   ouvrez Demo/ pour explorer")
 		view = lipgloss.JoinVertical(lipgloss.Left, view, tagline, primer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, view, hint)
@@ -1320,7 +1320,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 func (m *model) confirmAddSource(path string) {
 	s := newFolderSource(path)
 	if !s.reachable() {
-		m.status = "not a folder: " + path
+		m.status = "pas un dossier : " + path
 		return
 	}
 	before := len(m.sources)
@@ -1339,7 +1339,7 @@ func (m *model) confirmAddSource(path string) {
 	m.librarySelected = 0
 	m.recomputeHomeFiles()
 	m.resetHomeSelection()
-	m.status = "source added: " + s.Name
+	m.status = "source ajoutée : " + s.Name
 }
 
 // removeActiveSource removes the active source if it is a folder source, persists, and returns
@@ -1350,7 +1350,7 @@ func (m *model) removeActiveSource() {
 	}
 	s := m.sources[m.activeSource]
 	if s.Kind == sourceKindPrimary {
-		m.status = "the primary source can't be removed"
+		m.status = "la source principale ne peut pas être supprimée"
 		return
 	}
 	m.sources = removeSource(m.sources, s.ID)
@@ -1360,7 +1360,7 @@ func (m *model) removeActiveSource() {
 	m.librarySelected = 0
 	m.recomputeHomeFiles()
 	m.resetHomeSelection()
-	m.status = "source removed: " + s.Name
+	m.status = "source supprimée : " + s.Name
 }
 
 // startCreate opens the name prompt in file or folder mode.
