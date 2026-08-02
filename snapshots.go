@@ -76,7 +76,7 @@ func (s *snapshotsModel) loadPreview() string {
 	}
 	data, err := os.ReadFile(filepath.Join(s.bakDir, s.snaps[s.sel].name))
 	if err != nil {
-		return "(unreadable snapshot)"
+		return "(snapshot illisible)"
 	}
 	return string(data)
 }
@@ -86,7 +86,7 @@ func (s *snapshotsModel) loadPreview() string {
 func (m *model) enterSnapshots() {
 	file, ok := m.files.selectedFile()
 	if !ok {
-		m.status = "select a file to view its snapshots"
+		m.status = "sélectionnez un fichier pour voir ses snapshots"
 		return
 	}
 	if file == m.currentFile && m.dirty {
@@ -95,7 +95,7 @@ func (m *model) enterSnapshots() {
 	m.snapshots = newSnapshotsModel(file)
 	m.screen = screenSnapshots
 	if len(m.snapshots.snaps) == 0 {
-		m.status = "no snapshots yet — n to take one"
+		m.status = "aucun snapshot pour l'instant — n pour en créer un"
 	} else {
 		m.status = ""
 	}
@@ -111,18 +111,18 @@ func (m *model) restoreSelectedSnapshot() {
 	}
 	data, err := os.ReadFile(filepath.Join(s.bakDir, s.snaps[s.sel].name))
 	if err != nil {
-		m.status = "restore failed: " + err.Error()
+		m.status = "échec de la restauration : " + err.Error()
 		return
 	}
 	snapshotBackup(s.file) // safety: capture the current version before overwriting
 	if err := atomicWrite(s.file, data, 0o644); err != nil {
-		m.status = "restore failed: " + err.Error()
+		m.status = "échec de la restauration : " + err.Error()
 		return
 	}
 	if s.file == m.currentFile {
 		m.loadFile(s.file) // reload the live buffer from the restored file
 	}
-	m.status = "restored snapshot from " + s.snaps[s.sel].when.Format("2006-01-02 15:04:05")
+	m.status = "snapshot restauré du " + s.snaps[s.sel].when.Format("2006-01-02 15:04:05")
 	m.screen = screenWriting
 	m.focus = focusSidebar
 }
@@ -160,7 +160,7 @@ func (m model) updateSnapshots(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.preview = ""
 		} else if s.markA >= 0 {
 			s.markA = -1
-			m.status = "diff mark cleared"
+			m.status = "marque de diff effacée"
 		} else {
 			m.screen = screenWriting
 			m.focus = focusSidebar
@@ -190,7 +190,7 @@ func (m model) updateSnapshots(msg tea.Msg) (tea.Model, tea.Cmd) {
 		snapshotBackup(s.file)
 		s.snaps = listSnapshots(s.file)
 		s.sel = 0
-		m.status = "snapshot taken"
+		m.status = "snapshot créé"
 	case "enter":
 		if len(s.snaps) > 0 {
 			s.confirmRestore = true
@@ -203,7 +203,7 @@ func (m model) updateSnapshots(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(s.snaps) > 0 {
 			if s.markA < 0 {
 				s.markA = s.sel
-				m.status = "marked A · pick another snapshot, D to diff (esc clears)"
+				m.status = "marqué A · choisissez un autre snapshot, D pour diff (esc efface)"
 			} else {
 				m.openDiffTwoSnapshots(s.markA, s.sel)
 				s.markA = -1
@@ -222,7 +222,7 @@ func (m *model) openDiffSnapshotVsCurrent() {
 	snap := s.snaps[s.sel]
 	aContent, err := os.ReadFile(filepath.Join(s.bakDir, snap.name))
 	if err != nil {
-		m.status = "couldn't read snapshot"
+		m.status = "impossible de lire le snapshot"
 		return
 	}
 	bContent, _ := os.ReadFile(s.file) // current version on disk (buffer was flushed on entry)
@@ -240,7 +240,7 @@ func (m *model) openDiffTwoSnapshots(ai, bi int) {
 	aC, err1 := os.ReadFile(filepath.Join(s.bakDir, aSnap.name))
 	bC, err2 := os.ReadFile(filepath.Join(s.bakDir, bSnap.name))
 	if err1 != nil || err2 != nil {
-		m.status = "couldn't read snapshots"
+		m.status = "impossible de lire les snapshots"
 		return
 	}
 	m.diff = newDiffModel(
@@ -281,7 +281,7 @@ func (m model) snapshotsView() string {
 		}
 		if len(lines) > maxLines {
 			lines = lines[:maxLines]
-			lines = append(lines, lipgloss.NewStyle().Foreground(subtle).Render("… (truncated)"))
+			lines = append(lines, lipgloss.NewStyle().Foreground(subtle).Render("… (tronqué)"))
 		}
 		stamp := ""
 		if s.sel >= 0 && s.sel < len(s.snaps) {
@@ -289,14 +289,14 @@ func (m model) snapshotsView() string {
 		}
 		body := header + "\n" + lipgloss.NewStyle().Foreground(subtle).Render(stamp) + "\n\n" + strings.Join(lines, "\n")
 		b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Top, body))
-		foot := lipgloss.NewStyle().Foreground(subtle).Render("space / esc back to list · ↑↓ other snapshots")
+		foot := lipgloss.NewStyle().Foreground(subtle).Render("espace / esc retour à la liste · ↑↓ autres snapshots")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 		return b.String()
 	}
 
 	var rows []string
 	if len(s.snaps) == 0 {
-		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (no snapshots — press n to take one)"))
+		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (aucun snapshot — appuyez sur n pour en créer un)"))
 	} else {
 		for i, sn := range s.snaps {
 			label := "  " + sn.when.Format("2006-01-02 15:04:05")
@@ -314,13 +314,13 @@ func (m model) snapshotsView() string {
 
 	if s.confirmRestore {
 		bar := lipgloss.NewStyle().Foreground(accent).Render(
-			"restore this snapshot? the current version is backed up first — y restore · esc cancel")
+			"restaurer ce snapshot ? la version actuelle est d'abord sauvegardée — y restaurer · esc annuler")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	hint := "↑↓ select · space preview · d diff vs current · D diff two · ⏎ restore · n new · esc back"
+	hint := "↑↓ sélection · space aperçu · d diff vs actuel · D diff deux · ⏎ restaurer · n nouveau · esc retour"
 	if s.markA >= 0 {
-		hint = "A marked (" + s.snaps[s.markA].when.Format("15:04:05") + ") · D on another to diff · esc clears"
+		hint = "A marqué (" + s.snaps[s.markA].when.Format("15:04:05") + ") · D sur un autre pour diff · esc efface"
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render(hint)
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
