@@ -5,10 +5,14 @@
 terminal writing app for long-form manuscripts. This fork adapts it for
 French: a French spellchecking dictionary, French grammar checking via
 [Grammalecte](https://www.grammalecte.net/), a project-wide aggregated
-writing goal, and `.odt` export — see
+writing goal, `.odt` export, and a fully French-language interface (menus,
+help text, status messages) — see
 [`docs/superpowers/specs/2026-08-01-forkashi-v1-design.md`](docs/superpowers/specs/2026-08-01-forkashi-v1-design.md)
 for the full rationale. Everything else below describes the underlying
-okashi app, whose interface stays in English in this fork for now.
+okashi app; screenshots and on-screen labels are shown here in English to
+match upstream okashi's own docs, but the running app itself is in
+French — see [Keyboard shortcuts](#keyboard-shortcuts) for the actual
+French menu labels.
 
 **Write a whole book in your terminal, in plain Markdown.** okashi is a
 distraction-free writing app for long-form manuscripts — split your work into
@@ -125,51 +129,74 @@ green, changed words highlighted) so you can see exactly what a draft changed.
 
 ## Keyboard shortcuts
 
-### Navigation
+The app's own UI (menus, help overlay, status bar) is in French — the tables
+below show the actual on-screen French label next to each key, in the same
+grouping as the in-app help overlay (`F1` or `?`). The key chords themselves
+are unchanged from upstream okashi; only the displayed text is French, so a
+few labels don't start with the letter of their shortcut (e.g. `r` still
+means *renommer*/*retitrer*, `d` still means *dupliquer*).
 
-| Key | Action |
-|-----|--------|
-| `ctrl+b` | Toggle sidebar |
-| `ctrl+y` | Inspector tabs |
-| `ctrl+l` | Outline (full-screen brainstorming — beats & notes) |
-| `ctrl+k` | Corkboard (full-screen manuscript navigator); `c` from the sidebar |
-| `ctrl+o` | Home (launch screen) |
-| `esc` | Switch focus / back |
-| `ctrl+c` | Quit |
+### Naviguer (Navigation)
 
-### Files
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `ctrl+o` | accueil — home (launch screen) |
+| `ctrl+b` | panneau — toggle sidebar |
+| `ctrl+y` | inspecteur — inspector tabs |
+| `ctrl+k` | tableau — corkboard (full-screen manuscript navigator); `c` from the sidebar |
+| `ctrl+l` | plan — outline (full-screen brainstorming — beats & notes) |
+| `esc` | retour/focus — switch focus / back |
+| `ctrl+c` | quitter — quit |
 
-| Key | Action |
-|-----|--------|
-| `ctrl+n` | New file (`+` new, right-click / F2 rename) |
-| `r` | Rename file |
-| `M` | Move file or folder |
-| `del` | Delete file |
-| `d` | Duplicate file |
+### Fichiers (Files, sidebar focus)
 
-### Writing
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `ctrl+n` | nouveau — new chapter or resource (`+` new, F2 rename) |
+| `r` | renommer — rename file |
+| `d` | dupliquer — duplicate file |
+| `M` | déplacer — move file or folder |
+| `suppr` | supprimer — delete file |
 
-| Key | Action |
-|-----|--------|
-| `ctrl+s` | Save |
-| `ctrl+t` | Typewriter scrolling (caret stays centered) |
-| `ctrl+d` | Focus dim (dim everything outside the current sentence) |
-| `ctrl+g` | Set goals |
-| `ctrl+r` | Spelling suggestions |
+### Manuscrit (corkboard: `ctrl+k` or `c`)
 
-### Export & preview
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `J`/`K` | réordonner — reorder (`maj+↑↓` also works) |
+| `e` | synopsis |
+| `a` | ajouter — add / promote |
+| `x` | retirer — remove (demote to a resource) |
+| `r` | retitrer — retitle |
+| `m` | lecture — read-through pager |
+| `b` | sauvegardes/diff — snapshots / diff |
+| `n` | notes — revision notes |
 
-| Key | Action |
-|-----|--------|
-| `ctrl+e` | Export (RTF · PDF · DOCX · ODT) |
-| `ctrl+p` | Markdown preview |
-| `t` | Toggle Tufte view (inside preview) |
+### Écrire (Writing)
 
-### Search
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `ctrl+s` | enregistrer — save |
+| `ctrl+z` | annuler — undo |
+| `ctrl+t` | machine à écrire — typewriter scrolling (caret stays centered) |
+| `ctrl+d` | focus atténué — focus dim (dim everything outside the current sentence) |
+| `ctrl+x` | sélection — selection mode |
+| `ctrl+r` | orthographe — spelling suggestions |
 
-| Key | Action |
-|-----|--------|
-| `ctrl+f` | Search (Tab to scope · ctrl+a all sources) |
+### Relecture & sortie (Review & output)
+
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `ctrl+f` | rechercher — search (Tab to scope · ctrl+a all sources) |
+| `ctrl+p` | aperçu — Markdown preview |
+| `ctrl+e` | exporter — export (RTF · PDF · DOCX · ODT) |
+
+### Objectifs & temps (Goals & time)
+
+| Key | Action (as shown in-app) |
+|-----|---------------------------|
+| `ctrl+g` | objectifs — set goals |
+| `ctrl+u` | sprint |
+| `g` | historique — writing-history heatmap (sidebar) |
 
 ---
 
@@ -273,7 +300,7 @@ and never touch the manuscript text, so they stay out of your prose and out of e
 
 Set writing goals with `ctrl+g`: a daily word target, a project word target, daily
 writing minutes, and an optional **deadline**. With a project target + deadline, the Goals
-inspector tab shows a live **burndown** — "≈850/day to hit 80,000 by Mar 1" — that adjusts
+inspector tab shows a live **burndown** — "≈850/jour pour atteindre 80 000 avant le 2026-03-01 (28j)" — that adjusts
 as you write.
 
 okashi keeps a per-project **word-count history**. The Goals tab shows a recent sparkline
@@ -295,7 +322,7 @@ Grammar checking calls a locally running
 `OKASHI_GRAMMALECTE_PORT`). Start it yourself before launching forkashi —
 see [Grammalecte's own docs](https://www.grammalecte.net/) for the server
 mode setup. If the server isn't running, forkashi just runs without
-grammar checking rather than failing — check the "Check grammar" row in
+grammar checking rather than failing — check the "▸ Vérifier la grammaire" row in
 the sidebar's inspector to see whether it connected.
 
 ---
