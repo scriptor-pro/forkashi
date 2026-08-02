@@ -88,7 +88,7 @@ func TestFreshWorkspacePrimer(t *testing.T) {
 		t.Fatal("a workspace with only Demo/ should be fresh")
 	}
 	out := ansiStrip(m.homeView())
-	for _, want := range []string{"manuscript", "category", "notes", "Demo/"} {
+	for _, want := range []string{"manuscrit", "catégorie", "notes", "Demo/"} {
 		if !contains(out, want) {
 			t.Fatalf("fresh hub should show the model primer (%q missing)", want)
 		}
