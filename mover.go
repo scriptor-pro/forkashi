@@ -205,13 +205,13 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "y", "enter":
 				if err := m.applyMove(); err != nil {
-					m.moverError = "move failed: " + err.Error()
+					m.moverError = "échec du déplacement : " + err.Error()
 					m.moverConfirm = false
 					m.moverReload()
 					return m, nil
 				}
 				m.moverError = ""
-				m.status = "moved " + filepath.Base(m.moverSource)
+				m.status = "déplacé " + filepath.Base(m.moverSource)
 				m.moverConfirm = false
 				m.files.SetDir(m.files.dir) // refresh the pane (source may have left it)
 				m.screen = m.moverReturn
@@ -304,7 +304,7 @@ func (m model) moverView() string {
 	var leftInner string
 	var leftTitle string
 	if m.moverPhase == moverPickSource {
-		leftTitle = "MOVE · pick a file"
+		leftTitle = "DÉPLACER · choisir un fichier"
 		visRows := m.height - 8
 		if visRows < 1 {
 			visRows = 1
@@ -316,7 +316,7 @@ func (m model) moverView() string {
 			var text string
 			switch e.kind {
 			case moverMoveThis:
-				text = "→ move this folder"
+				text = "→ déplacer ce dossier"
 			case moverUp:
 				text = "‹ .."
 			case moverFolder:
@@ -331,12 +331,13 @@ func (m model) moverView() string {
 		}
 		leftInner = strings.Join(lines, "\n")
 	} else {
-		leftTitle = "MOVE"
-		kindLabel := "file"
+		leftTitle = "DÉPLACER"
+		kindLabel := "fichier"
+		article := "du "
 		if m.moverIsDir {
-			kindLabel = "folder"
+			kindLabel = "dossier"
 		}
-		leftInner = "moving " + kindLabel + ":\n" + filepath.Base(m.moverSource) + "\n\nfrom: " + filepath.Base(m.moverFromDir)
+		leftInner = "déplacement " + article + kindLabel + " :\n" + filepath.Base(m.moverSource) + "\n\ndepuis : " + filepath.Base(m.moverFromDir)
 	}
 	leftPanel := framedPanel(leftTitle, leftInner, max(26, min(m.width-34, 40)), max(len(strings.Split(leftInner, "\n"))+2, 8), "")
 
@@ -344,8 +345,8 @@ func (m model) moverView() string {
 	var rightPanel string
 	rightW := max(30, min(m.width-30, 44))
 	if m.moverPhase == moverPickSource {
-		rightInner := homeDim("pick a source first →")
-		rightPanel = framedPanel("TO", rightInner, rightW, 4, "")
+		rightInner := homeDim("choisissez d'abord une source →")
+		rightPanel = framedPanel("VERS", rightInner, rightW, 4, "")
 	} else {
 		visRows := m.height - 8
 		if visRows < 1 {
@@ -358,7 +359,7 @@ func (m model) moverView() string {
 			var text string
 			switch e.kind {
 			case moverMoveHere:
-				text = "→ move into " + e.name + "/"
+				text = "→ déplacer dans " + e.name + "/"
 			case moverUp:
 				text = "‹ .."
 			case moverSource:
@@ -371,14 +372,14 @@ func (m model) moverView() string {
 			}
 			rows = append(rows, text)
 		}
-		toTitle := "TO · SOURCES"
+		toTitle := "VERS · SOURCES"
 		if m.moverDestDir != "" {
-			toTitle = "TO · " + filepath.Base(m.moverDestDir)
+			toTitle = "VERS · " + filepath.Base(m.moverDestDir)
 			if src, ok := m.moverBoundingSource(m.moverDestDir); ok {
 				if m.moverDestDir == src.root() {
-					toTitle = "TO · " + src.Name
+					toTitle = "VERS · " + src.Name
 				} else {
-					toTitle = "TO · " + src.Name + "/" + filepath.Base(m.moverDestDir)
+					toTitle = "VERS · " + src.Name + "/" + filepath.Base(m.moverDestDir)
 				}
 			}
 		}
@@ -392,26 +393,26 @@ func (m model) moverView() string {
 		dst := filepath.Base(m.moverDestDir)
 		var line string
 		if !m.moverIsDir && hasManifest(m.moverDestDir) {
-			chapter, resource := "( ) chapter", "( ) resource"
+			chapter, resource := "( ) chapitre", "( ) ressource"
 			if m.moverAsChapter {
-				chapter = "(•) chapter"
+				chapter = "(•) chapitre"
 			} else {
-				resource = "(•) resource"
+				resource = "(•) ressource"
 			}
-			line = "move " + filepath.Base(m.moverSource) + " → " + dst + " as  " + chapter + "  " + resource + "   ←→ toggle · y move · esc cancel"
+			line = "déplacer " + filepath.Base(m.moverSource) + " → " + dst + " comme  " + chapter + "  " + resource + "   ←→ basculer · y déplacer · esc annuler"
 		} else {
-			line = "move " + filepath.Base(m.moverSource) + " → " + dst + "?   y move · esc cancel"
+			line = "déplacer " + filepath.Base(m.moverSource) + " → " + dst + "?   y déplacer · esc annuler"
 		}
 		bar := lipgloss.NewStyle().Foreground(accent).Render(line)
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
 	if m.moverError != "" {
-		errLine := lipgloss.NewStyle().Foreground(errColor).Render("⚠ " + m.moverError + "   (browse to dismiss · esc cancel)")
+		errLine := lipgloss.NewStyle().Foreground(errColor).Render("⚠ " + m.moverError + "   (parcourir pour fermer · esc annuler)")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, errLine))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ browse · enter drill/select · .. → sources · esc cancel")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ parcourir · entrée ouvrir/sélectionner · .. → sources · esc annuler")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

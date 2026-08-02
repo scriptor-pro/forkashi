@@ -35,9 +35,9 @@ func TestMoverEnterFromFilePane(t *testing.T) {
 	if m.moverSource != filepath.Join(root, "stray.md") || m.moverIsDir {
 		t.Fatalf("source should be the selected file, got %q isDir=%v", m.moverSource, m.moverIsDir)
 	}
-	// The destination browser lists a "move into" row + the subfolder(s).
+	// The destination browser lists a "déplacer dans" row + the subfolder(s).
 	out := ansi.Strip(m.moverView())
-	if !strings.Contains(out, "move into") || !strings.Contains(out, "research") {
+	if !strings.Contains(out, "déplacer dans") || !strings.Contains(out, "research") {
 		t.Fatalf("mover view should show the destination browser (move-into + subfolders):\n%s", out)
 	}
 }
