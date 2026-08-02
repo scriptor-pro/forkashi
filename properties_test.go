@@ -176,3 +176,38 @@ func TestPropertiesDirtyTracking(t *testing.T) {
 		t.Fatal("reverting a field to its original should clear dirty")
 	}
 }
+
+func TestPropertiesCoverFieldLoadsAndSaves(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(dir+"/manifest.json", []byte(`{"schemaVersion":1,"title":"T","items":[]}`), 0o644)
+	p := newPropertiesModel(dir)
+	found := false
+	for _, k := range p.fields {
+		if k == propCover {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("propCover should be in the field order")
+	}
+	p.cover.SetValue("cover.jpg")
+	if !p.dirty() {
+		t.Fatal("changing Cover should mark the form dirty")
+	}
+	if _, err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	ps := loadProjectSettings(dir)
+	if ps.Cover == nil || *ps.Cover != "cover.jpg" {
+		t.Fatalf("Cover not persisted, got %v", ps.Cover)
+	}
+}
+
+func TestPropertiesCoverFieldDefaultsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(dir+"/manifest.json", []byte(`{"schemaVersion":1,"title":"T","items":[]}`), 0o644)
+	p := newPropertiesModel(dir)
+	if p.cover.Value() != "" {
+		t.Errorf("Cover default = %q, want empty", p.cover.Value())
+	}
+}

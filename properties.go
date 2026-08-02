@@ -22,6 +22,7 @@ const (
 	propContact
 	propWidth
 	propSmartquotes
+	propCover
 )
 
 // propertiesModel backs the Properties screen: editable project + personal metadata for one dir.
@@ -34,6 +35,7 @@ type propertiesModel struct {
 	author      textinput.Model
 	width       textinput.Model
 	contact     textarea.Model
+	cover       textinput.Model
 	smartquotes bool
 
 	fields      []propKind // editable field order (Title omitted for a non-manuscript dir)
@@ -47,6 +49,7 @@ type propertiesModel struct {
 	origContact     string
 	origWidth       int
 	origSmartquotes bool
+	origCover       string
 }
 
 func newPropInput(val string, width int) textinput.Model {
@@ -87,17 +90,19 @@ func newPropertiesModel(dir string) propertiesModel {
 		author:          newPropInput(eff.Author, 40),
 		width:           newPropInput(strconv.Itoa(eff.Width), 6),
 		contact:         ca,
+		cover:           newPropInput(eff.Cover, 40),
 		smartquotes:     eff.Smartquotes,
 		origTitle:       title,
 		origAuthor:      eff.Author,
 		origContact:     eff.Contact,
 		origWidth:       eff.Width,
 		origSmartquotes: eff.Smartquotes,
+		origCover:       eff.Cover,
 	}
 	if isMs {
-		p.fields = []propKind{propTitle, propAuthor, propContact, propWidth, propSmartquotes}
+		p.fields = []propKind{propTitle, propAuthor, propContact, propWidth, propCover, propSmartquotes}
 	} else {
-		p.fields = []propKind{propAuthor, propContact, propWidth, propSmartquotes}
+		p.fields = []propKind{propAuthor, propContact, propWidth, propCover, propSmartquotes}
 	}
 	return p
 }
@@ -116,6 +121,9 @@ func (p *propertiesModel) dirty() bool {
 	if w, err := strconv.Atoi(strings.TrimSpace(p.width.Value())); err != nil || w != p.origWidth {
 		return true
 	}
+	if p.cover.Value() != p.origCover {
+		return true
+	}
 	return false
 }
 
@@ -129,6 +137,8 @@ func (p *propertiesModel) focusInput() {
 		p.width.Focus()
 	case propContact:
 		p.contact.Focus()
+	case propCover:
+		p.cover.Focus()
 	}
 }
 
@@ -137,6 +147,7 @@ func (p *propertiesModel) blurInputs() {
 	p.author.Blur()
 	p.width.Blur()
 	p.contact.Blur()
+	p.cover.Blur()
 }
 
 // save writes only the stores whose fields changed, preserving unrelated on-disk fields. It reports
@@ -165,7 +176,8 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 	w, werr := strconv.Atoi(strings.TrimSpace(p.width.Value()))
 	widthChanged := werr == nil && w != p.origWidth
 	sqChanged := p.smartquotes != p.origSmartquotes
-	if widthChanged || sqChanged {
+	coverChanged := p.cover.Value() != p.origCover
+	if widthChanged || sqChanged || coverChanged {
 		ps := loadProjectSettings(p.dir)
 		if widthChanged {
 			wv := clampWidth(w)
@@ -174,6 +186,10 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 		if sqChanged {
 			sv := p.smartquotes
 			ps.Smartquotes = &sv
+		}
+		if coverChanged {
+			cv := p.cover.Value()
+			ps.Cover = &cv
 		}
 		if serr := saveProjectSettings(p.dir, ps); serr != nil {
 			return false, serr
@@ -188,6 +204,7 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 		p.origWidth = clampWidth(w)
 	}
 	p.origSmartquotes = p.smartquotes
+	p.origCover = p.cover.Value()
 	return projectChanged, nil
 }
 
@@ -299,6 +316,8 @@ func (m model) updatePropertiesEditing(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.width, cmd = p.width.Update(key)
 	case propContact:
 		p.contact, cmd = p.contact.Update(key)
+	case propCover:
+		p.cover, cmd = p.cover.Update(key)
 	}
 	return m, cmd
 }
@@ -360,6 +379,15 @@ func (m model) propertiesView() string {
 			val = "désactivé"
 			if p.smartquotes {
 				val = "activé"
+			}
+		case propCover:
+			label = "Couverture"
+			if editing {
+				val = p.cover.View()
+			} else if v := p.cover.Value(); v != "" {
+				val = v
+			} else {
+				val = lipgloss.NewStyle().Foreground(subtle).Render("(aucune)")
 			}
 		}
 		rows = append(rows, propRow(label, val, focused && !editing))
