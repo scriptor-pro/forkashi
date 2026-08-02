@@ -108,9 +108,11 @@ func (m model) heatmapView() string {
 		return header + "\n\n  (no history yet)"
 	}
 	mx, total := 0, 0
-	for _, v := range h.history {
+	var mxDay string
+	for day, v := range h.history {
 		if v > mx {
 			mx = v
+			mxDay = day
 		}
 		total += v
 	}
@@ -142,10 +144,16 @@ func (m model) heatmapView() string {
 		rows = append(rows, line)
 	}
 
-	legend := "   less " + heatCell(0, 1) + heatLevels[1].Render("■") + heatLevels[2].Render("■") +
-		heatLevels[3].Render("■") + heatLevels[4].Render("■") + " more"
-	stats := fmt.Sprintf("   %d-day streak · best day %s · %s words in view",
-		streak(h.history, h.today), commafy(mx), commafy(total))
+	legend := "   moins " + heatCell(0, 1) + heatLevels[1].Render("■") + heatLevels[2].Render("■") +
+		heatLevels[3].Render("■") + heatLevels[4].Render("■") + " plus"
+	bestDay := ""
+	if mxDay != "" {
+		if d, err := time.Parse("2006-01-02", mxDay); err == nil {
+			bestDay = " (" + frenchLongDate(d) + ")"
+		}
+	}
+	stats := fmt.Sprintf("   série de %d jours · meilleur jour : %s%s · mots déjà écrits : %s",
+		streak(h.history, h.today), commafy(mx), bestDay, commafy(total))
 
 	body := header + "\n\n" + strings.Join(rows, "\n") + "\n\n" +
 		lipgloss.NewStyle().Foreground(subtle).Render(legend) + "\n" +
@@ -153,4 +161,14 @@ func (m model) heatmapView() string {
 	foot := lipgloss.NewStyle().Foreground(subtle).Render("esc / g / q  retour")
 	return lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body) + "\n" +
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot)
+}
+
+var frenchWeekdays = [...]string{"dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"}
+
+var frenchMonths = [...]string{"janvier", "février", "mars", "avril", "mai", "juin",
+	"juillet", "août", "septembre", "octobre", "novembre", "décembre"}
+
+// frenchLongDate formats d as "jeudi 12 mai 2023" (Go's time package has no built-in French locale).
+func frenchLongDate(d time.Time) string {
+	return fmt.Sprintf("%s %d %s %d", frenchWeekdays[d.Weekday()], d.Day(), frenchMonths[d.Month()-1], d.Year())
 }
