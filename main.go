@@ -767,7 +767,7 @@ func (m *model) applySuggestion(i int) {
 	if m.suggestions[i] == dictItem { // add the word to the personal dictionary instead
 		m.suggesting = false
 		if addToDictionary(m.suggestWord) {
-			m.status = "added '" + m.suggestWord + "' to dictionary"
+			m.status = "« " + m.suggestWord + " » ajouté au dictionnaire"
 		} else {
 			m.status = "« " + m.suggestWord + " » est déjà connu"
 		}
@@ -2173,7 +2173,7 @@ func (m *model) startDelete() {
 	}
 	m.deleting = true
 	m.deleteTarget = e.name
-	m.status = "delete '" + e.name + "'? [y]es · esc cancel"
+	m.status = "supprimer « " + e.name + " » ? [y]es · esc annuler"
 }
 
 // confirmDelete removes the deleteTarget file or folder and refreshes the sidebar.
@@ -2303,7 +2303,7 @@ func (m *model) confirmRename() {
 	oldPath := filepath.Join(t.dir, t.name)
 	newPath := filepath.Join(t.dir, newName)
 	if _, err := os.Stat(newPath); err == nil {
-		m.status = "a file named " + newName + " already exists"
+		m.status = "un fichier nommé " + newName + " existe déjà"
 		m.refreshAfterRename()
 		return
 	}
