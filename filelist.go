@@ -191,7 +191,7 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 	if f.wc != nil {
 		n = f.wc.count(filepath.Join(f.dir, e.name))
 	}
-	count := commafy(n) + "w"
+	count := commafy(n) + "m"
 	g := f.icons.iconFor(e)
 	left := " " + renderIcon(g, !dimCount) + f.chapterTitle(e.name)
 	maxLeft := f.width - lipgloss.Width(count) - 1
