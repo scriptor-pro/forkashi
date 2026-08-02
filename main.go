@@ -2501,7 +2501,7 @@ func (m model) statsText() string {
 		}
 		timeSeg = disp
 	}
-	return fmt.Sprintf("%s words · %s session · %s", commafy(words), signedComma(delta), timeSeg)
+	return fmt.Sprintf("%s mots · %s session · %s", commafy(words), signedComma(delta), timeSeg)
 }
 
 // statusBar composes the bottom line: the status message on the left, the live

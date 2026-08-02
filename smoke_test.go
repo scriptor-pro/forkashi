@@ -894,7 +894,7 @@ func TestStatsAtEditorTextLeftEdge(t *testing.T) {
 	m.width = 100
 	m.sidebarVisible = true
 	m.inspector.visible = false
-	stats := "✓ 1,240 words · +142 session"
+	stats := "✓ 1,240 mots · +142 session"
 	bar := m.composeStatus("", stats)
 	leading := len(bar) - len(strings.TrimLeft(bar, " "))
 	// Stats should start at the editor text's left edge:
@@ -919,7 +919,7 @@ func TestStatusBarLeftRight(t *testing.T) {
 	m.colWidth = 72
 	m.sidebarVisible = false
 	m.inspector.visible = false
-	stats := "✓ 1,240 words · +142 session"
+	stats := "✓ 1,240 mots · +142 session"
 	out := ansi.Strip(m.composeStatus("saved draft.md", stats))
 	si := strings.Index(out, "1,240")
 	di := strings.Index(out, "saved")
