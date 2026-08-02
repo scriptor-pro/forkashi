@@ -60,25 +60,25 @@ func TestCorkboardStatusLine(t *testing.T) {
 	items := []manifestItem{{File: "a.md"}, {File: "b.md"}}
 	// wc == nil → total counts as 0; still reports the chapter count, no target fragment.
 	got := corkboardStatusLine(items, "/x", nil, projectGoals{})
-	if !strings.Contains(got, "2 chapters") {
+	if !strings.Contains(got, "2 chapitres") {
 		t.Fatalf("want chapter count, got %q", got)
 	}
 	if strings.Contains(got, "/") {
 		t.Fatalf("no goal set → no target fragment, got %q", got)
 	}
 	withGoal := corkboardStatusLine(items, "/x", nil, projectGoals{ProjectGoal: 80000, Deadline: "2026-03-01"})
-	if !strings.Contains(withGoal, "/ 80,000") || !strings.Contains(withGoal, "by 2026-03-01") {
+	if !strings.Contains(withGoal, "/ 80,000") || !strings.Contains(withGoal, "avant 2026-03-01") {
 		t.Fatalf("want target + deadline, got %q", withGoal)
 	}
 	one := corkboardStatusLine(items[:1], "/x", nil, projectGoals{})
-	if !strings.Contains(one, "1 chapter ") {
+	if !strings.Contains(one, "1 chapitre ") {
 		t.Fatalf("want singular 'chapter', got %q", one)
 	}
 	// With a real word-count cache the total sums the chapters (3 + 2 = 5 words).
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("one two three"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.md"), []byte("four five"), 0o644)
-	if got := corkboardStatusLine(items, dir, newWordCountCache(), projectGoals{}); !strings.Contains(got, "5 words") {
+	if got := corkboardStatusLine(items, dir, newWordCountCache(), projectGoals{}); !strings.Contains(got, "5 mots") {
 		t.Fatalf("want summed total '5 words', got %q", got)
 	}
 }

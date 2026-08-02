@@ -21,11 +21,11 @@ func (m *model) enterCorkboard() {
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if err != nil {
-		m.status = "can't open the corkboard — this manuscript's manifest.json is unreadable (corrupt or a newer version)"
+		m.status = "impossible d'ouvrir le tableau — le manifest.json de ce manuscrit est illisible (corrompu ou version plus récente)"
 		return
 	}
 	if !present {
-		m.status = "the corkboard only works inside a manuscript (a project with ordered chapters)"
+		m.status = "le tableau fonctionne uniquement dans un manuscrit (un projet avec chapitres ordonnés)"
 		return
 	}
 	m.structureDir = dir
@@ -128,9 +128,9 @@ func (m *model) commitSynopsis() {
 		m.synopses[file] = text
 	}
 	if err := saveSynopses(m.structureDir, m.synopses, m.corkChapterSet()); err != nil {
-		m.status = "synopsis save failed: " + err.Error()
+		m.status = "échec de l'enregistrement du synopsis : " + err.Error()
 	} else {
-		m.status = "synopsis saved"
+		m.status = "synopsis enregistré"
 	}
 }
 
@@ -157,7 +157,7 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runExport(StyleTufte)
 		case "esc":
 			m.exportPrompt = false
-			m.status = "export cancelled"
+			m.status = "export annulé"
 		}
 		return m, nil
 	}
@@ -233,11 +233,11 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.structureConfirm = false
 			m.exitCorkboard()
-			m.status = "changes saved"
+			m.status = "modifications enregistrées"
 		case "esc", "n":
 			m.structureConfirm = false
 			m.exitCorkboard()
-			m.status = "changes discarded"
+			m.status = "modifications annulées"
 		}
 		return m, nil
 	}
@@ -271,7 +271,7 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.startSynopsisEdit()
 	case "ctrl+e":
 		m.exportPrompt = true
-		m.status = "export: m manuscript · t tufte · esc cancel"
+		m.status = "export : m manuscrit · t tufte · esc annuler"
 	case "a":
 		m.structureAdding = true
 		m.structureAddSel = 0
@@ -297,7 +297,7 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Open the selected chapter; staged changes must be resolved first.
 		if m.structureDirty {
 			m.structureConfirm = true
-			m.status = "apply changes first — y apply · esc discard"
+			m.status = "appliquer les modifications d'abord — y appliquer · esc annuler"
 		} else if m.structureSel < len(m.structureItems) {
 			file := filepath.Join(m.structureDir, m.structureItems[m.structureSel].File)
 			m.exitCorkboard()
@@ -371,15 +371,15 @@ func corkboardStatusLine(items []manifestItem, dir string, wc *wordCountCache, p
 			total += wc.count(filepath.Join(dir, it.File))
 		}
 	}
-	unit := "chapters"
+	unit := "chapitres"
 	if len(items) == 1 {
-		unit = "chapter"
+		unit = "chapitre"
 	}
-	line := strconv.Itoa(len(items)) + " " + unit + " · " + commafy(total) + " words"
+	line := strconv.Itoa(len(items)) + " " + unit + " · " + commafy(total) + " mots"
 	if pg.ProjectGoal > 0 {
 		line += " · " + commafy(total) + " / " + commafy(pg.ProjectGoal)
 		if pg.Deadline != "" {
-			line += " by " + pg.Deadline
+			line += " avant " + pg.Deadline
 		}
 	}
 	return line
@@ -407,7 +407,7 @@ func (m model) corkboardView() string {
 		openMark, rawBody, dim := corkboardCardMeta(isCurrent, m.synopses[it.File], m.corkFirstLines[it.File])
 		var body string
 		if rawBody == "" {
-			body = lipgloss.NewStyle().Foreground(subtle).Render("(no synopsis — e to add)")
+			body = lipgloss.NewStyle().Foreground(subtle).Render("(pas de synopsis — e pour éditer)")
 		} else {
 			body = wrapClamp(rawBody, cardW-4, bodyRows)
 			if dim {
@@ -422,7 +422,7 @@ func (m model) corkboardView() string {
 		cards = append(cards, framedPanel(hdr, body, cardW, cardRows, wc))
 	}
 	if len(cards) == 0 {
-		cards = append(cards, lipgloss.NewStyle().Foreground(subtle).Render("(no chapters)"))
+		cards = append(cards, lipgloss.NewStyle().Foreground(subtle).Render("(aucun chapitre)"))
 	}
 
 	var b strings.Builder
@@ -433,12 +433,12 @@ func (m model) corkboardView() string {
 	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, board))
 
 	if m.synEditing {
-		edit := framedPanel("synopsis · "+m.structureItems[m.structureSel].Title, m.synArea.View(), cardW, 5, "esc save")
+		edit := framedPanel("synopsis · "+m.structureItems[m.structureSel].Title, m.synArea.View(), cardW, 5, "esc enregistrer")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, edit))
 		return b.String()
 	}
 	if m.structureRenaming {
-		field := "retitle ▸ " + m.nameInput.View()
+		field := "renommer ▸ " + m.nameInput.View()
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, field))
 		return b.String()
 	}
@@ -452,18 +452,18 @@ func (m model) corkboardView() string {
 			picks = append(picks, label)
 		}
 		if len(picks) == 0 {
-			picks = append(picks, lipgloss.NewStyle().Foreground(subtle).Render("(no resources to promote)"))
+			picks = append(picks, lipgloss.NewStyle().Foreground(subtle).Render("(aucune ressource à promouvoir)"))
 		}
-		pick := framedPanel("add", strings.Join(picks, "\n"), max(30, min(m.width-8, 44)), len(picks)+2, "")
+		pick := framedPanel("ajouter", strings.Join(picks, "\n"), max(30, min(m.width-8, 44)), len(picks)+2, "")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, pick))
 		return b.String()
 	}
 	if m.structureConfirm {
-		bar := lipgloss.NewStyle().Foreground(accent).Render("apply changes? y apply · esc discard")
+		bar := lipgloss.NewStyle().Foreground(accent).Render("appliquer les modifications ? y appliquer · esc annuler")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("J/K/alt reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("J/K/alt réordonner · e synopsis · a ajouter · x retirer · r renommer · ⏎ ouvrir · esc")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
