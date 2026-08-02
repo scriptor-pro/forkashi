@@ -197,14 +197,14 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 // the user's edits intact rather than discarding them.
 func (m *model) savePropertiesAndApply() error {
 	if _, err := m.properties.save(); err != nil {
-		m.status = "properties save failed: " + err.Error()
+		m.status = "échec de l'enregistrement : " + err.Error()
 		return err
 	}
 	if m.properties.dir == m.files.dir {
 		m.files.SetDir(m.files.dir) // reflect a retitled manifest in the sidebar
 		m.applyProjectSettings()    // reflect width/smartquotes live
 	}
-	m.status = "properties saved"
+	m.status = "propriétés enregistrées"
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (m model) updateProperties(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "esc":
 		if p.dirty() {
 			p.confirmExit = true
-			m.status = "unsaved changes — s save · d discard · esc cancel"
+			m.status = "modifications non enregistrées — s enregistrer · d ignorer · esc annuler"
 		} else {
 			m.screen = screenHome
 		}
@@ -283,7 +283,7 @@ func (m model) updatePropertiesEditing(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if kind == propWidth {
 			if n, err := strconv.Atoi(strings.TrimSpace(p.width.Value())); err != nil || n < 20 || n > 200 {
 				p.width.SetValue(strconv.Itoa(p.origWidth))
-				m.status = "width must be 20–200"
+				m.status = "la largeur doit être comprise entre 20 et 200"
 			}
 		}
 		return m, nil
@@ -306,7 +306,7 @@ func (m model) updatePropertiesEditing(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 // propRow renders one "  Label   value" row; multiline values indent their continuation lines under
 // the value column. A focused (non-editing) row is highlighted.
 func propRow(label, val string, focused bool) string {
-	const labelCol = 15
+	const labelCol = 20
 	lbl := fmt.Sprintf("  %-*s", labelCol-2, label)
 	lines := strings.Split(val, "\n")
 	out := []string{lbl + lines[0]}
@@ -332,8 +332,8 @@ func (m model) propertiesView() string {
 	var rows []string
 
 	if !p.isManuscript {
-		ro := lipgloss.NewStyle().Foreground(subtle).Render(p.origTitle + "  (folder — retitle on disk)")
-		rows = append(rows, propRow("Title", ro, false))
+		ro := lipgloss.NewStyle().Foreground(subtle).Render(p.origTitle + "  (dossier — renommer sur le disque)")
+		rows = append(rows, propRow("Titre", ro, false))
 	}
 	for i, kind := range p.fields {
 		focused := i == p.focus
@@ -341,9 +341,9 @@ func (m model) propertiesView() string {
 		var label, val string
 		switch kind {
 		case propTitle:
-			label, val = "Title", fieldVal(p.title, editing)
+			label, val = "Titre", fieldVal(p.title, editing)
 		case propAuthor:
-			label, val = "Author", fieldVal(p.author, editing)
+			label, val = "Auteur", fieldVal(p.author, editing)
 		case propContact:
 			label = "Contact"
 			if editing {
@@ -351,31 +351,31 @@ func (m model) propertiesView() string {
 			} else if v := p.contact.Value(); v != "" {
 				val = v
 			} else {
-				val = lipgloss.NewStyle().Foreground(subtle).Render("(none)")
+				val = lipgloss.NewStyle().Foreground(subtle).Render("(aucun)")
 			}
 		case propWidth:
-			label, val = "Width", fieldVal(p.width, editing)
+			label, val = "Largeur", fieldVal(p.width, editing)
 		case propSmartquotes:
-			label = "Smart quotes"
-			val = "off"
+			label = "Guillemets typo."
+			val = "désactivé"
 			if p.smartquotes {
-				val = "on"
+				val = "activé"
 			}
 		}
 		rows = append(rows, propRow(label, val, focused && !editing))
 	}
 
-	header := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("── properties · " + p.origTitle + " ")
+	header := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("── propriétés · " + p.origTitle + " ")
 	body := header + "\n\n" + strings.Join(rows, "\n")
 
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body))
 	if p.confirmExit {
-		bar := lipgloss.NewStyle().Foreground(accent).Render("unsaved changes — s save · d discard · esc cancel")
+		bar := lipgloss.NewStyle().Foreground(accent).Render("modifications non enregistrées — s enregistrer · d ignorer · esc annuler")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ field · ⏎ edit · space toggles smart quotes · ctrl+s save · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ champ · ⏎ éditer · espace bascule guillemets typo · ctrl+s enregistrer · esc retour")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

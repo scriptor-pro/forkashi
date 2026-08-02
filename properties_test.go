@@ -42,7 +42,7 @@ func TestPropertiesViewRendersFields(t *testing.T) {
 	dir := t.TempDir()
 	m := model{width: 80, height: 24, properties: newPropertiesModel(dir)}
 	out := m.propertiesView()
-	for _, want := range []string{"properties", "Author", "Contact", "Width", "Smart quotes"} {
+	for _, want := range []string{"propriétés", "Auteur", "Contact", "Largeur", "Guillemets typo."} {
 		if !strings.Contains(out, want) {
 			t.Errorf("propertiesView missing %q", want)
 		}
