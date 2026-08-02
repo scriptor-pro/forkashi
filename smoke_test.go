@@ -981,38 +981,38 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	if strings.Contains(ansi.Strip(m.View()), "DOCUMENT") {
 		t.Fatal("inspector should be hidden by default")
 	}
-	// 1st ctrl+y → Words tab visible.
+	// 1st ctrl+y → Mots tab visible.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if !m.inspector.visible {
 		t.Fatal("1st ctrl+y should make the inspector visible")
 	}
 	if !strings.Contains(ansi.Strip(m.View()), "DOCUMENT") {
-		t.Fatal("writing View should contain the inspector (Words tab) after 1st ctrl+y")
+		t.Fatal("writing View should contain the inspector (Mots tab) after 1st ctrl+y")
 	}
-	// 2nd ctrl+y → Outline tab (still visible, NOT closed).
+	// 2nd ctrl+y → Plan tab (still visible, NOT closed).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if !m.inspector.visible {
-		t.Fatal("2nd ctrl+y should keep the inspector visible (Outline tab)")
+		t.Fatal("2nd ctrl+y should keep the inspector visible (Plan tab)")
 	}
 	if m.inspector.tab != tabOutline {
 		t.Fatalf("2nd ctrl+y: expected tabOutline, got %v", m.inspector.tab)
 	}
-	// 3rd ctrl+y → Goals tab (still visible).
+	// 3rd ctrl+y → Objectifs tab (still visible).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if !m.inspector.visible {
-		t.Fatal("3rd ctrl+y should keep the inspector visible (Goals tab)")
+		t.Fatal("3rd ctrl+y should keep the inspector visible (Objectifs tab)")
 	}
 	if m.inspector.tab != tabGoals {
 		t.Fatalf("3rd ctrl+y: expected tabGoals, got %v", m.inspector.tab)
 	}
-	// 4th ctrl+y → Analysis tab (still visible).
+	// 4th ctrl+y → Analyse tab (still visible).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if !m.inspector.visible {
-		t.Fatal("4th ctrl+y should keep the inspector visible (Analysis tab)")
+		t.Fatal("4th ctrl+y should keep the inspector visible (Analyse tab)")
 	}
 	if m.inspector.tab != tabAnalysis {
 		t.Fatalf("4th ctrl+y: expected tabAnalysis, got %v", m.inspector.tab)
@@ -1199,14 +1199,14 @@ func TestInspectorTabClick(t *testing.T) {
 	m.inspector.visible = true
 	m.inspector.tab = tabWords
 	m.layout()
-	// Click the "Outline" chip: inspector content starts at width-inspectorWidth+2;
-	// Outline chip begins at localX 7 ("Words " = 6). Click at that column, row 1
+	// Click the "Plan" chip: inspector content starts at width-inspectorWidth+2;
+	// Plan chip begins at localX 6 ("Mots " = 5). Click at that column, row 1
 	// (row 0 is the framed panel's top border, row 1 is the tab bar).
-	x := m.width - inspectorWidth + 2 + 8 // mid-"Outline"
+	x := m.width - inspectorWidth + 2 + 7 // mid-"Plan"
 	nm, _ = m.Update(tea.MouseMsg{X: x, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if m.inspector.tab != tabOutline {
-		t.Fatalf("click on Outline chip → tab=%v, want Outline", m.inspector.tab)
+		t.Fatalf("click on Plan chip → tab=%v, want Plan", m.inspector.tab)
 	}
 }
 
@@ -1312,23 +1312,23 @@ func TestFramedInspectorClickAlignment(t *testing.T) {
 	m.inspector.visible = true
 	m.inspector.tab = tabAnalysis
 	m.layout()
-	// Click the Adverb checkbox row at its on-screen position; it must toggle adverb.
+	// Click the Adverbe checkbox row at its on-screen position; it must toggle adverb.
 	x := m.width - inspectorWidth + 4 // into the content (left border+padding+indent)
-	// y must be wherever Adverb actually renders on screen — find it:
+	// y must be wherever Adverbe actually renders on screen — find it:
 	lines := strings.Split(ansi.Strip(m.View()), "\n")
 	yAdverb := -1
 	for i, ln := range lines {
-		if strings.Contains(ln, "Adverb") {
+		if strings.Contains(ln, "Adverbe") {
 			yAdverb = i
 		}
 	}
 	if yAdverb < 0 {
-		t.Fatal("Adverb row not found on screen")
+		t.Fatal("Adverbe row not found on screen")
 	}
 	nm, _ = m.Update(tea.MouseMsg{X: x, Y: yAdverb, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if !m.analysis.adverb {
-		t.Fatalf("clicking the on-screen Adverb row (y=%d) must toggle adverb — geometry misaligned", yAdverb)
+		t.Fatalf("clicking the on-screen Adverbe row (y=%d) must toggle adverb — geometry misaligned", yAdverb)
 	}
 }
 
@@ -1356,7 +1356,7 @@ func TestTabClickColumnAlignment(t *testing.T) {
 	for _, tc := range []struct {
 		label string
 		want  inspectorTab
-	}{{"Words", tabWords}, {"Outline", tabOutline}, {"Goals", tabGoals}, {"Analysis", tabAnalysis}} {
+	}{{"Mots", tabWords}, {"Plan", tabOutline}, {"Objectifs", tabGoals}, {"Analyse", tabAnalysis}} {
 		dir := t.TempDir()
 		os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
 		t.Setenv("OKASHI_DIR", dir)
@@ -1812,7 +1812,7 @@ func TestActionRowHiddenWithoutBackend(t *testing.T) {
 	m.layout()
 
 	view := ansi.Strip(m.View())
-	if strings.Contains(view, "Check grammar") {
+	if strings.Contains(view, "Vérifier la grammaire") {
 		t.Fatal("action row should NOT appear when grammarChecker is nil (no backend)")
 	}
 }

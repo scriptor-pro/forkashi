@@ -134,13 +134,13 @@ func TestProjectGoalsHistoryRoundTripAndBackCompat(t *testing.T) {
 func TestPaceLine(t *testing.T) {
 	base := projectGoals{ProjectGoal: 80000, Deadline: "2026-08-01"}
 	// 10 days out, 20000 to go → 2000/day.
-	if s, ok := paceLine(base, 60000, "2026-07-22"); !ok || s != "≈2,000/day to hit 80,000 by 2026-08-01 (10d)" {
+	if s, ok := paceLine(base, 60000, "2026-07-22"); !ok || s != "≈2,000/jour pour atteindre 80,000 avant le 2026-08-01 (10j)" {
 		t.Fatalf("normal pace: %q ok=%v", s, ok)
 	}
-	if s, ok := paceLine(base, 80000, "2026-07-22"); !ok || s != "✓ target met" {
+	if s, ok := paceLine(base, 80000, "2026-07-22"); !ok || s != "✓ objectif atteint" {
 		t.Fatalf("met: %q", s)
 	}
-	if s, ok := paceLine(base, 60000, "2026-09-01"); !ok || !contains(s, "deadline passed") {
+	if s, ok := paceLine(base, 60000, "2026-09-01"); !ok || !contains(s, "date limite dépassée") {
 		t.Fatalf("past: %q", s)
 	}
 	if _, ok := paceLine(projectGoals{ProjectGoal: 80000}, 10, "2026-07-22"); ok {

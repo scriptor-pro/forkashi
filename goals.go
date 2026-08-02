@@ -145,19 +145,19 @@ func paceLine(pg projectGoals, projectWords int, today string) (string, bool) {
 		return "", false
 	}
 	if projectWords >= pg.ProjectGoal {
-		return "✓ target met", true
+		return "✓ objectif atteint", true
 	}
 	now, _ := time.Parse("2006-01-02", today)
 	daysLeft := int(due.Sub(now).Hours() / 24)
 	remaining := pg.ProjectGoal - projectWords
 	if daysLeft < 0 {
-		return "deadline passed · " + commafy(remaining) + " to go", true
+		return "date limite dépassée · " + commafy(remaining) + " restants", true
 	}
 	if daysLeft == 0 {
-		return "due today · " + commafy(remaining) + " to go", true
+		return "échéance aujourd'hui · " + commafy(remaining) + " restants", true
 	}
 	perDay := (remaining + daysLeft - 1) / daysLeft // ceil
-	return "≈" + commafy(perDay) + "/day to hit " + commafy(pg.ProjectGoal) + " by " + pg.Deadline + " (" + strconv.Itoa(daysLeft) + "d)", true
+	return "≈" + commafy(perDay) + "/jour pour atteindre " + commafy(pg.ProjectGoal) + " avant le " + pg.Deadline + " (" + strconv.Itoa(daysLeft) + "j)", true
 }
 
 // recentHistory returns the last n days' word counts (oldest first) ending at today, for a sparkline.

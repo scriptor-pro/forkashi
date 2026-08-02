@@ -88,7 +88,7 @@ const (
 
 // inspectorTabLabels is the single source of the tab set — used by both the tab
 // bar render and cycle() so they never diverge.
-func inspectorTabLabels() []string { return []string{"Words", "Outline", "Goals", "Analysis"} }
+func inspectorTabLabels() []string { return []string{"Mots", "Plan", "Objectifs", "Analyse"} }
 
 // inspectorModel is the read-only right-side panel: a tab bar + the active tab.
 type inspectorModel struct {
@@ -121,7 +121,7 @@ func (in *inspectorModel) cycle() {
 // lines plain, each truncated to width. Empty → a hint.
 func renderOutline(text string, width int) string {
 	if strings.TrimSpace(text) == "" {
-		return lipgloss.NewStyle().Foreground(subtle).Render("(empty — ctrl+l to edit)")
+		return lipgloss.NewStyle().Foreground(subtle).Render("(vide — ctrl+l pour éditer)")
 	}
 	var b strings.Builder
 	for i, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
@@ -549,27 +549,27 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	b.WriteString("\n\n")
 	switch in.tab {
 	case tabAnalysis:
-		b.WriteString(sectionHeader("Analysis", width) + "\n\n")
-		b.WriteString("  " + checkbox(analysis.spell) + "Spellcheck\n")
-		b.WriteString("  " + checkbox(analysis.grammar) + grammarStyle.Render("Grammar") + "\n")
+		b.WriteString(sectionHeader("Analyse", width) + "\n\n")
+		b.WriteString("  " + checkbox(analysis.spell) + "Orthographe\n")
+		b.WriteString("  " + checkbox(analysis.grammar) + grammarStyle.Render("Grammaire") + "\n")
 		b.WriteString("\n")
-		b.WriteString(sectionHeader("Syntax", width) + "\n")
-		b.WriteString("  " + checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")
-		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
-		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
+		b.WriteString(sectionHeader("Syntaxe", width) + "\n")
+		b.WriteString("  " + checkbox(analysis.adverb) + adverbStyle.Render("Adverbe") + "\n")
+		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjectif") + "\n")
+		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passif/faible"))
 		if analysis.grammar && in.grammarBackend != "" {
 			// Stable layout so the click rows never shift: action (analysisActionRowY=12),
 			// backend name (13, dim — keeps a long name off the action row), Auto-recheck (14).
-			action := "▸ Check grammar"
+			action := "▸ Vérifier la grammaire"
 			if in.grammarChecking {
-				action = "checking grammar…"
+				action = "vérification…"
 			}
 			b.WriteString("\n\n  " + action)
 			b.WriteString("\n  " + lipgloss.NewStyle().Foreground(subtle).Render(in.grammarBackend))
-			b.WriteString("\n  " + checkbox(in.grammarAutoRecheck) + "Auto-recheck")
+			b.WriteString("\n  " + checkbox(in.grammarAutoRecheck) + "Revérification auto")
 		}
 	case tabOutline:
-		b.WriteString(sectionHeader("Outline", width) + "\n\n")
+		b.WriteString(sectionHeader("Plan", width) + "\n\n")
 		outLines := strings.Split(renderOutline(outline, width-2), "\n")
 		indented := make([]string, len(outLines))
 		for i, l := range outLines {
@@ -577,23 +577,23 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		}
 		b.WriteString(strings.Join(indented, "\n"))
 	case tabGoals:
-		b.WriteString(sectionHeader("Daily", width) + "\n")
+		b.WriteString(sectionHeader("Aujourd'hui", width) + "\n")
 		b.WriteString("  " + progressBar(goals.today, goals.dailyGoal, max(4, width-10)) + "\n")
 		b.WriteString("  " + fmt.Sprintf("%s / %s\n", commafy(goals.today), commafy(goals.dailyGoal)))
 		if goals.today >= goals.dailyGoal && goals.dailyGoal > 0 {
-			b.WriteString("  " + lipgloss.NewStyle().Foreground(accent).Render("✓ goal met"))
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(accent).Render("✓ objectif atteint"))
 		} else {
-			b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(commafy(goals.dailyGoal-goals.today)+" to go"))
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(commafy(goals.dailyGoal-goals.today)+" restants"))
 		}
 		if goals.projectGoal > 0 {
-			b.WriteString("\n\n" + sectionHeader("Project", width) + "\n")
+			b.WriteString("\n\n" + sectionHeader("Projet", width) + "\n")
 			b.WriteString("  " + progressBar(goals.project, goals.projectGoal, max(4, width-10)) + "\n")
 			b.WriteString("  " + fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
 			if goals.pace != "" {
 				b.WriteString("\n  " + lipgloss.NewStyle().Foreground(accent).Render(goals.pace))
 			}
 		}
-		b.WriteString("\n\n" + sectionHeader("Time", width) + "\n")
+		b.WriteString("\n\n" + sectionHeader("Temps", width) + "\n")
 		sess := "  Session   " + fmtDuration(time.Duration(goals.sessionSecs)*time.Second)
 		if goals.idle {
 			sess += " ⏸"
@@ -601,45 +601,45 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		b.WriteString(sess + "\n")
 		if goals.sessionGoalMin > 0 {
 			mins := goals.todayActiveSecs / 60
-			b.WriteString("  Today\n")
+			b.WriteString("  Aujourd'hui\n")
 			b.WriteString("  " + progressBar(mins, goals.sessionGoalMin, max(4, width-10)) + "\n")
 			b.WriteString("  " + fmt.Sprintf("%d / %d min\n", mins, goals.sessionGoalMin))
 			if mins >= goals.sessionGoalMin {
-				b.WriteString("  " + lipgloss.NewStyle().Foreground(accent).Render("✓ time goal met"))
+				b.WriteString("  " + lipgloss.NewStyle().Foreground(accent).Render("✓ objectif de temps atteint"))
 			} else {
-				b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(fmt.Sprintf("%d min to go", goals.sessionGoalMin-mins)))
+				b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(fmt.Sprintf("%d min restantes", goals.sessionGoalMin-mins)))
 			}
 		} else {
-			b.WriteString("  Today     " + fmtDuration(time.Duration(goals.todayActiveSecs)*time.Second) + "\n")
+			b.WriteString("  Aujourd'hui  " + fmtDuration(time.Duration(goals.todayActiveSecs)*time.Second) + "\n")
 		}
 		if len(goals.spark) > 0 {
-			b.WriteString("\n\n" + sectionHeader("History", width) + "\n")
+			b.WriteString("\n\n" + sectionHeader("Historique", width) + "\n")
 			hist := "  " + sparkline(goals.spark)
 			if goals.streakDays > 0 {
-				hist += lipgloss.NewStyle().Foreground(accent).Render(fmt.Sprintf("  %d-day streak", goals.streakDays))
+				hist += lipgloss.NewStyle().Foreground(accent).Render(fmt.Sprintf("  série de %d jours", goals.streakDays))
 			}
-			b.WriteString(hist + "\n  " + lipgloss.NewStyle().Foreground(subtle).Render("g → full history"))
+			b.WriteString(hist + "\n  " + lipgloss.NewStyle().Foreground(subtle).Render("g → historique complet"))
 		}
 	default: // tabWords
 		b.WriteString(sectionHeader("Document", width) + "\n")
-		b.WriteString("  " + kvRow("Words", doc.words, width-2) + "\n")
-		b.WriteString("  " + kvRow("Characters", doc.chars, width-2) + "\n")
-		b.WriteString("  " + kvRow("Paragraphs", doc.paragraphs, width-2) + "\n\n")
-		b.WriteString(sectionHeader("Project", width) + "\n")
-		b.WriteString("  " + kvRow("Words", proj.words, width-2))
+		b.WriteString("  " + kvRow("Mots", doc.words, width-2) + "\n")
+		b.WriteString("  " + kvRow("Caractères", doc.chars, width-2) + "\n")
+		b.WriteString("  " + kvRow("Paragraphes", doc.paragraphs, width-2) + "\n\n")
+		b.WriteString(sectionHeader("Projet", width) + "\n")
+		b.WriteString("  " + kvRow("Mots", proj.words, width-2))
 		if proj.manuscript {
-			b.WriteString("\n  " + kvRow("Chapters", proj.chapters, width-2))
+			b.WriteString("\n  " + kvRow("Chapitres", proj.chapters, width-2))
 		}
 		if doc.words > 0 {
-			b.WriteString("\n\n" + sectionHeader("Readability", width) + "\n")
-			b.WriteString("  " + kvStrRow("Reading time", fmtReadTime(doc.readSecs), width-2) + "\n")
-			b.WriteString("  " + kvStrRow("Avg sentence", fmt.Sprintf("%.0f±%.0f wd", doc.sentMean, doc.sentStdDev), width-2))
+			b.WriteString("\n\n" + sectionHeader("Lisibilité", width) + "\n")
+			b.WriteString("  " + kvStrRow("Temps de lecture", fmtReadTime(doc.readSecs), width-2) + "\n")
+			b.WriteString("  " + kvStrRow("Phrase moy.", fmt.Sprintf("%.0f±%.0f mots", doc.sentMean, doc.sentStdDev), width-2))
 			if doc.readabilityLabel != "" {
 				score := fmt.Sprintf("%.0f · %s", doc.readabilityScore, doc.readabilityLabel)
 				b.WriteString("\n  " + kvStrRow("Score", score, width-2))
 			}
 			if len(doc.overused) > 0 {
-				b.WriteString("\n\n" + sectionHeader("Overused", width) + "\n")
+				b.WriteString("\n\n" + sectionHeader("Surutilisés", width) + "\n")
 				for i, wf := range doc.overused {
 					b.WriteString("  " + kvRow(wf.word, wf.n, width-2))
 					if i < len(doc.overused)-1 {

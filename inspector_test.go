@@ -68,7 +68,7 @@ func TestComputeProjStatsPlainFolder(t *testing.T) {
 func TestInspectorViewRendersWords(t *testing.T) {
 	in := inspectorModel{visible: true}
 	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{}, analysisState{})
-	for _, want := range []string{"Words", "DOCUMENT", "PROJECT", "1,204", "47,032", "Chapters", "12"} {
+	for _, want := range []string{"Mots", "DOCUMENT", "PROJET", "1,204", "47,032", "Chapitres", "12"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
@@ -110,14 +110,14 @@ func TestInspectorCycle(t *testing.T) {
 func TestInspectorOutlineTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabOutline}
 	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub", goalStats{}, analysisState{})
-	for _, want := range []string{"Outline", "Top", "sub"} {
+	for _, want := range []string{"Plan", "Top", "sub"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("outline tab missing %q:\n%s", want, out)
 		}
 	}
 	empty := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{})
-	if !strings.Contains(empty, "empty") {
-		t.Fatal("empty outline should show an (empty …) hint")
+	if !strings.Contains(empty, "vide") {
+		t.Fatal("empty outline should show an (vide …) hint")
 	}
 }
 
@@ -140,37 +140,37 @@ func TestProgressBar(t *testing.T) {
 func TestInspectorGoalsTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
 	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000}, analysisState{})
-	for _, w := range []string{"DAILY", "312", "500", "PROJECT", "80,000"} {
+	for _, w := range []string{"AUJOURD'HUI", "312", "500", "PROJET", "80,000"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("goals tab missing %q:\n%s", w, out)
 		}
 	}
 	// projectGoal 0 → no Project section.
 	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0}, analysisState{})
-	if strings.Contains(noproj, "PROJECT") {
+	if strings.Contains(noproj, "PROJET") {
 		t.Fatal("projectGoal 0 should omit the Project section")
 	}
 	// goal met.
 	met := in.View(28, docStats{}, projStats{}, "", goalStats{today: 600, dailyGoal: 500, project: 1, projectGoal: 0}, analysisState{})
-	if !strings.Contains(met, "met") {
-		t.Fatal("today >= daily goal should show '✓ goal met'")
+	if !strings.Contains(met, "atteint") {
+		t.Fatal("today >= daily goal should show '✓ objectif atteint'")
 	}
 }
 
 func TestInspectorTabAtX(t *testing.T) {
-	// labels {"Words","Outline","Goals","Analysis"} → no padding, single-space separated.
-	// Words(0..4) space(5) Outline(6..12) space(13) Goals(14..18) space(19) Analysis(20..27)
+	// labels {"Mots","Plan","Objectifs","Analyse"} → no padding, single-space separated.
+	// Mots(0..3) space(4) Plan(5..8) space(9) Objectifs(10..19) space(20) Analyse(21..27)
 	if tb, ok := inspectorTabAtX(2); !ok || tb != tabWords {
-		t.Fatalf("x=2 → %v ok=%v, want Words", tb, ok)
+		t.Fatalf("x=2 → %v ok=%v, want Mots", tb, ok)
 	}
-	if tb, ok := inspectorTabAtX(8); !ok || tb != tabOutline {
-		t.Fatalf("x=8 → %v ok=%v, want Outline", tb, ok)
+	if tb, ok := inspectorTabAtX(7); !ok || tb != tabOutline {
+		t.Fatalf("x=7 → %v ok=%v, want Plan", tb, ok)
 	}
 	if tb, ok := inspectorTabAtX(15); !ok || tb != tabGoals {
-		t.Fatalf("x=15 → %v ok=%v, want Goals", tb, ok)
+		t.Fatalf("x=15 → %v ok=%v, want Objectifs", tb, ok)
 	}
-	if tb, ok := inspectorTabAtX(22); !ok || tb != tabAnalysis {
-		t.Fatalf("x=22 → %v ok=%v, want Analysis", tb, ok)
+	if tb, ok := inspectorTabAtX(24); !ok || tb != tabAnalysis {
+		t.Fatalf("x=24 → %v ok=%v, want Analyse", tb, ok)
 	}
 	if _, ok := inspectorTabAtX(100); ok {
 		t.Fatal("x past the last chip → not ok")
@@ -180,14 +180,14 @@ func TestInspectorTabAtX(t *testing.T) {
 func TestInspectorAnalysisTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: false})
-	if !strings.Contains(on, "Spellcheck") || !strings.Contains(on, "SYNTAX") {
-		t.Fatalf("analysis tab should list Spellcheck and SYNTAX:\n%s", on)
+	if !strings.Contains(on, "Orthographe") || !strings.Contains(on, "SYNTAXE") {
+		t.Fatalf("analysis tab should list Orthographe and SYNTAXE:\n%s", on)
 	}
-	if !strings.Contains(on, "[x] Spellcheck") {
+	if !strings.Contains(on, "[x] Orthographe") {
 		t.Fatalf("spell on → checked box:\n%s", on)
 	}
 	off := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{})
-	if !strings.Contains(off, "[ ] Spellcheck") {
+	if !strings.Contains(off, "[ ] Orthographe") {
 		t.Fatalf("spell off → empty box:\n%s", off)
 	}
 }
@@ -208,18 +208,18 @@ func TestInspectorAnalysisRowAtY(t *testing.T) {
 func TestAnalysisTabPOSList(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true})
-	for _, w := range []string{"Spellcheck", "Grammar", "SYNTAX", "Adverb", "Adjective", "Passive"} {
+	for _, w := range []string{"Orthographe", "Grammaire", "SYNTAXE", "Adverbe", "Adjectif", "Passif"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("analysis tab missing %q:\n%s", w, out)
 		}
 	}
-	if !strings.Contains(out, "[x] Spellcheck") || !strings.Contains(out, "[x] Adverb") {
+	if !strings.Contains(out, "[x] Orthographe") || !strings.Contains(out, "[x] Adverbe") {
 		t.Fatalf("toggled-on checkboxes should render [x]:\n%s", out)
 	}
 	// Verify rows render at the expected Y positions.
-	// Row indices: 0=Spellcheck, 1=Grammar, 2=Adverb, 3=Adjective, 4=Passive.
+	// Row indices: 0=Orthographe, 1=Grammaire, 2=Adverbe, 3=Adjectif, 4=Passif.
 	lines := strings.Split(out, "\n")
-	for i, label := range []string{"Spellcheck", "Grammar", "Adverb", "Adjective", "Passive"} {
+	for i, label := range []string{"Orthographe", "Grammaire", "Adverbe", "Adjectif", "Passif"} {
 		y := analysisRowY(i)
 		if y >= len(lines) || !strings.Contains(lines[y], label) {
 			t.Fatalf("row %d (analysisRowY(%d)=%d) should contain %q, got %q", i, i, y, label, func() string {
@@ -258,8 +258,8 @@ func TestAnalysisRowAtY(t *testing.T) {
 func TestAnalysisGrammarRow(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{grammar: true})
-	if !strings.Contains(out, "Grammar") || !strings.Contains(out, "[x] Grammar") {
-		t.Fatalf("Analysis tab should show a checked Grammar row:\n%s", out)
+	if !strings.Contains(out, "Grammaire") || !strings.Contains(out, "[x] Grammaire") {
+		t.Fatalf("Analysis tab should show a checked Grammaire row:\n%s", out)
 	}
 }
 
@@ -274,12 +274,12 @@ func TestAnalysisRowYWithGrammar(t *testing.T) {
 }
 
 func TestFramedPanel(t *testing.T) {
-	out := framedPanel("Words", "alpha\nbeta", 20, 6, "")
+	out := framedPanel("Mots", "alpha\nbeta", 20, 6, "")
 	lines := strings.Split(ansi.Strip(out), "\n")
 	if len(lines) != 6 {
 		t.Fatalf("framedPanel height: want 6 lines, got %d", len(lines))
 	}
-	if !strings.HasPrefix(lines[0], "╭") || !strings.Contains(lines[0], "Words") || !strings.HasSuffix(lines[0], "╮") {
+	if !strings.HasPrefix(lines[0], "╭") || !strings.Contains(lines[0], "Mots") || !strings.HasSuffix(lines[0], "╮") {
 		t.Fatalf("top border malformed: %q", lines[0])
 	}
 	if !strings.HasPrefix(lines[5], "╰") || !strings.HasSuffix(lines[5], "╯") {
@@ -342,8 +342,8 @@ func TestFramedPanelAction(t *testing.T) {
 func TestInspectorGoalsSessionSection(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
 	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 300, todayActiveSecs: 600, sessionGoalMin: 30, idle: true}, analysisState{}))
-	if !strings.Contains(out, "TIME") || !strings.Contains(out, "10 / 30 min") {
-		t.Fatalf("expected a TIME section with 10/30 min, got:\n%s", out)
+	if !strings.Contains(out, "TEMPS") || !strings.Contains(out, "10 / 30 min") {
+		t.Fatalf("expected a TEMPS section with 10/30 min, got:\n%s", out)
 	}
 	if !strings.Contains(out, "⏸") {
 		t.Fatalf("idle should show ⏸, got:\n%s", out)
