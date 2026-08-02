@@ -119,7 +119,7 @@ var searchHitStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#282a36")).B
 
 func newSearchInput() textinput.Model {
 	ti := textinput.New()
-	ti.Placeholder = "search…"
+	ti.Placeholder = "rechercher…"
 	ti.Prompt = ""
 	ti.CharLimit = 120
 	return ti
@@ -132,7 +132,7 @@ func (m *model) recomputeSearch() {
 	case scopeDocument:
 		name := filepath.Base(m.currentFile)
 		if name == "." || name == "" {
-			name = "this document"
+			name = "ce document"
 		}
 		m.searchHits = searchText(name, m.currentFile, m.editor.Value(), q, searchLimit)
 	case scopeAll:
@@ -330,14 +330,14 @@ func replaceStatus(text, q, r string) (out, status string, changed bool) {
 	ci := countFold(text, q)
 	if n == 0 {
 		if ci > 0 {
-			return text, "no exact-case matches for \"" + q + "\" (search ignores case; replace matches it)", false
+			return text, "aucune correspondance exacte (casse) pour « " + q + " » (la recherche ignore la casse ; le remplacement en tient compte)", false
 		}
-		return text, "no matches for \"" + q + "\"", false
+		return text, "aucune correspondance pour « " + q + " »", false
 	}
 	out = strings.ReplaceAll(text, q, r)
-	status = fmt.Sprintf("replaced %d × \"%s\" → \"%s\"", n, q, r)
+	status = fmt.Sprintf("%d remplacement(s) × « %s » → « %s »", n, q, r)
 	if ci > n {
-		status += fmt.Sprintf(" · %d case-variant(s) left (replace matches case)", ci-n)
+		status += fmt.Sprintf(" · %d variante(s) de casse restante(s) (le remplacement respecte la casse)", ci-n)
 	}
 	return out, status, true
 }
@@ -353,13 +353,13 @@ func countFold(s, sub string) int {
 // searchView renders the search screen.
 func (m model) searchView() string {
 	width := m.width
-	scope := "Project"
+	scope := "Projet"
 	if m.searchScope == scopeDocument {
-		scope = "This document"
+		scope = "Ce document"
 	} else if m.searchScope == scopeAll {
-		scope = "All sources"
+		scope = "Toutes les sources"
 	}
-	head := "Search ▸ " + m.searchInput.View()
+	head := "Recherche ▸ " + m.searchInput.View()
 	right := lipgloss.NewStyle().Foreground(accent).Render(scope) + lipgloss.NewStyle().Foreground(subtle).Render("  (Tab)")
 	gap := width - lipgloss.Width(head) - lipgloss.Width(scope+"  (Tab)")
 	if gap < 1 {
@@ -370,7 +370,7 @@ func (m model) searchView() string {
 	b.WriteString(head + strings.Repeat(" ", gap) + right + "\n")
 	b.WriteString(rule + "\n")
 	if m.replaceMode {
-		b.WriteString("Replace ▸ " + m.replaceInput.View() + "\n")
+		b.WriteString("Remplacer ▸ " + m.replaceInput.View() + "\n")
 		b.WriteString(rule + "\n")
 	}
 
@@ -401,18 +401,18 @@ func (m model) searchView() string {
 	for _, h := range m.searchHits {
 		files[h.file] = true
 	}
-	note := fmt.Sprintf("%d matches in %d files", len(m.searchHits), len(files))
+	note := fmt.Sprintf("%d résultats dans %d fichiers", len(m.searchHits), len(files))
 	if len(m.searchHits) >= searchLimit {
-		note += " (capped)"
+		note += " (limité)"
 	}
 	if q == "" {
-		note = "type to search"
+		note = "tapez pour rechercher"
 	} else if len(m.searchHits) == 0 {
-		note = "(no matches)"
+		note = "(aucun résultat)"
 	}
-	footText := note + " · ↑↓ select · ⏎ open · Tab scope · ctrl+r replace · esc back"
+	footText := note + " · ↑↓ sélectionner · ⏎ ouvrir · Tab portée · ctrl+r remplacer · esc retour"
 	if m.replaceMode {
-		footText = "⏎ replace all in this chapter · esc cancel"
+		footText = "⏎ remplacer tout dans ce chapitre · esc annuler"
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
 	b.WriteString(foot)

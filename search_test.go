@@ -164,16 +164,16 @@ func TestReplaceStatusFlagsCaseVariants(t *testing.T) {
 	if !changed || out != "The x THE" {
 		t.Fatalf("out=%q changed=%v", out, changed)
 	}
-	if !strings.Contains(status, "replaced 1") || !strings.Contains(status, "case-variant") {
+	if !strings.Contains(status, "remplacement(s)") || !strings.Contains(status, "variante(s) de casse") {
 		t.Fatalf("status should flag case-variants left, got %q", status)
 	}
 	// No exact-case match, but case-insensitive matches exist → explain, don't just say "no matches".
 	_, status, changed = replaceStatus("The THE", "the", "x")
-	if changed || !strings.Contains(status, "exact-case") {
+	if changed || !strings.Contains(status, "exacte (casse)") {
 		t.Fatalf("want an exact-case explanation, got %q changed=%v", status, changed)
 	}
 	// All-same-case → no case-variant note.
-	if _, status, _ = replaceStatus("the the", "the", "x"); strings.Contains(status, "case-variant") {
+	if _, status, _ = replaceStatus("the the", "the", "x"); strings.Contains(status, "variante(s) de casse") {
 		t.Fatalf("no case-variant note expected, got %q", status)
 	}
 }
