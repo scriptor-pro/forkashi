@@ -229,7 +229,7 @@ func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
 	if m.files.dir != dir {
 		t.Fatalf("pane dir = %q, want %q (should enter the project)", m.files.dir, dir)
 	}
-	if filepath.Base(m.currentFile) != "01-untitled.md" {
+	if filepath.Base(m.currentFile) != "01-pas-encore-de-titre.md" {
 		t.Fatalf("currentFile = %q, want the opened first chapter", m.currentFile)
 	}
 	if m.focus != focusEditor {

@@ -1882,7 +1882,7 @@ func (m *model) enterManuscript() {
 	m.pager.load(m.files.dir, w)
 	m.lastClickTime = time.Time{} // don't carry a stale double-click in from another screen
 	m.screen = screenManuscript
-	m.status = "manuscrit · ↑↓ défiler · entrée éditer ici · esc éditeur"
+	m.status = "manuscrit · ↑↓ défiler · entrée éditer ici · esc éditeur · F1 aide"
 }
 
 // pagerWidth is the pager's measure: the configured column width, never wider than
@@ -2052,7 +2052,7 @@ func (m *model) confirmCreate() {
 		dir := filepath.Join(m.files.dir, name)
 		if explicitFolder {
 			// New Project → a real manuscript (folder + manifest + first chapter you land in).
-			first, err := createManuscript(dir, name, "Untitled")
+			first, err := createManuscript(dir, name, "Pas encore de titre")
 			if err != nil {
 				m.status = "impossible de créer le projet : " + err.Error()
 				return

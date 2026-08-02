@@ -150,7 +150,7 @@ func (m model) heatmapView() string {
 	body := header + "\n\n" + strings.Join(rows, "\n") + "\n\n" +
 		lipgloss.NewStyle().Foreground(subtle).Render(legend) + "\n" +
 		lipgloss.NewStyle().Foreground(subtle).Render(stats)
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("esc / g / q  back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("esc / g / q  retour")
 	return lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body) + "\n" +
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot)
 }

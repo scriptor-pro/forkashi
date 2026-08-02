@@ -288,11 +288,11 @@ func (f filelist) selectedFile() (string, bool) {
 	return filepath.Join(f.dir, e.name), true
 }
 
-// paneLabel is the file-pane header: "Files" at the source root, the manuscript title
+// paneLabel is the file-pane header: "Fichiers" at the source root, the manuscript title
 // for a manuscript (manifest or legacy), else the folder name for a category.
 func (f filelist) paneLabel() string {
 	if f.dir == "" || f.dir == f.root {
-		return "Files"
+		return "Fichiers"
 	}
 	if f.view.ordered() {
 		return f.view.title

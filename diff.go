@@ -280,12 +280,12 @@ func (m model) diffView() string {
 		rows = append(rows, ansi.Truncate(renderDiffLine(d.lines[i], d.wordRuns[i]), max(4, m.width-1), "…"))
 	}
 	if len(d.lines) == 0 {
-		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (files are identical)"))
+		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (fichiers identiques)"))
 	}
 	for len(rows) < h {
 		rows = append(rows, "")
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ scroll · n/N next/prev change · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ défiler · n/N modif suiv/préc · esc retour")
 	return header + "\n\n" + strings.Join(rows, "\n") + "\n" + foot
 }
 

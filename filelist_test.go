@@ -381,8 +381,8 @@ func TestPaneLabel(t *testing.T) {
 	f.root = root
 
 	f.SetDir(root)
-	if got := f.paneLabel(); got != "Files" {
-		t.Fatalf("root paneLabel = %q, want Files", got)
+	if got := f.paneLabel(); got != "Fichiers" {
+		t.Fatalf("root paneLabel = %q, want Fichiers", got)
 	}
 	f.SetDir(proj)
 	if got := f.paneLabel(); got != "The Real Title" {

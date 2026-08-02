@@ -64,7 +64,7 @@ func (m *model) applyAdd(c structAdd) {
 		}
 		f := uniqueChapterFile(m.structureDir, taken)
 		m.structurePendingNew[f] = true
-		it = manifestItem{File: f, Title: "Sans titre"}
+		it = manifestItem{File: f, Title: "Pas encore de titre"}
 	} else { // promote an existing loose Resource
 		it = manifestItem{File: c.file, Title: sectionTitle(c.file)}
 	}
