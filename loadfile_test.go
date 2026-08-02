@@ -36,7 +36,7 @@ func TestLoadFileValidUTF8OpensNormally(t *testing.T) {
 	m := model{editor: textarea.New()}
 	m.loadFile(file)
 
-	if !strings.Contains(m.status, "opened") {
+	if !strings.Contains(m.status, "ouvert") {
 		t.Fatalf("a valid UTF-8 file should open normally, got status %q", m.status)
 	}
 }

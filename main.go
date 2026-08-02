@@ -42,34 +42,34 @@ else ~/Documents/okashi. Inside the app, ctrl+p toggles a Markdown preview.`
 // measure" is ~66). Override with OKASHI_WIDTH.
 const defaultColumnWidth = 72
 
-const helpText = `NAVIGATE
-  ctrl+o home   ctrl+b sidebar   ctrl+y inspector
-  ctrl+k corkboard   ctrl+l outline   esc back/focus
+const helpText = `NAVIGUER
+  ctrl+o accueil   ctrl+b panneau   ctrl+y inspecteur
+  ctrl+k tableau   ctrl+l plan   esc retour/focus
 
-FILES  (sidebar focus)
-  ctrl+n new · chapter|resource   r rename (F2)
-  d duplicate   M move   del delete
+FICHIERS  (focus panneau)
+  ctrl+n nouveau · chapitre|ressource   r renommer (F2)
+  d dupliquer   M déplacer   suppr supprimer
 
-MANUSCRIPT  (corkboard: ctrl+k or c)
-  J/K reorder (shift+↑↓)   e synopsis   a add   x remove   r retitle
-  m pager   b snapshots/diff   n notes
+MANUSCRIT  (tableau : ctrl+k ou c)
+  J/K réordonner (maj+↑↓)   e synopsis   a ajouter   x retirer   r retitrer
+  m lecture   b sauvegardes/diff   n notes
 
-OUTLINE  (ctrl+l)
-  shift+↑/↓ move beat   ctrl+p promote → chapter   (alt works too)
+PLAN  (ctrl+l)
+  maj+↑/↓ déplacer le beat   ctrl+p promouvoir → chapitre   (alt marche aussi)
 
-WRITE
-  ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
-  ctrl+t typewriter   ctrl+d focus-dim   ctrl+x select
-  ctrl+r spelling   ⌥/⇧+drag select · ⌘C copy
+ÉCRIRE
+  ctrl+s enregistrer   ctrl+z annuler   ⇥/⇧⇥ indenter
+  ctrl+t machine à écrire   ctrl+d focus atténué   ctrl+x sélection
+  ctrl+r orthographe   ⌥/⇧+glisser sélectionner · ⌘C copier
 
-REVIEW & OUTPUT
-  ctrl+f search   ctrl+p preview   ctrl+e export
+RELECTURE & SORTIE
+  ctrl+f rechercher   ctrl+p aperçu   ctrl+e exporter
 
-GOALS & TIME
-  ctrl+g goals   ctrl+u sprint   g history (sidebar)
+OBJECTIFS & TEMPS
+  ctrl+g objectifs   ctrl+u sprint   g historique (panneau)
 
-APP
-  i properties (home)   F1/? help   ctrl+c quit`
+APPLICATION
+  i propriétés (accueil)   F1/? aide   ctrl+c quitter`
 
 // resolveColumnWidthEnv reads OKASHI_WIDTH (a column count in [20,200]); the bool reports whether a
 // valid value was present (so a higher tier can decide whether to override it).
@@ -356,7 +356,7 @@ func initialModel() model {
 	startupSettings := resolveSettings(writingDir())
 
 	ta := textarea.New()
-	ta.Placeholder = "Start writing…"
+	ta.Placeholder = "Commencez à écrire…"
 	ta.Prompt = "" // no gutter pipe — read like paper, not code
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0 // unlimited
@@ -769,7 +769,7 @@ func (m *model) applySuggestion(i int) {
 		if addToDictionary(m.suggestWord) {
 			m.status = "added '" + m.suggestWord + "' to dictionary"
 		} else {
-			m.status = "'" + m.suggestWord + "' is already known"
+			m.status = "« " + m.suggestWord + " » est déjà connu"
 		}
 		m.applyDecorator() // the word is now known — clear its underline
 		return
@@ -777,7 +777,7 @@ func (m *model) applySuggestion(i int) {
 	chosen := matchCase(m.suggestWord, m.suggestions[i])
 	m.checkpointUndo() // capture pre-apply state so ctrl+z can undo the fix
 	m.editor.ReplaceRange(m.suggestStart, m.suggestEnd, chosen)
-	m.status = "'" + m.suggestWord + "' → '" + chosen + "'"
+	m.status = "« " + m.suggestWord + " » → « " + chosen + " »"
 	m.suggesting = false
 	m.invalidateAppleFindings() // the edit shifts offsets; refresh via Check grammar
 }
@@ -864,12 +864,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.applyDecorator()
 			n := len(msg.findings)
 			if n == 1 {
-				m.status = "1 grammar note"
+				m.status = "1 remarque grammaticale"
 			} else {
-				m.status = fmt.Sprintf("%d grammar notes", n)
+				m.status = fmt.Sprintf("%d remarques grammaticales", n)
 			}
 		} else {
-			m.status = "grammar check failed"
+			m.status = "échec de la vérification grammaticale"
 		}
 		return m, nil
 	}
@@ -958,7 +958,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			case "esc":
 				m.createPicker = false
-				m.status = "create cancelled"
+				m.status = "création annulée"
 			}
 		}
 		return m, nil
@@ -976,7 +976,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.creatingFolder = false
 				m.createKind = 0 // don't let a cancelled chapter|resource pick bleed into the next create
 				m.nameInput.Blur()
-				m.status = "create cancelled"
+				m.status = "création annulée"
 				return m, nil
 			case "enter":
 				m.confirmCreate()
@@ -997,7 +997,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.renaming = false
 				m.renamingInPane = false
 				m.nameInput.Blur()
-				m.status = "rename cancelled"
+				m.status = "renommage annulé"
 				m.refreshAfterRename()
 				return m, nil
 			case "enter":
@@ -1020,7 +1020,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			default:
 				m.deleting = false
-				m.status = "delete cancelled"
+				m.status = "suppression annulée"
 				return m, nil
 			}
 		}
@@ -1042,7 +1042,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "esc":
 				m.exportPrompt = false
-				m.status = "export cancelled"
+				m.status = "export annulé"
 				return m, nil
 			}
 		}
@@ -1098,14 +1098,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if _, err := time.Parse("2006-01-02", raw); err == nil {
 					pg.Deadline = raw
 				} else {
-					m.status = "deadline must be YYYY-MM-DD (or blank) — try again"
+					m.status = "échéance au format AAAA-MM-JJ (ou vide) — réessayez"
 					return m, nil
 				}
 				m.goalsAll[m.files.dir] = pg
 				saveGoals(goalsPath(), m.goalsAll)
 				m.goalPromptField = 0
 				m.nameInput.Blur()
-				m.status = "goals saved"
+				m.status = "objectifs enregistrés"
 				return m, nil
 			}
 		}
@@ -1121,7 +1121,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc":
 				m.suggesting = false
-				m.status = "suggestion cancelled"
+				m.status = "suggestion annulée"
 				return m, nil
 			case "left":
 				if m.suggestIndex > 0 {
@@ -1202,7 +1202,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.analysis.grammar && m.grammarChecker != nil && !m.checkingGrammar && localX >= 0 && msg.Y-1 == analysisActionRowY {
 				m.checkingGrammar = true
 				m.lastGrammarCheck = time.Now()
-				m.status = "checking grammar…"
+				m.status = "vérification grammaticale…"
 				return m, checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value())
 			}
 			// Auto-recheck toggle row.
@@ -1373,7 +1373,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if hasManifest(m.files.dir) {
 				// In a manuscript, ask: chapter or resource.
 				m.createPicker = true
-				m.status = "new: c chapter (ordered) · r resource (loose doc) · esc cancel"
+				m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · esc annuler"
 				return m, nil
 			}
 			m.createKind = 0
@@ -1392,19 +1392,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// text (and the terminal's own copy works), then restore capture so clicks work again.
 			m.selectMode = !m.selectMode
 			if m.selectMode {
-				m.status = "-- SELECT -- · drag to select, copy with your terminal · ctrl+x exits"
+				m.status = "-- SÉLECTION -- · glissez pour sélectionner, copiez avec votre terminal · ctrl+x quitte"
 				return m, tea.DisableMouse
 			}
-			m.status = "select mode off"
+			m.status = "mode sélection désactivé"
 			return m, tea.EnableMouseCellMotion
 		case "ctrl+t":
 			m.typewriter = !m.typewriter
 			m.editor.Typewriter = m.typewriter
 			m.syncDim()
 			if m.typewriter {
-				m.status = "typewriter on"
+				m.status = "machine à écrire activée"
 			} else {
-				m.status = "typewriter off"
+				m.status = "machine à écrire désactivée"
 			}
 			return m, nil
 		case "ctrl+l":
@@ -1417,15 +1417,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "ctrl+e":
 			m.exportPrompt = true
-			m.status = "export: m manuscript · t tufte · esc cancel"
+			m.status = "export : m manuscrit · t tufte · esc annuler"
 			return m, nil
 		case "ctrl+d":
 			m.dimEnabled = !m.dimEnabled
 			m.syncDim()
 			if m.editor.Dim {
-				m.status = "dim on"
+				m.status = "atténuation activée"
 			} else {
-				m.status = "dim off"
+				m.status = "atténuation désactivée"
 			}
 			return m, nil
 		case "ctrl+b":
@@ -1449,13 +1449,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+u":
 			if m.sprintActive {
 				m.sprintActive = false
-				m.status = "sprint stopped"
+				m.status = "sprint arrêté"
 			} else {
 				mins := m.goalsAll[m.files.dir].applyEnvDefaults().SprintMin
 				m.sprintActive = true
 				m.sprintOnBreak = false
 				m.sprintEnd = m.now.Add(time.Duration(mins) * time.Minute)
-				m.status = fmt.Sprintf("sprint started — %d min", mins)
+				m.status = fmt.Sprintf("sprint démarré — %d min", mins)
 			}
 			return m, nil
 		case "esc":
@@ -1497,11 +1497,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.renaming && m.goalPromptField == 0 && !m.suggesting && !m.previewing {
 				w, s, e, ok := m.wordUnderCursor()
 				if !ok {
-					m.status = "no word under cursor"
+					m.status = "aucun mot sous le curseur"
 					return m, nil
 				}
 				if spellOK(w) {
-					m.status = "'" + w + "' looks correct"
+					m.status = "« " + w + " » semble correct"
 					return m, nil
 				}
 				sugg := append(spellSuggest(w, 7), dictItem) // + add-to-dictionary slot
@@ -1603,7 +1603,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.width == 0 {
-		return "loading…"
+		return "chargement…"
 	}
 
 	// Help overlay renders over any screen (F1 / ? open it from anywhere).
@@ -1612,9 +1612,9 @@ func (m model) View() string {
 		if hH < 1 {
 			hH = 1
 		}
-		card := framedPanel("Keys", helpText, 58, min(hH, lipgloss.Height(helpText)+2), "")
+		card := framedPanel("Touches", helpText, 58, min(hH, lipgloss.Height(helpText)+2), "")
 		body := lipgloss.Place(m.width, hH, lipgloss.Center, lipgloss.Center, card)
-		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1 · ? · esc  close"))
+		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1 · ? · esc  fermer"))
 	}
 
 	if m.screen == screenHome {
@@ -1680,13 +1680,13 @@ func (m model) View() string {
 	if m.previewing {
 		name := filepath.Base(m.currentFile)
 		if m.currentFile == "" {
-			name = "untitled"
+			name = "sans titre"
 		}
-		style := "Default"
+		style := "Standard"
 		if m.previewTufte {
 			style = "Tufte"
 		}
-		header := breadcrumbStyle.Render("▌ PREVIEW · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
+		header := breadcrumbStyle.Render("▌ APERÇU · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
 	}
 
@@ -1882,7 +1882,7 @@ func (m *model) enterManuscript() {
 	m.pager.load(m.files.dir, w)
 	m.lastClickTime = time.Time{} // don't carry a stale double-click in from another screen
 	m.screen = screenManuscript
-	m.status = "manuscript · ↑↓ scroll · enter edit here · esc editor"
+	m.status = "manuscrit · ↑↓ défiler · entrée éditer ici · esc éditeur"
 }
 
 // pagerWidth is the pager's measure: the configured column width, never wider than
@@ -1901,13 +1901,13 @@ func (m *model) loadFile(path string) {
 		if m.dirty {
 			// The flush failed (I/O error) — save() left dirty=true. Don't clobber the
 			// unsaved buffer; stay on the current file and surface the error.
-			m.status = "save failed — staying on " + filepath.Base(m.currentFile)
+			m.status = "échec de l'enregistrement — reste sur " + filepath.Base(m.currentFile)
 			return
 		}
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		m.status = "couldn't open: " + filepath.Base(path)
+		m.status = "impossible d'ouvrir : " + filepath.Base(path)
 		return
 	}
 	m.editor.SetValue(string(data))
@@ -1925,12 +1925,12 @@ func (m *model) loadFile(path string) {
 	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
 	if utf8.Valid(data) {
-		m.status = "opened " + filepath.Base(path)
+		m.status = "ouvert " + filepath.Base(path)
 	} else {
 		// A non-UTF-8 file (e.g. Latin-1) decodes with replacement runes; saving would re-encode
 		// it as UTF-8 and lose the original bytes. Warn, and leave the buffer clean so nothing is
 		// rewritten until the writer makes an intentional edit.
-		m.status = "⚠ " + filepath.Base(path) + " isn't valid UTF-8 — editing then saving will re-encode it"
+		m.status = "⚠ " + filepath.Base(path) + " n'est pas un UTF-8 valide — modifier puis enregistrer le ré-encodera"
 	}
 	addRecent(recentPath(), path, m.editor.Line())
 	m.dirty = false
@@ -1945,7 +1945,7 @@ func (m *model) loadFile(path string) {
 // (read-modify-write, atomic), then opens it.
 func (m *model) createChapter(name string) {
 	if strings.Contains(name, "/") {
-		m.status = "a chapter name can't contain a path separator"
+		m.status = "un nom de chapitre ne peut pas contenir de séparateur de chemin"
 		return
 	}
 	if filepath.Ext(name) == "" {
@@ -1953,24 +1953,24 @@ func (m *model) createChapter(name string) {
 	}
 	dst := filepath.Join(m.files.dir, name)
 	if _, err := os.Stat(dst); err == nil {
-		m.status = "a file named " + name + " already exists"
+		m.status = "un fichier nommé " + name + " existe déjà"
 		return
 	}
 	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
-		m.status = "couldn't create chapter: " + err.Error()
+		m.status = "impossible de créer le chapitre : " + err.Error()
 		return
 	}
 	if mani, present, err := readManifest(m.files.dir); err == nil && present {
 		mani.Items = append(mani.Items, manifestItem{File: name, Title: sectionTitle(name)})
 		if werr := writeManifest(m.files.dir, mani); werr != nil {
-			m.status = "chapter created but manifest update failed: " + werr.Error()
+			m.status = "chapitre créé mais échec de la mise à jour du manifeste : " + werr.Error()
 		}
 	}
 	m.files.SetDir(m.files.dir)
 	m.loadFile(dst)
 	m.focus = focusEditor
 	m.editor.Focus()
-	m.status = "new chapter " + name
+	m.status = "nouveau chapitre " + name
 }
 
 // createResource makes an unlisted resource doc — loose at the manuscript root, or into a subfolder
@@ -1981,7 +1981,7 @@ func (m *model) createResource(name string) {
 		sub, name = name[:i], name[i+1:]
 	}
 	if strings.Contains(name, "/") || name == "" {
-		m.status = "a resource name can't be empty or contain '/' (use Folder/name to file it in a subfolder)"
+		m.status = "un nom de ressource ne peut pas être vide ni contenir '/' (utilisez Dossier/nom pour le classer dans un sous-dossier)"
 		return
 	}
 	if filepath.Ext(name) == "" {
@@ -1991,24 +1991,24 @@ func (m *model) createResource(name string) {
 	if sub != "" {
 		dir = filepath.Join(dir, sub)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			m.status = "couldn't create folder: " + err.Error()
+			m.status = "impossible de créer le dossier : " + err.Error()
 			return
 		}
 	}
 	dst := filepath.Join(dir, name)
 	if _, err := os.Stat(dst); err == nil {
-		m.status = "a file named " + name + " already exists"
+		m.status = "un fichier nommé " + name + " existe déjà"
 		return
 	}
 	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
-		m.status = "couldn't create resource: " + err.Error()
+		m.status = "impossible de créer la ressource : " + err.Error()
 		return
 	}
 	m.files.SetDir(m.files.dir)
 	m.files.selectName(name)
 	m.focus = focusSidebar
 	m.editor.Blur()
-	m.status = "new resource " + name
+	m.status = "nouvelle ressource " + name
 }
 
 func (m *model) confirmCreate() {
@@ -2021,7 +2021,7 @@ func (m *model) confirmCreate() {
 	m.creatingFolder = false
 	m.nameInput.Blur()
 	if name == "" {
-		m.status = "create cancelled (no name)"
+		m.status = "création annulée (aucun nom)"
 		return
 	}
 
@@ -2039,12 +2039,12 @@ func (m *model) confirmCreate() {
 	name = strings.TrimSuffix(name, "/")
 
 	if strings.Contains(name, "/") || name == "." || name == ".." {
-		m.status = "name can't contain a path separator"
+		m.status = "le nom ne peut pas contenir de séparateur de chemin"
 		return
 	}
 
 	if name == manifestName {
-		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
+		m.status = "manifest.json ne peut être ni renommé ni supprimé — c'est ainsi qu'okashi suit l'ordre des chapitres"
 		return
 	}
 
@@ -2054,24 +2054,24 @@ func (m *model) confirmCreate() {
 			// New Project → a real manuscript (folder + manifest + first chapter you land in).
 			first, err := createManuscript(dir, name, "Untitled")
 			if err != nil {
-				m.status = "couldn't create project: " + err.Error()
+				m.status = "impossible de créer le projet : " + err.Error()
 				return
 			}
 			m.files.SetDir(dir)
 			m.loadFile(filepath.Join(dir, first))
 			m.focus = focusEditor
 			m.editor.Focus()
-			m.status = "new project " + name + " — start writing"
+			m.status = "nouveau projet " + name + " — commencez à écrire"
 			return
 		}
 		// "name/" convention → a plain category folder; refresh and stay.
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			m.status = "couldn't create folder: " + err.Error()
+			m.status = "impossible de créer le dossier : " + err.Error()
 			return
 		}
 		m.files.SetDir(m.files.dir)
 		m.files.selectName(name)
-		m.status = "created folder " + name
+		m.status = "dossier créé " + name
 		m.focus = focusSidebar
 		m.editor.Blur()
 		return
@@ -2086,7 +2086,7 @@ func (m *model) confirmCreate() {
 	m.dirty = false
 	m.focus = focusEditor
 	m.editor.Focus()
-	m.status = "new file: " + name + " — ctrl+s to save"
+	m.status = "nouveau fichier : " + name + " — ctrl+s pour enregistrer"
 }
 
 // beginRename opens the rename prompt for t, pre-filled with prefill.
@@ -2128,7 +2128,7 @@ func (m *model) startRename() {
 	}
 	v := m.files.view
 	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is read-only (external manifest)"
+		m.status = "manifeste illisible — structure en lecture seule (manifeste externe)"
 		return
 	}
 	if isChapterOf(v, e.name) {
@@ -2163,12 +2163,12 @@ func (m *model) startDelete() {
 		return
 	}
 	if e.name == manifestName {
-		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
+		m.status = "manifest.json ne peut être ni renommé ni supprimé — c'est ainsi qu'okashi suit l'ordre des chapitres"
 		return
 	}
 	v := m.files.view
 	if isChapterOf(v, e.name) && v.source == sourceManifest {
-		m.status = "chapter files are read-only (external manifest)"
+		m.status = "les fichiers de chapitre sont en lecture seule (manifeste externe)"
 		return
 	}
 	m.deleting = true
@@ -2191,7 +2191,7 @@ func (m *model) confirmDelete() {
 	m.deleting = false
 	m.deleteTarget = ""
 	if err != nil {
-		m.status = "couldn't delete: " + err.Error()
+		m.status = "impossible de supprimer : " + err.Error()
 		return
 	}
 	if info != nil && !info.IsDir() {
@@ -2204,7 +2204,7 @@ func (m *model) confirmDelete() {
 		}
 		m.files.selectRow(idx) // the row the deleted item occupied (now its neighbor)
 	}
-	m.status = "deleted"
+	m.status = "supprimé"
 }
 
 // duplicateSelected copies the selected file to a free "name copy.ext" (then
@@ -2215,7 +2215,7 @@ func (m *model) duplicateSelected() {
 	}
 	e := m.files.entries[m.files.selected]
 	if e.name == ".." || e.isDir {
-		m.status = "duplicate: files only"
+		m.status = "duplication : fichiers uniquement"
 		return
 	}
 	ext := filepath.Ext(e.name)
@@ -2223,16 +2223,16 @@ func (m *model) duplicateSelected() {
 	target := copyFreeName(m.files.dir, stem, ext)
 	data, err := os.ReadFile(filepath.Join(m.files.dir, e.name))
 	if err != nil {
-		m.status = "duplicate failed: " + err.Error()
+		m.status = "échec de la duplication : " + err.Error()
 		return
 	}
 	if err := atomicWrite(filepath.Join(m.files.dir, target), data, 0o644); err != nil {
-		m.status = "duplicate failed: " + err.Error()
+		m.status = "échec de la duplication : " + err.Error()
 		return
 	}
 	m.files.SetDir(m.files.dir)
 	m.files.selectName(target)
-	m.status = "duplicated → " + target
+	m.status = "dupliqué → " + target
 }
 
 // copyFreeName returns "stem copy.ext", then "stem copy 2.ext", … that doesn't exist in dir.
@@ -2258,16 +2258,16 @@ func (m *model) confirmRename() {
 	typed := strings.TrimSpace(m.nameInput.Value())
 	t := m.renameTarget
 	if typed == "" {
-		m.status = "rename cancelled (empty)"
+		m.status = "renommage annulé (vide)"
 		m.refreshAfterRename()
 		return
 	}
 
 	if t.manifestChapter {
 		if err := renameChapterTitle(t.dir, t.name, typed); err != nil {
-			m.status = "retitle failed: " + err.Error()
+			m.status = "échec du retitrage : " + err.Error()
 		} else {
-			m.status = "retitled to " + typed
+			m.status = "retitré en " + typed
 		}
 		m.refreshAfterRename()
 		return
@@ -2278,7 +2278,7 @@ func (m *model) confirmRename() {
 		newName = sectionRetitle(t.name, typed)
 	} else {
 		if strings.Contains(typed, "/") || typed == "." || typed == ".." {
-			m.status = "name can't contain a path separator"
+			m.status = "le nom ne peut pas contenir de séparateur de chemin"
 			m.refreshAfterRename()
 			return
 		}
@@ -2289,13 +2289,13 @@ func (m *model) confirmRename() {
 		}
 	}
 	if newName == manifestName {
-		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
+		m.status = "manifest.json ne peut être ni renommé ni supprimé — c'est ainsi qu'okashi suit l'ordre des chapitres"
 		m.refreshAfterRename()
 		return
 	}
 
 	if newName == t.name {
-		m.status = "unchanged"
+		m.status = "inchangé"
 		m.refreshAfterRename()
 		return
 	}
@@ -2308,7 +2308,7 @@ func (m *model) confirmRename() {
 		return
 	}
 	if err := os.Rename(oldPath, newPath); err != nil {
-		m.status = "rename failed: " + err.Error()
+		m.status = "échec du renommage : " + err.Error()
 		m.refreshAfterRename()
 		return
 	}
@@ -2322,7 +2322,7 @@ func (m *model) confirmRename() {
 		m.currentFile = newPath
 	}
 	m.refreshAfterRename()
-	m.status = "renamed to " + newName
+	m.status = "renommé en " + newName
 }
 
 // refreshAfterRename re-reads the sidebar and restores focus to the file pane.
@@ -2341,7 +2341,7 @@ func (m *model) togglePreview() {
 		if m.focus == focusEditor || !m.sidebarVisible {
 			m.editor.Focus()
 		}
-		m.status = "editing"
+		m.status = "édition"
 		return
 	}
 
@@ -2349,7 +2349,7 @@ func (m *model) togglePreview() {
 	m.preview.GotoTop()
 	m.previewing = true
 	m.editor.Blur()
-	m.status = "preview (read-only) · ctrl+p edit · t style · ↑/↓ scroll"
+	m.status = "aperçu (lecture seule) · ctrl+p éditer · t style · ↑/↓ défiler"
 }
 
 // NOTE: the sidenote helpers below (sidenoteGeometry, sidenotePlan, and in preview.go
@@ -2408,12 +2408,12 @@ func (m *model) renderPreview() {
 	}
 	r, err := glamour.NewTermRenderer(styleOpt, glamour.WithWordWrap(wrap))
 	if err != nil {
-		m.status = "preview unavailable: " + err.Error()
+		m.status = "aperçu indisponible : " + err.Error()
 		return
 	}
 	out, err := r.Render(footnotesToEndnotes(m.editor.Value()))
 	if err != nil {
-		m.status = "preview failed: " + err.Error()
+		m.status = "échec de l'aperçu : " + err.Error()
 		return
 	}
 	m.preview.SetContent(out)
@@ -2515,15 +2515,15 @@ func (m model) statusBar() string {
 	showSidebar, _, _ := m.effectivePanels()
 	if m.creatingFile && (!m.creatingInPane || !showSidebar) {
 		folderMode := m.creatingFolder || strings.HasSuffix(m.nameInput.Value(), "/")
-		label := "new file ▸ "
+		label := "nouveau fichier ▸ "
 		if folderMode {
-			label = "new folder ▸ "
+			label = "nouveau dossier ▸ "
 		}
 		bar := label + m.nameInput.View()
 		if folderMode {
 			return bar
 		}
-		hint := lipgloss.NewStyle().Foreground(subtle).Render("end with / for a folder")
+		hint := lipgloss.NewStyle().Foreground(subtle).Render("terminez par / pour un dossier")
 		gap := (m.width - 2) - lipgloss.Width(bar) - lipgloss.Width(hint)
 		if gap < 1 {
 			return bar
@@ -2539,7 +2539,7 @@ func (m model) statusBar() string {
 				parts[i] = s
 			}
 		}
-		return "suggest ▸ " + strings.Join(parts, " · ")
+		return "suggestion ▸ " + strings.Join(parts, " · ")
 	}
 	if w, sugg, ok := m.cursorSpellHint(); ok {
 		return "✗ " + w + " → " + strings.Join(sugg, " · ") + "  ·  ^R"
@@ -2553,25 +2553,25 @@ func (m model) statusBar() string {
 		return ansi.Truncate(hint, max(10, editorArea-2), "…") // keep the fix visible; trim the reason
 	}
 	if m.renaming && (!m.renamingInPane || !showSidebar) {
-		return "rename ▸ " + m.nameInput.View()
+		return "renommer ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 1 {
-		return "daily goal ▸ " + m.nameInput.View()
+		return "objectif quotidien ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 2 {
-		return "project goal ▸ " + m.nameInput.View()
+		return "objectif du projet ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 3 {
-		return "daily minutes ▸ " + m.nameInput.View()
+		return "minutes quotidiennes ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 4 {
-		return "deadline YYYY-MM-DD (blank clears) ▸ " + m.nameInput.View()
+		return "échéance AAAA-MM-JJ (vide efface) ▸ " + m.nameInput.View()
 	}
 	if m.exportPrompt {
-		return "export: m manuscript · t tufte · esc cancel"
+		return "export : m manuscrit · t tufte · esc annuler"
 	}
 	if m.createPicker {
-		return "new: c chapter · r resource · esc cancel"
+		return "nouveau : c chapitre · r ressource · esc annuler"
 	}
 	mark := "✓"
 	if m.dirty {
@@ -2585,7 +2585,7 @@ func (m model) statusBar() string {
 	// status — these single-key features are only in F1 otherwise.
 	status := m.status
 	if status == "" && m.focus == focusSidebar {
-		status = "c corkboard · m read · b backups · F1 keys"
+		status = "c tableau · m lecture · b sauvegardes · F1 touches"
 	}
 	return m.composeStatus(status, stats)
 }
@@ -2677,7 +2677,7 @@ func pruneBackups(dir, base string, keep int) {
 
 func (m *model) save() {
 	if m.currentFile == "" {
-		m.status = "no file open — pick one from the sidebar first"
+		m.status = "aucun fichier ouvert — choisissez-en un dans le panneau d'abord"
 		return
 	}
 	// External-change guard: never overwrite a file that changed on disk since we loaded it.
@@ -2686,10 +2686,10 @@ func (m *model) save() {
 			ext := filepath.Ext(m.currentFile)
 			confl := strings.TrimSuffix(m.currentFile, ext) + ".conflict-" + time.Now().Format("20060102-150405") + ext
 			if werr := atomicWrite(confl, []byte(m.editor.Value()), 0o644); werr != nil {
-				m.status = "save failed (conflict): " + werr.Error()
+				m.status = "échec de l'enregistrement (conflit) : " + werr.Error()
 				return
 			}
-			m.status = "⚠ " + filepath.Base(m.currentFile) + " changed on disk — your edits saved to " + filepath.Base(confl)
+			m.status = "⚠ " + filepath.Base(m.currentFile) + " a changé sur le disque — vos modifications ont été enregistrées dans " + filepath.Base(confl)
 			m.currentFile = confl
 			if m.loadedMtime == nil {
 				m.loadedMtime = map[string]time.Time{}
@@ -2710,12 +2710,12 @@ func (m *model) save() {
 		m.backedUp[m.currentFile] = true
 	}
 	if err := atomicWrite(m.currentFile, []byte(m.editor.Value()), 0o644); err != nil {
-		m.status = "save failed: " + err.Error()
+		m.status = "échec de l'enregistrement : " + err.Error()
 		return // dirty stays true → retried next tick
 	}
 	m.dirty = false
 	addRecent(recentPath(), m.currentFile, m.editor.Line())
-	m.status = "saved " + filepath.Base(m.currentFile)
+	m.status = "enregistré " + filepath.Base(m.currentFile)
 	if m.loadedMtime == nil {
 		m.loadedMtime = map[string]time.Time{}
 	}

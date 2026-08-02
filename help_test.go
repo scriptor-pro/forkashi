@@ -46,7 +46,7 @@ func TestHelpOpensGloballyAndRenders(t *testing.T) {
 	}
 	// The overlay renders over any screen (here: home), showing the categorized keys.
 	out := ansi.Strip(model{screen: screenHome, width: 80, height: 24, showHelp: true}.View())
-	for _, want := range []string{"NAVIGATE", "MANUSCRIPT", "ctrl+k corkboard", "J/K reorder"} {
+	for _, want := range []string{"NAVIGUER", "MANUSCRIT", "ctrl+k tableau", "J/K réordonner"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("help overlay should render %q over the home screen, got:\n%s", want, out)
 		}

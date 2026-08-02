@@ -1035,8 +1035,8 @@ func TestPreviewHeaderShown(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
 	m = nm.(model)
 	view := m.View()
-	if !strings.Contains(view, "PREVIEW") {
-		t.Fatal("preview should show a PREVIEW header")
+	if !strings.Contains(view, "APERÇU") {
+		t.Fatal("preview should show an APERÇU header")
 	}
 	if !strings.Contains(view, "chapter-01.md") {
 		t.Fatal("preview header should show the filename")

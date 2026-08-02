@@ -98,8 +98,8 @@ func TestPreviewTufteToggle(t *testing.T) {
 	if !strings.Contains(v, "Notes") || !strings.Contains(v, "a note") || strings.Contains(v, "[^1]") {
 		t.Fatal("preview should fold footnotes to endnotes")
 	}
-	if !strings.Contains(v, "Default") {
-		t.Fatal("preview header should show the Default style")
+	if !strings.Contains(v, "Standard") {
+		t.Fatal("preview header should show the Standard style")
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
 	m = nm.(model)
