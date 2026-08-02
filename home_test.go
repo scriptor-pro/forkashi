@@ -80,10 +80,10 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[4].kind != homeLoose || items[4].label != "◦ Notes" {
 		t.Fatalf("fifth item should be ◦ Notes, got %+v", items[4])
 	}
-	if items[5].kind != homeMoveFiles || items[5].label != "Move files" {
+	if items[5].kind != homeMoveFiles || items[5].label != "Déplacer des fichiers" {
 		t.Fatalf("sixth item should be Move files action, got %+v", items[5])
 	}
-	if items[6].kind != homeOpenOther || items[6].label != "Browse all files" {
+	if items[6].kind != homeOpenOther || items[6].label != "Parcourir tous les fichiers" {
 		t.Fatalf("last item should be the Browse action, got %+v", items[6])
 	}
 }
@@ -114,8 +114,8 @@ func TestBuildHomeItemsHasBrowseAction(t *testing.T) {
 	// Action row: Move files + Browse all files (in that order).
 	acts := homeGroupsActions(items)
 	if len(acts) != 2 ||
-		acts[0].kind != homeMoveFiles || acts[0].label != "Move files" ||
-		acts[1].kind != homeOpenOther || acts[1].label != "Browse all files" {
+		acts[0].kind != homeMoveFiles || acts[0].label != "Déplacer des fichiers" ||
+		acts[1].kind != homeOpenOther || acts[1].label != "Parcourir tous les fichiers" {
 		t.Fatalf("actions should be exactly [Move files, Browse all files], got %+v", acts)
 	}
 }
@@ -523,7 +523,7 @@ func TestHomeMoveFilesActionOpensStandaloneMover(t *testing.T) {
 	acts := homeGroupsActions(m.homeItems)
 	found := false
 	for _, a := range acts {
-		if a.kind == homeMoveFiles && a.label == "Move files" {
+		if a.kind == homeMoveFiles && a.label == "Déplacer des fichiers" {
 			found = true
 		}
 	}
@@ -586,7 +586,7 @@ func TestPinnedStripRendersAndHitTests(t *testing.T) {
 	m.resetHomeSelection()
 
 	out := ansiStrip(m.homeView())
-	if !strings.Contains(out, "PINNED") || !strings.Contains(out, "★ my-novel") {
+	if !strings.Contains(out, "ÉPINGLÉS") || !strings.Contains(out, "★ my-novel") {
 		t.Fatalf("home should render a PINNED strip with the pins:\n%s", out)
 	}
 	// render == hit-test: each pinned cell round-trips.
