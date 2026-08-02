@@ -26,12 +26,12 @@ func TestManuscriptWordCount(t *testing.T) {
 
 func TestApproxWords(t *testing.T) {
 	cases := map[int]string{
-		82437: "~82,500 words",
-		120:   "~100 words",
-		950:   "~1,000 words",
-		1234:  "~1,000 words",
-		1250:  "~1,500 words",
-		0:     "~0 words",
+		82437: "~82,500 mots",
+		120:   "~100 mots",
+		950:   "~1,000 mots",
+		1234:  "~1,000 mots",
+		1250:  "~1,500 mots",
+		0:     "~0 mots",
 	}
 	for n, want := range cases {
 		if got := approxWords(n); got != want {
@@ -63,7 +63,7 @@ func TestRTFTitlePagePresentAndSuppressesHeader(t *testing.T) {
 		}
 	}
 	// Word count string (RTF escapes the ~ as-is; digits/commas survive).
-	if !strings.Contains(out, "words") {
+	if !strings.Contains(out, "mots") {
 		t.Error("RTF title page missing word count")
 	}
 	// The title page must precede the first chapter's page break.
@@ -109,7 +109,7 @@ func TestDOCXTitlePagePresentWithPageBreak(t *testing.T) {
 		t.Fatal(err)
 	}
 	xml := docxDocumentXML(t, b)
-	for _, want := range []string{"Jane Ledoux", "123 Rue Ordinaire", "by Jane Ledoux", "words"} {
+	for _, want := range []string{"Jane Ledoux", "123 Rue Ordinaire", "by Jane Ledoux", "mots"} {
 		if !strings.Contains(xml, want) {
 			t.Errorf("DOCX title page missing %q", want)
 		}

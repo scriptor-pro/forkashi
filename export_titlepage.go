@@ -47,7 +47,7 @@ func blockWordCount(blk Block) int {
 }
 
 // approxWords formats a rounded, comma-grouped word count for the title page, e.g.
-// "~82,500 words". Rounds to the nearest 100 under 1,000 words, else the nearest 500 —
+// "~82,500 mots". Rounds to the nearest 100 under 1,000 words, else the nearest 500 —
 // the "approximate" figure agents expect, never a false-precision exact count.
 func approxWords(n int) string {
 	step := 500
@@ -55,7 +55,7 @@ func approxWords(n int) string {
 		step = 100
 	}
 	r := ((n + step/2) / step) * step
-	return "~" + commaInt(r) + " words"
+	return "~" + commaInt(r) + " mots"
 }
 
 // commaInt renders a non-negative int with thousands separators (1234567 → "1,234,567").
