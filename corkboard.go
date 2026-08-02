@@ -145,18 +145,33 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Export prompt (ctrl+e from the corkboard → whole-manuscript export).
-	if m.exportPrompt {
+	if m.exportChooser != nil {
 		switch key.String() {
 		case "ctrl+c":
 			return m, tea.Quit
-		case "m":
-			m.exportPrompt = false
-			m.runExport(StyleManuscript)
-		case "t":
-			m.exportPrompt = false
-			m.runExport(StyleTufte)
+		case "up", "k":
+			m.exportChooser.cursor = (m.exportChooser.cursor - 1 + exportChooserRowCount) % exportChooserRowCount
+		case "down", "j":
+			m.exportChooser.cursor = (m.exportChooser.cursor + 1) % exportChooserRowCount
+		case "left", "right":
+			if m.exportChooser.cursor == exportChooserRowCount-1 {
+				if m.exportChooser.style == StyleManuscript {
+					m.exportChooser.setStyle(StyleTufte)
+				} else {
+					m.exportChooser.setStyle(StyleManuscript)
+				}
+			}
+		case " ":
+			m.exportChooser.toggleAtCursor()
+		case "enter":
+			if !m.exportChooser.anyChecked() {
+				m.status = "choisissez au moins un format"
+				return m, nil
+			}
+			m.runExport()
+			m.exportChooser = nil
 		case "esc":
-			m.exportPrompt = false
+			m.exportChooser = nil
 			m.status = "export annulé"
 		}
 		return m, nil
@@ -270,8 +285,8 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "e":
 		m.startSynopsisEdit()
 	case "ctrl+e":
-		m.exportPrompt = true
-		m.status = "export : m manuscrit · t tufte · esc annuler"
+		c := newExportChooser()
+		m.exportChooser = &c
 	case "a":
 		m.structureAdding = true
 		m.structureAddSel = 0
@@ -461,6 +476,11 @@ func (m model) corkboardView() string {
 	if m.structureConfirm {
 		bar := lipgloss.NewStyle().Foreground(accent).Render("appliquer les modifications ? y appliquer · esc annuler")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
+		return b.String()
+	}
+	if m.exportChooser != nil {
+		panel := exportChooserView(*m.exportChooser, m.width)
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, panel))
 		return b.String()
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render("J/K/alt réordonner · e synopsis · a ajouter · x retirer · r renommer · ⏎ ouvrir · esc · F1 aide")

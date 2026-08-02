@@ -4,7 +4,98 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// exportFormat is one of the five file types runExport can produce.
+type exportFormat int
+
+const (
+	formatRTF exportFormat = iota
+	formatPDF
+	formatDOCX
+	formatODT
+	formatEPUB
+)
+
+// exportFormatOrder is the fixed display/iteration order for the chooser and for runExport's
+// write loop — RTF, PDF, DOCX, ODT, EPUB, matching the design spec's screen mockup.
+var exportFormatOrder = []exportFormat{formatRTF, formatPDF, formatDOCX, formatODT, formatEPUB}
+
+func (f exportFormat) label() string {
+	switch f {
+	case formatRTF:
+		return "RTF"
+	case formatPDF:
+		return "PDF"
+	case formatDOCX:
+		return "DOCX"
+	case formatODT:
+		return "ODT"
+	case formatEPUB:
+		return "EPUB"
+	}
+	return ""
+}
+
+func (f exportFormat) ext() string {
+	switch f {
+	case formatRTF:
+		return ".rtf"
+	case formatPDF:
+		return ".pdf"
+	case formatDOCX:
+		return ".docx"
+	case formatODT:
+		return ".odt"
+	case formatEPUB:
+		return ".epub"
+	}
+	return ""
+}
+
+// exportChooserRowCount is the number of navigable rows: 5 format checkboxes + 1 style radio.
+var exportChooserRowCount = len(exportFormatOrder) + 1
+
+// exportChooserModel backs the ctrl+e screen: which formats to write, and which style.
+// cursor indexes into exportFormatOrder for rows 0..4, and the style row is row 5 (the last).
+type exportChooserModel struct {
+	checked map[exportFormat]bool
+	style   ExportStyle
+	cursor  int
+}
+
+func newExportChooser() exportChooserModel {
+	return exportChooserModel{checked: make(map[exportFormat]bool), style: StyleManuscript}
+}
+
+func (c *exportChooserModel) toggleAtCursor() {
+	if c.cursor < len(exportFormatOrder) {
+		f := exportFormatOrder[c.cursor]
+		c.checked[f] = !c.checked[f]
+		return
+	}
+	// Style row: space toggles between the two styles.
+	if c.style == StyleManuscript {
+		c.style = StyleTufte
+	} else {
+		c.style = StyleManuscript
+	}
+}
+
+// setStyle is used by the ←/→ shortcut on the style row (direct set, not a toggle).
+func (c *exportChooserModel) setStyle(st ExportStyle) {
+	c.style = st
+}
+
+func (c exportChooserModel) anyChecked() bool {
+	for _, f := range exportFormatOrder {
+		if c.checked[f] {
+			return true
+		}
+	}
+	return false
+}
 
 // exportWholeManuscript reports whether ctrl+e should export the whole manuscript (from the
 // full-screen corkboard) rather than just the current document.
@@ -13,13 +104,16 @@ func (m model) exportWholeManuscript() bool {
 }
 
 // runExport builds the export doc for the current scope (whole manuscript from the corkboard,
-// else the current document) and writes <slug>.rtf + <slug>.pdf under <dir>/export/.
-func (m *model) runExport(st ExportStyle) {
+// else the current document) and writes one file per format checked in m.exportChooser,
+// under <dir>/export/. Style and format selection come from m.exportChooser — call this only
+// after confirming m.exportChooser.anyChecked().
+func (m *model) runExport() {
 	defer func() {
 		if r := recover(); r != nil {
 			m.status = fmt.Sprintf("export failed: %v", r)
 		}
 	}()
+	chooser := m.exportChooser
 	dir := m.files.dir
 	var doc ManuscriptDoc
 	var title string
@@ -48,8 +142,6 @@ func (m *model) runExport(st ExportStyle) {
 		return
 	}
 
-	// A Shunn title page is for a whole-manuscript submission, not a single-chapter export.
-	// Identity resolves through Properties (personal config) with the OKASHI_* env as fallback.
 	eff := resolveSettings(dir)
 	meta := Meta{
 		Author:    eff.Author,
@@ -63,40 +155,86 @@ func (m *model) runExport(st ExportStyle) {
 		return
 	}
 	slug := slugify(title)
-	rtfPath := filepath.Join(outDir, slug+".rtf")
-	pdfPath := filepath.Join(outDir, slug+".pdf")
-	if err := atomicWrite(rtfPath, writeRTF(doc, st, meta), 0o644); err != nil {
-		m.status = "export failed: " + err.Error()
-		return
+
+	coverPath := eff.Cover
+	if coverPath != "" && !filepath.IsAbs(coverPath) {
+		coverPath = filepath.Join(dir, coverPath)
 	}
-	pdfBytes, err := writePDF(doc, st, meta)
-	if err != nil {
-		m.status = "export failed (pdf): " + err.Error()
-		return
+	coverWarning := false
+	if coverPath != "" {
+		if _, err := os.Stat(coverPath); err != nil {
+			coverWarning = true
+		}
 	}
-	if err := atomicWrite(pdfPath, pdfBytes, 0o644); err != nil {
-		m.status = "export failed: " + err.Error()
-		return
+
+	var written []string
+	for _, f := range exportFormatOrder {
+		if !chooser.checked[f] {
+			continue
+		}
+		path := filepath.Join(outDir, slug+f.ext())
+		var data []byte
+		var err error
+		switch f {
+		case formatRTF:
+			data = writeRTF(doc, chooser.style, meta)
+		case formatPDF:
+			data, err = writePDF(doc, chooser.style, meta)
+		case formatDOCX:
+			data, err = writeDOCX(doc, chooser.style, meta)
+		case formatODT:
+			data, err = writeODT(doc, chooser.style, meta)
+		case formatEPUB:
+			data, err = writeEPUB(doc, chooser.style, meta, coverPath)
+		}
+		if err != nil {
+			m.status = fmt.Sprintf("export failed (%s) : %s", f.label(), err.Error())
+			return
+		}
+		if err := atomicWrite(path, data, 0o644); err != nil {
+			m.status = "export failed : " + err.Error()
+			return
+		}
+		written = append(written, f.ext())
 	}
-	docxPath := filepath.Join(outDir, slug+".docx")
-	docxBytes, err := writeDOCX(doc, st, meta)
-	if err != nil {
-		m.status = "export failed (docx): " + err.Error()
-		return
+
+	msg := "exporté " + slug
+	for _, ext := range written {
+		msg += " + " + ext
 	}
-	if err := atomicWrite(docxPath, docxBytes, 0o644); err != nil {
-		m.status = "export failed: " + err.Error()
-		return
+	msg += " vers export/"
+	if coverWarning {
+		msg += " — couverture introuvable, page de titre utilisée"
 	}
-	odtPath := filepath.Join(outDir, slug+".odt")
-	odtBytes, err := writeODT(doc, st, meta)
-	if err != nil {
-		m.status = "export failed (odt): " + err.Error()
-		return
+	m.status = msg
+}
+
+// exportChooserView renders the ctrl+e screen: 5 format checkboxes + a style radio, framed.
+func exportChooserView(c exportChooserModel, width int) string {
+	var lines []string
+	for i, f := range exportFormatOrder {
+		box := "[ ]"
+		if c.checked[f] {
+			box = "[x]"
+		}
+		line := box + " " + f.label()
+		if i == c.cursor {
+			line = selectedStyle.Render(line)
+		}
+		lines = append(lines, line)
 	}
-	if err := atomicWrite(odtPath, odtBytes, 0o644); err != nil {
-		m.status = "export failed: " + err.Error()
-		return
+	styleLine := ""
+	manuscriptMark, tufteMark := "( )", "( )"
+	if c.style == StyleManuscript {
+		manuscriptMark = "(•)"
+	} else {
+		tufteMark = "(•)"
 	}
-	m.status = "exported " + slug + ".rtf + .pdf + .docx + .odt to export/"
+	styleLine = fmt.Sprintf("%s Manuscript   %s Tufte", manuscriptMark, tufteMark)
+	if c.cursor == len(exportFormatOrder) {
+		styleLine = selectedStyle.Render(styleLine)
+	}
+	lines = append(lines, "", "Style :", "  "+styleLine)
+	inner := strings.Join(lines, "\n")
+	return framedPanel("Export", inner, min(width-8, 40), len(lines)+2, "")
 }

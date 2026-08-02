@@ -301,7 +301,7 @@ type model struct {
 	moverSrcEntries []moverEntry // left-pane rows
 	moverSrcSel     int
 
-	exportPrompt bool
+	exportChooser *exportChooserModel // nil when the screen is not showing
 
 	goalsAll        map[string]projectGoals
 	goalPromptField int // 0 off, 1 daily words, 2 project words, 3 daily minutes, 4 deadline
@@ -661,7 +661,7 @@ func (m *model) wordUnderCursor() (word string, start, end int, ok bool) {
 // should be typed rather than opening the help overlay. (F1 always opens help;
 // `?` only opens it where the user isn't typing.)
 func (m model) capturingText() bool {
-	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.exportPrompt || m.creatingFile || m.addingSource {
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.exportChooser != nil || m.creatingFile || m.addingSource {
 		return true
 	}
 	switch m.screen {
@@ -682,7 +682,7 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	if !m.analysis.spell || m.screen != screenWriting {
 		return "", nil, false
 	}
-	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt || m.creatingFile {
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportChooser != nil || m.creatingFile {
 		return "", nil, false
 	}
 	w, _, _, found := m.wordUnderCursor()
@@ -717,7 +717,7 @@ func (m *model) cursorGrammarHint() (word string, suggestions []string, reason s
 	if !m.analysis.grammar || m.screen != screenWriting {
 		return "", nil, "", false
 	}
-	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt || m.creatingFile {
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportChooser != nil || m.creatingFile {
 		return "", nil, "", false
 	}
 	f, found := m.grammarFindingUnderCursor()
@@ -1027,23 +1027,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.exportPrompt {
+	if m.exportChooser != nil {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
 			case "ctrl+c":
 				return m, tea.Quit
-			case "m":
-				m.exportPrompt = false
-				m.runExport(StyleManuscript)
-				return m, nil
-			case "t":
-				m.exportPrompt = false
-				m.runExport(StyleTufte)
-				return m, nil
+			case "up", "k":
+				m.exportChooser.cursor = (m.exportChooser.cursor - 1 + exportChooserRowCount) % exportChooserRowCount
+			case "down", "j":
+				m.exportChooser.cursor = (m.exportChooser.cursor + 1) % exportChooserRowCount
+			case "left", "right":
+				if m.exportChooser.cursor == exportChooserRowCount-1 {
+					if m.exportChooser.style == StyleManuscript {
+						m.exportChooser.setStyle(StyleTufte)
+					} else {
+						m.exportChooser.setStyle(StyleManuscript)
+					}
+				}
+			case " ":
+				m.exportChooser.toggleAtCursor()
+			case "enter":
+				if !m.exportChooser.anyChecked() {
+					m.status = "choisissez au moins un format"
+					return m, nil
+				}
+				m.runExport()
+				m.exportChooser = nil
 			case "esc":
-				m.exportPrompt = false
+				m.exportChooser = nil
 				m.status = "export annulé"
-				return m, nil
 			}
 		}
 		return m, nil
@@ -1416,8 +1428,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.enterCorkboard()
 			return m, nil
 		case "ctrl+e":
-			m.exportPrompt = true
-			m.status = "export : m manuscrit · t tufte · esc annuler"
+			c := newExportChooser()
+			m.exportChooser = &c
 			return m, nil
 		case "ctrl+d":
 			m.dimEnabled = !m.dimEnabled
@@ -1733,7 +1745,13 @@ func (m model) View() string {
 		title := inspectorTabLabels()[m.inspector.tab]
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	if m.exportChooser != nil {
+		panel := exportChooserView(*m.exportChooser, m.width)
+		overlay := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
+		return overlay
+	}
+	return body
 }
 
 // effectivePanels resolves which side panels are shown this render and the
@@ -2566,9 +2584,6 @@ func (m model) statusBar() string {
 	}
 	if m.goalPromptField == 4 {
 		return "échéance AAAA-MM-JJ (vide efface) ▸ " + m.nameInput.View()
-	}
-	if m.exportPrompt {
-		return "export : m manuscrit · t tufte · esc annuler"
 	}
 	if m.createPicker {
 		return "nouveau : c chapitre · r ressource · esc annuler"

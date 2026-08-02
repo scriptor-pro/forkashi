@@ -24,7 +24,7 @@ func TestExportSingleDocFromEditor(t *testing.T) {
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = nm.(model)
-	if !m.exportPrompt {
+	if m.exportChooser == nil {
 		t.Fatal("ctrl+e should raise the export chooser")
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
@@ -108,7 +108,7 @@ func TestExportEmitsDOCX(t *testing.T) {
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = nm.(model)
-	if !m.exportPrompt {
+	if m.exportChooser == nil {
 		t.Fatal("ctrl+e should raise the export chooser")
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
@@ -139,7 +139,7 @@ func TestExportEmitsODT(t *testing.T) {
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = nm.(model)
-	if !m.exportPrompt {
+	if m.exportChooser == nil {
 		t.Fatal("ctrl+e should raise the export chooser")
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
@@ -169,7 +169,7 @@ func TestExportCancel(t *testing.T) {
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = nm.(model)
-	if m.exportPrompt {
+	if m.exportChooser != nil {
 		t.Fatal("esc should dismiss the export chooser")
 	}
 	if _, err := os.Stat(filepath.Join(root, "export")); !os.IsNotExist(err) {
