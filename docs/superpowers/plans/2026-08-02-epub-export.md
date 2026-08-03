@@ -92,7 +92,7 @@ writers' style — no template engine, no new dependency).
   Properties' new Cover field, or `""` if unset. Task 4 is the only later task that calls
   this function from `runExport()`.
 
-- [ ] **Step 1: Write the failing test for a minimal valid EPUB**
+- [x] **Step 1: Write the failing test for a minimal valid EPUB**
 
 ```go
 package main
@@ -191,12 +191,12 @@ func TestWriteEPUBContentOPFHasMetadata(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestWriteEPUB ./... -v 2>&1 | head -30`
 Expected: FAIL — `writeEPUB` undefined (the function doesn't exist yet).
 
-- [ ] **Step 3: Write the AST-to-XHTML block renderer**
+- [x] **Step 3: Write the AST-to-XHTML block renderer**
 
 This mirrors `writeBlockDOCX` in `export_docx.go` — same switch over `Block` types, same
 degrade decisions (list → `•`/numbered paragraphs, blockquote → indented, scene break →
@@ -287,7 +287,7 @@ func writeBlockEPUB(b *strings.Builder, blk Block) {
 }
 ```
 
-- [ ] **Step 4: Write the container/OPF/NCX/nav/cover scaffolding and `writeEPUB` itself**
+- [x] **Step 4: Write the container/OPF/NCX/nav/cover scaffolding and `writeEPUB` itself**
 
 ```go
 const epubMimetype = "application/epub+zip"
@@ -497,12 +497,12 @@ func epubContentOPF(doc ManuscriptDoc, meta Meta, chapterFiles []string, hasCove
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestWriteEPUB ./... -v`
 Expected: all three PASS.
 
-- [ ] **Step 6: Add the TOC and cover-fallback tests**
+- [x] **Step 6: Add the TOC and cover-fallback tests**
 
 ```go
 func TestWriteEPUBTableOfContentsOrder(t *testing.T) {
@@ -603,17 +603,17 @@ func TestWriteEPUBCoverImageUnsupportedExtFallsBackToText(t *testing.T) {
 }
 ```
 
-- [ ] **Step 7: Run all EPUB tests**
+- [x] **Step 7: Run all EPUB tests**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestWriteEPUB ./... -v`
 Expected: all PASS.
 
-- [ ] **Step 8: Build, vet, full test suite**
+- [x] **Step 8: Build, vet, full test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1`
 Expected: clean build/vet, 0 FAIL (rerun once if only `TestSnippetCacheReadsHeadAndInvalidates` fails — see Global Constraints).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add export_epub.go export_epub_test.go
@@ -651,7 +651,7 @@ EOF
   written) is called by Task 4 with whatever cover path Task 3/4 resolve — this task only
   adds the storage, no caller changes yet.
 
-- [ ] **Step 1: Write the failing test for Cover in `mergeSettings`**
+- [x] **Step 1: Write the failing test for Cover in `mergeSettings`**
 
 Add to `settings_test.go` (find the existing `TestMergeSettings*` tests and follow their
 pattern — read the file first to match the exact table-driven style already there):
@@ -675,12 +675,12 @@ func TestMergeSettingsCoverUnsetIsEmpty(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestMergeSettingsCover ./... -v`
 Expected: FAIL — `projectSettings` has no field `Cover` / `effectiveSettings` has no field `Cover`.
 
-- [ ] **Step 3: Add the field and wire it through**
+- [x] **Step 3: Add the field and wire it through**
 
 In `settings.go`, modify the `projectSettings` struct:
 
@@ -715,17 +715,17 @@ Modify `mergeSettings` — add after the `Smartquotes` block:
 equivalent; the design spec puts this in Properties only, never in env. Leave `eff.Cover`
 at its zero value `""` unless `ps.Cover` is set.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestMergeSettingsCover ./... -v`
 Expected: both PASS.
 
-- [ ] **Step 5: Build, vet, full test suite**
+- [x] **Step 5: Build, vet, full test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1`
 Expected: clean, 0 FAIL.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add settings.go settings_test.go
@@ -761,7 +761,7 @@ EOF
   export chooser's cover path — Task 4 does not touch `properties.go` itself, it only calls
   `resolveSettings(m.files.dir).Cover`.
 
-- [ ] **Step 1: Write the failing test for the Couverture field**
+- [x] **Step 1: Write the failing test for the Couverture field**
 
 Read `properties_test.go` first to match its existing setup helpers (likely a `newTestProps`
 or direct `newPropertiesModel(dir)` calls — follow whatever pattern is already there). Then
@@ -806,12 +806,12 @@ func TestPropertiesCoverFieldDefaultsEmpty(t *testing.T) {
 
 (Add `"os"` to the test file's imports if not already present.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestPropertiesCover ./... -v`
 Expected: FAIL — `propCover` undefined / `p.cover` undefined.
 
-- [ ] **Step 3: Add `propCover` to the enum**
+- [x] **Step 3: Add `propCover` to the enum**
 
 In `properties.go`, modify the `propKind` const block:
 
@@ -826,7 +826,7 @@ const (
 )
 ```
 
-- [ ] **Step 4: Add the `cover` field to `propertiesModel` and its `origCover` baseline**
+- [x] **Step 4: Add the `cover` field to `propertiesModel` and its `origCover` baseline**
 
 ```go
 type propertiesModel struct {
@@ -854,7 +854,7 @@ type propertiesModel struct {
 }
 ```
 
-- [ ] **Step 5: Wire `cover` into `newPropertiesModel`, `fields`, `dirty`, `focusInput`, `blurInputs`, `save`**
+- [x] **Step 5: Wire `cover` into `newPropertiesModel`, `fields`, `dirty`, `focusInput`, `blurInputs`, `save`**
 
 In `newPropertiesModel` (`properties.go:69-103`), add the cover input and baseline:
 
@@ -938,7 +938,7 @@ extended with `|| coverChanged`, and one extra `if coverChanged` inside. At the 
 	p.origCover = p.cover.Value()
 ```
 
-- [ ] **Step 6: Wire `cover` into `updatePropertiesEditing`**
+- [x] **Step 6: Wire `cover` into `updatePropertiesEditing`**
 
 In `properties.go:272-304`, add a case to the `switch kind` block:
 
@@ -947,7 +947,7 @@ In `properties.go:272-304`, add a case to the `switch kind` block:
 		p.cover, cmd = p.cover.Update(key)
 ```
 
-- [ ] **Step 7: Wire `cover` into `propertiesView`**
+- [x] **Step 7: Wire `cover` into `propertiesView`**
 
 In `properties.go:330-381`, add a case to the `switch kind` block (around line 342-364):
 
@@ -963,24 +963,24 @@ In `properties.go:330-381`, add a case to the `switch kind` block (around line 3
 			}
 ```
 
-- [ ] **Step 8: Run tests to verify they pass**
+- [x] **Step 8: Run tests to verify they pass**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestPropertiesCover ./... -v`
 Expected: both PASS.
 
-- [ ] **Step 9: Run the full Properties test file to check nothing else broke**
+- [x] **Step 9: Run the full Properties test file to check nothing else broke**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestProperties ./... -v`
 Expected: all PASS — in particular, `dirty()`/`save()` tests for the *other* fields must
 still pass unmodified, since Step 5's edit to `save()` only adds a condition, it doesn't
 remove existing behavior.
 
-- [ ] **Step 10: Build, vet, full test suite**
+- [x] **Step 10: Build, vet, full test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1`
 Expected: clean, 0 FAIL.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add properties.go properties_test.go
@@ -1025,7 +1025,7 @@ EOF
   *exportChooserModel` (nil = not showing; a non-nil pointer both signals "the screen is up"
   and carries its own state — replaces the separate bool).
 
-- [ ] **Step 1: Write the failing unit tests for the chooser model**
+- [x] **Step 1: Write the failing unit tests for the chooser model**
 
 ```go
 package main
@@ -1071,12 +1071,12 @@ func TestExportChooserAnyCheckedAfterFormatToggle(t *testing.T) {
 
 Save as `export_chooser_test.go`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestExportChooser ./... -v && go test -run TestNewExportChooser ./... -v`
 Expected: FAIL — none of these types/functions exist yet.
 
-- [ ] **Step 3: Read the current `export.go`, `exportPrompt` usages, and `selectedStyle`**
+- [x] **Step 3: Read the current `export.go`, `exportPrompt` usages, and `selectedStyle`**
 
 Before rewriting, run these to confirm every call site that must change:
 
@@ -1093,7 +1093,7 @@ prompt-handling block). `runExport(` appears once as the definition in `export.g
 each `m.runExport(StyleManuscript)` / `m.runExport(StyleTufte)` call site in both files —
 these all need updating in this task.
 
-- [ ] **Step 4: Rewrite `export.go`**
+- [x] **Step 4: Rewrite `export.go`**
 
 ```go
 package main
@@ -1315,7 +1315,7 @@ as a drive-by — that would be outside this plan's stated scope. `fmt.Sprintf("
 follows the same pre-existing `"export failed (pdf): "` pattern, just parameterized by
 `f.label()` instead of one hardcoded format name per format.
 
-- [ ] **Step 5: Update `main.go` — struct field, key handler, prompt-handling block, `composeStatus`**
+- [x] **Step 5: Update `main.go` — struct field, key handler, prompt-handling block, `composeStatus`**
 
 Find the `exportPrompt bool` field (`main.go:304`) and replace it:
 
@@ -1384,7 +1384,7 @@ Grep once more for any remaining `m.exportPrompt` reference in `main.go` after t
 (`grep -n "exportPrompt" main.go`) — there must be none left; if any remain, they were missed
 above and need the same treatment.
 
-- [ ] **Step 6: Update `corkboard.go` — key handler and prompt-handling block**
+- [x] **Step 6: Update `corkboard.go` — key handler and prompt-handling block**
 
 Find `case "ctrl+e":` in `corkboard.go` (`corkboard.go:272-274`) and replace:
 
@@ -1439,7 +1439,7 @@ confirm this by reading the ~10 lines above the block being replaced before past
 
 Grep once more (`grep -n "exportPrompt" corkboard.go`) — none should remain.
 
-- [ ] **Step 7: Render the chooser screen — add `exportChooserView` and wire it into both View() functions**
+- [x] **Step 7: Render the chooser screen — add `exportChooserView` and wire it into both View() functions**
 
 Add to `export.go` (or a new small block at the end of it):
 
@@ -1506,19 +1506,19 @@ export chooser is up. Wire the equivalent render into `corkboardView()` as well,
 the same `framedPanel` + `lipgloss.PlaceHorizontal` centering pattern already used for
 `m.structureAdding`'s `pick` panel at `corkboard.go:445-459`.
 
-- [ ] **Step 8: Run the chooser model unit tests**
+- [x] **Step 8: Run the chooser model unit tests**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestExportChooser ./... -v && go test -run TestNewExportChooser ./... -v`
 Expected: all PASS.
 
-- [ ] **Step 9: Build and vet**
+- [x] **Step 9: Build and vet**
 
 Run: `go build ./... && go vet ./...`
 Expected: clean. This will surface any leftover `m.exportPrompt`/`m.runExport(StyleX)`
 call-site mismatches as compile errors — fix any found before proceeding (Task 5 will also
 catch these via the integration tests, but a compile error here means Task 5 cannot start).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add export.go main.go corkboard.go export_chooser_test.go
@@ -1551,7 +1551,7 @@ EOF
 - Produces: nothing new — this task only updates test drivers to match the new interaction
   model and adds EPUB-specific coverage mirroring the existing per-format tests.
 
-- [ ] **Step 1: Read the current `export_wiring_test.go` in full**
+- [x] **Step 1: Read the current `export_wiring_test.go` in full**
 
 Already read during plan research — six tests: `TestExportSingleDocFromEditor`,
 `TestExportWholeManuscriptFromCorkboard`, `TestExportManifestManuscriptUsesManifestOrder`
@@ -1570,7 +1570,7 @@ m = nm.(model)
 This must become: press ctrl+e, check `m.exportChooser != nil`, move the cursor to the
 target format row and press space, press enter.
 
-- [ ] **Step 2: Rewrite the file**
+- [x] **Step 2: Rewrite the file**
 
 ```go
 package main
@@ -1870,7 +1870,7 @@ func TestExportCancel(t *testing.T) {
 var _ = zip.Store // keep archive/zip imported if hasZipEntry lives in another file already importing it — remove this line if export_docx_test.go's import covers it package-wide (it does not; Go imports are per-file). Verify at Step 3 whether this line is actually needed by checking if any test in THIS file uses archive/zip directly — if not, delete both the import and this line.
 ```
 
-- [ ] **Step 3: Reconcile the `archive/zip` import**
+- [x] **Step 3: Reconcile the `archive/zip` import**
 
 `hasZipEntry` (defined in `export_docx_test.go`) is called by name in this file, which is
 fine (same package, `main`) — but `export_wiring_test.go` itself doesn't need to import
@@ -1890,7 +1890,7 @@ import (
 )
 ```
 
-- [ ] **Step 4: Run the full export test file**
+- [x] **Step 4: Run the full export test file**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go test -run TestExport ./... -v`
 Expected: all PASS — `TestExportSingleDocFromEditor`, `TestExportWholeManuscriptFromCorkboard`,
@@ -1898,13 +1898,13 @@ Expected: all PASS — `TestExportSingleDocFromEditor`, `TestExportWholeManuscri
 `TestExportEmitsEPUB`, `TestExportOnlyWritesCheckedFormats`,
 `TestExportEnterWithNothingCheckedShowsError`, `TestExportCancel`.
 
-- [ ] **Step 5: Build, vet, full test suite**
+- [x] **Step 5: Build, vet, full test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1`
 Expected: clean build/vet, 0 FAIL across the whole module (rerun once if only
 `TestSnippetCacheReadsHeadAndInvalidates` fails).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add export_wiring_test.go
@@ -1933,12 +1933,12 @@ EOF
 - Produces: nothing new — confirms the whole thing works together visually, the way Task 13
   of the earlier UI-translation plan did.
 
-- [ ] **Step 1: Full build, vet, test suite**
+- [x] **Step 1: Full build, vet, test suite**
 
 Run: `export PATH="$HOME/.local/go/bin:$PATH" && go build ./... && go vet ./... && go test ./... -count=1 -v 2>&1 | tail -80`
 Expected: clean build, no vet warnings, all tests PASS.
 
-- [ ] **Step 2: Manual walkthrough in tmux**
+- [x] **Step 2: Manual walkthrough in tmux**
 
 ```bash
 go build -o /tmp/forkashi-epub-check .
@@ -1983,7 +1983,7 @@ Document any visual anomaly (misalignment, overflow, wrong default) found during
 note file:line if the cause is identifiable, without necessarily fixing it in this task if
 it's minor; flag it as a finding instead.
 
-- [ ] **Step 3: Validate the EPUB with `pdfinfo`-equivalent tooling if available**
+- [x] **Step 3: Validate the EPUB with `pdfinfo`-equivalent tooling if available**
 
 ```bash
 epub_file=/tmp/epub-check-proj/Livre/export/mon-livre.epub
@@ -2000,7 +2000,7 @@ Expected: `mimetype` is the first entry, `compress_type = 0` (stored, not deflat
 is exactly `application/epub+zip`, and `OEBPS/chapter-01.xhtml`/`chapter-02.xhtml` are both
 present.
 
-- [ ] **Step 4: Clean up**
+- [x] **Step 4: Clean up**
 
 ```bash
 tmux send-keys -t epubcheck 'C-c'
@@ -2009,7 +2009,7 @@ rm -f /tmp/forkashi-epub-check
 rm -rf /tmp/epub-check-home /tmp/epub-check-proj
 ```
 
-- [ ] **Step 5: Report findings**
+- [x] **Step 5: Report findings**
 
 No commit for this task (verification only). If Step 2 surfaced any visual anomaly, report
 it — do not silently fix it under this task unless it's a one-line, obviously-safe
