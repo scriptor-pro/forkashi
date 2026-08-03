@@ -1741,7 +1741,8 @@ func (m model) View() string {
 		}
 		m.inspector.grammarChecking = m.checkingGrammar
 		m.inspector.grammarAutoRecheck = m.autoRecheck
-		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
+		notes := loadNotes(m.currentFile)
+		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis, notes)
 		title := inspectorTabLabels()[m.inspector.tab]
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
 	}
