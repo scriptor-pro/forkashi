@@ -138,6 +138,26 @@ func renderOutline(text string, width int) string {
 	return b.String()
 }
 
+// renderNotesSection shows the revision notes attached to the current file, read-only: a
+// "NOTES" header, then either a subtle empty-state hint or one line per note (first line of
+// its text, "…" appended if the note continues beyond that line), each truncated to width.
+func renderNotesSection(notes []note, width int) string {
+	var b strings.Builder
+	b.WriteString(sectionHeader("Notes", width))
+	if len(notes) == 0 {
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(subtle).Render("(aucune note — n pour en ajouter)"))
+		return b.String()
+	}
+	for _, nt := range notes {
+		first := nt.Text
+		if idx := strings.IndexByte(first, '\n'); idx >= 0 {
+			first = first[:idx] + " …"
+		}
+		b.WriteString("\n  " + ansi.Truncate(first, width-2, "…"))
+	}
+	return b.String()
+}
+
 type docStats struct {
 	words, chars, paragraphs int
 	readSecs                 int        // estimated reading time at 210 wpm (French silent-reading estimate)

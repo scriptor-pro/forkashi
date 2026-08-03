@@ -595,3 +595,58 @@ func TestComputeDocStatsSyllablesPerWordUsesConsistentTokenBase(t *testing.T) {
 		t.Fatalf("ds.words = %d, want %d (wordCount/strings.Fields — must not change)", ds.words, wordCount(text))
 	}
 }
+
+func TestRenderNotesSectionEmpty(t *testing.T) {
+	out := renderNotesSection(nil, 28)
+	if !strings.Contains(out, "NOTES") {
+		t.Fatalf("empty notes section missing header:\n%s", out)
+	}
+	if !strings.Contains(out, "aucune note") {
+		t.Fatalf("empty notes section missing placeholder:\n%s", out)
+	}
+}
+
+func TestRenderNotesSectionSingleLineNote(t *testing.T) {
+	out := renderNotesSection([]note{{ID: "n1", Text: "Vérifier la continuité du prénom"}}, 40)
+	if !strings.Contains(out, "Vérifier la continuité du prénom") {
+		t.Fatalf("notes section missing note text:\n%s", out)
+	}
+	if strings.Contains(out, "aucune note") {
+		t.Fatalf("notes section should not show the empty placeholder when notes exist:\n%s", out)
+	}
+}
+
+func TestRenderNotesSectionMultiLineNoteShowsFirstLineOnly(t *testing.T) {
+	out := renderNotesSection([]note{{ID: "n1", Text: "Rythme à retravailler\nvoir chapitre 3"}}, 40)
+	if !strings.Contains(out, "Rythme à retravailler …") {
+		t.Fatalf("multi-line note should show first line + ellipsis marker:\n%s", out)
+	}
+	if strings.Contains(out, "voir chapitre 3") {
+		t.Fatalf("multi-line note should NOT show the second line:\n%s", out)
+	}
+}
+
+func TestRenderNotesSectionTruncatesToWidth(t *testing.T) {
+	long := strings.Repeat("mot ", 30) // far longer than any reasonable inspector width
+	out := renderNotesSection([]note{{ID: "n1", Text: long}}, 20)
+	for _, line := range strings.Split(out, "\n") {
+		if lipgloss.Width(line) > 20 {
+			t.Fatalf("line exceeds width 20: %q (width %d)", line, lipgloss.Width(line))
+		}
+	}
+}
+
+func TestRenderNotesSectionListsMultipleNotesInOrder(t *testing.T) {
+	out := renderNotesSection([]note{
+		{ID: "n1", Text: "Première note"},
+		{ID: "n2", Text: "Deuxième note"},
+	}, 40)
+	i1 := strings.Index(out, "Première note")
+	i2 := strings.Index(out, "Deuxième note")
+	if i1 == -1 || i2 == -1 {
+		t.Fatalf("both notes should appear:\n%s", out)
+	}
+	if i1 > i2 {
+		t.Fatalf("notes should appear in storage order (first note first):\n%s", out)
+	}
+}
