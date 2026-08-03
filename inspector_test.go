@@ -67,14 +67,14 @@ func TestComputeProjStatsPlainFolder(t *testing.T) {
 
 func TestInspectorViewRendersWords(t *testing.T) {
 	in := inspectorModel{visible: true}
-	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{}, analysisState{})
+	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{}, analysisState{}, nil)
 	for _, want := range []string{"Mots", "DOCUMENT", "PROJET", "1,204", "47,032", "Chapitres", "12"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
 	}
 	// Non-manuscript omits the Chapitres line.
-	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "", goalStats{}, analysisState{})
+	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "", goalStats{}, analysisState{}, nil)
 	if strings.Contains(plain, "Chapitres") {
 		t.Fatal("non-manuscript inspector should omit 'Chapitres'")
 	}
@@ -109,13 +109,13 @@ func TestInspectorCycle(t *testing.T) {
 
 func TestInspectorOutlineTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabOutline}
-	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub", goalStats{}, analysisState{})
+	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub", goalStats{}, analysisState{}, nil)
 	for _, want := range []string{"Plan", "Top", "sub"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("outline tab missing %q:\n%s", want, out)
 		}
 	}
-	empty := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{})
+	empty := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{}, nil)
 	if !strings.Contains(empty, "vide") {
 		t.Fatal("empty outline should show an (vide …) hint")
 	}
@@ -139,19 +139,19 @@ func TestProgressBar(t *testing.T) {
 
 func TestInspectorGoalsTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
-	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000}, analysisState{})
+	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000}, analysisState{}, nil)
 	for _, w := range []string{"AUJOURD'HUI", "312", "500", "PROJET", "80,000"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("goals tab missing %q:\n%s", w, out)
 		}
 	}
 	// projectGoal 0 → no Project section.
-	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0}, analysisState{})
+	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0}, analysisState{}, nil)
 	if strings.Contains(noproj, "PROJET") {
 		t.Fatal("projectGoal 0 should omit the Project section")
 	}
 	// goal met.
-	met := in.View(28, docStats{}, projStats{}, "", goalStats{today: 600, dailyGoal: 500, project: 1, projectGoal: 0}, analysisState{})
+	met := in.View(28, docStats{}, projStats{}, "", goalStats{today: 600, dailyGoal: 500, project: 1, projectGoal: 0}, analysisState{}, nil)
 	if !strings.Contains(met, "atteint") {
 		t.Fatal("today >= daily goal should show '✓ objectif atteint'")
 	}
@@ -179,14 +179,14 @@ func TestInspectorTabAtX(t *testing.T) {
 
 func TestInspectorAnalysisTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
-	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: false})
+	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: false}, nil)
 	if !strings.Contains(on, "Orthographe") || !strings.Contains(on, "SYNTAXE") {
 		t.Fatalf("analysis tab should list Orthographe and SYNTAXE:\n%s", on)
 	}
 	if !strings.Contains(on, "[x] Orthographe") {
 		t.Fatalf("spell on → checked box:\n%s", on)
 	}
-	off := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{})
+	off := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{}, nil)
 	if !strings.Contains(off, "[ ] Orthographe") {
 		t.Fatalf("spell off → empty box:\n%s", off)
 	}
@@ -207,7 +207,7 @@ func TestInspectorAnalysisRowAtY(t *testing.T) {
 
 func TestAnalysisTabPOSList(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
-	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true})
+	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true}, nil)
 	for _, w := range []string{"Orthographe", "Grammaire", "SYNTAXE", "Adverbe", "Adjectif", "Passif"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("analysis tab missing %q:\n%s", w, out)
@@ -257,7 +257,7 @@ func TestAnalysisRowAtY(t *testing.T) {
 
 func TestAnalysisGrammarRow(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
-	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{grammar: true})
+	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{grammar: true}, nil)
 	if !strings.Contains(out, "Grammaire") || !strings.Contains(out, "[x] Grammaire") {
 		t.Fatalf("Analysis tab should show a checked Grammaire row:\n%s", out)
 	}
@@ -341,7 +341,7 @@ func TestFramedPanelAction(t *testing.T) {
 
 func TestInspectorGoalsSessionSection(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
-	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 300, todayActiveSecs: 600, sessionGoalMin: 30, idle: true}, analysisState{}))
+	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 300, todayActiveSecs: 600, sessionGoalMin: 30, idle: true}, analysisState{}, nil))
 	if !strings.Contains(out, "TEMPS") || !strings.Contains(out, "10 / 30 min") {
 		t.Fatalf("expected a TEMPS section with 10/30 min, got:\n%s", out)
 	}
@@ -648,5 +648,30 @@ func TestRenderNotesSectionListsMultipleNotesInOrder(t *testing.T) {
 	}
 	if i1 > i2 {
 		t.Fatalf("notes should appear in storage order (first note first):\n%s", out)
+	}
+}
+
+func TestInspectorViewShowsNotesWhenPresent(t *testing.T) {
+	in := inspectorModel{visible: true}
+	notes := []note{{ID: "n1", Text: "Continuité à vérifier"}}
+	out := in.View(28, docStats{words: 10}, projStats{words: 10}, "", goalStats{}, analysisState{}, notes)
+	if !strings.Contains(out, "Continuité à vérifier") {
+		t.Fatalf("inspector Mots tab should show note text when notes exist:\n%s", out)
+	}
+}
+
+func TestInspectorViewShowsPlaceholderWhenNoNotes(t *testing.T) {
+	in := inspectorModel{visible: true}
+	out := in.View(28, docStats{words: 10}, projStats{words: 10}, "", goalStats{}, analysisState{}, nil)
+	if !strings.Contains(out, "aucune note") {
+		t.Fatalf("inspector Mots tab should show the empty-notes placeholder when a file is open but has no notes:\n%s", out)
+	}
+}
+
+func TestInspectorViewOmitsNotesSectionWhenNoFileOpen(t *testing.T) {
+	in := inspectorModel{visible: true}
+	out := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{}, nil)
+	if strings.Contains(out, "NOTES") {
+		t.Fatalf("inspector Mots tab should omit the Notes section entirely when no file is open (doc.words == 0):\n%s", out)
 	}
 }

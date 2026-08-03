@@ -563,7 +563,7 @@ func fmtReadTime(secs int) string {
 }
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
-func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats, analysis analysisState) string {
+func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats, analysis analysisState, notes []note) string {
 	var b strings.Builder
 	b.WriteString(in.tabBar())
 	b.WriteString("\n\n")
@@ -667,6 +667,7 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 					}
 				}
 			}
+			b.WriteString("\n\n" + renderNotesSection(notes, width))
 		}
 	}
 	return b.String()
