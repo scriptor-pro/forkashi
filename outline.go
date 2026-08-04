@@ -209,11 +209,32 @@ func projectTitle(name string) string {
 	return strings.TrimSpace(s)
 }
 
-// slugify turns a typed section title into a filename slug: lowercase, spaces and
-// underscores to hyphens, stripped of other punctuation.
+// accentFold maps a rune outside a-z/0-9 to its unaccented ASCII equivalent when
+// one exists, so a slug built from an accented French title reads as the words
+// it came from ("Été" → "ete") instead of silently dropping the letter
+// ("Été" → "t"). Covers the accented letters that occur in French prose;
+// anything not listed here still falls through to slugify's existing
+// punctuation-stripping behavior.
+var accentFold = map[rune]rune{
+	'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a', 'å': 'a',
+	'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+	'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+	'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
+	'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
+	'ý': 'y', 'ÿ': 'y',
+	'ç': 'c', 'ñ': 'n',
+	'œ': 'o', 'æ': 'a', // digraphs fold to their leading vowel — good enough for a slug
+}
+
+// slugify turns a typed section title into a filename slug: lowercase, accented
+// letters transliterated to their unaccented ASCII form, spaces and underscores
+// to hyphens, stripped of other punctuation.
 func slugify(title string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(title)) {
+		if folded, ok := accentFold[r]; ok {
+			r = folded
+		}
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)

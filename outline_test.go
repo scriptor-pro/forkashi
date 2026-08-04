@@ -226,3 +226,20 @@ func TestProjectTitle(t *testing.T) {
 		}
 	}
 }
+
+func TestSlugifyTransliteratesAccents(t *testing.T) {
+	cases := map[string]string{
+		"Été":           "ete",
+		"Éveil":         "eveil",
+		"À l'aube":      "a-laube",
+		"Le café brûlé": "le-cafe-brule",
+		"Noël":          "noel",
+		"déjà vu":       "deja-vu",
+		"Chapitre Un":   "chapitre-un",
+	}
+	for in, want := range cases {
+		if got := slugify(in); got != want {
+			t.Errorf("slugify(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
