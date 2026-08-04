@@ -49,29 +49,35 @@ func (p *pagerModel) load(dir string, width int) {
 	p.offset = 0
 
 	running := 0
-	for _, ch := range v.chapters {
-		p.lines = append(p.lines, pagerLine{
-			text:     "── " + ch.title + " ──",
-			file:     ch.file,
-			src:      -1,
-			header:   true,
-			cumWords: running,
-		})
-		data, err := os.ReadFile(filepath.Join(dir, ch.file))
-		if err != nil {
-			continue
-		}
-		body := strings.TrimSuffix(string(data), "\n")
-		for srcIdx, srcLine := range strings.Split(body, "\n") {
-			for _, row := range strings.Split(ansi.Wrap(srcLine, width, ""), "\n") {
-				running += wordCount(row)
-				p.lines = append(p.lines, pagerLine{
-					text:     row,
-					file:     ch.file,
-					src:      srcIdx,
-					header:   false,
-					cumWords: running,
-				})
+	for _, part := range v.parts {
+		for _, ch := range part.chapters {
+			if len(ch.texts) == 0 {
+				continue // empty chapter: header with no body would panic on ch.texts[0]
+			}
+			file := filepath.Join(ch.folder, ch.texts[0].file)
+			p.lines = append(p.lines, pagerLine{
+				text:     "── " + ch.title + " ──",
+				file:     file,
+				src:      -1,
+				header:   true,
+				cumWords: running,
+			})
+			data, err := os.ReadFile(filepath.Join(dir, ch.folder, ch.texts[0].file))
+			if err != nil {
+				continue
+			}
+			body := strings.TrimSuffix(string(data), "\n")
+			for srcIdx, srcLine := range strings.Split(body, "\n") {
+				for _, row := range strings.Split(ansi.Wrap(srcLine, width, ""), "\n") {
+					running += wordCount(row)
+					p.lines = append(p.lines, pagerLine{
+						text:     row,
+						file:     file,
+						src:      srcIdx,
+						header:   false,
+						cumWords: running,
+					})
+				}
 			}
 		}
 	}

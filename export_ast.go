@@ -230,17 +230,28 @@ func manuscriptDoc(dir string, sections []fileEntry) ManuscriptDoc {
 	return doc
 }
 
-// manuscriptDocFromChapters builds the export doc from a resolved chapter list.
-// Title comes from chapterRef.title (manifest title or de-slugged filename),
-// so manifest and legacy folders both produce correct section headings.
-func manuscriptDocFromChapters(dir string, chapters []chapterRef) ManuscriptDoc {
+// manuscriptDocFromChapters builds the export doc from a resolved parts list,
+// flattened across parts (Part headers are the next plan's job — this plan
+// keeps export mechanically correct but visually flat). Title comes from
+// chapterRef.title (manifest title or de-slugged filename), so manifest and
+// legacy folders both produce correct section headings. Only the first text of
+// each chapter is read (degraded-but-functional multi-text behavior; real
+// concatenation is the next plan's job); an empty chapter (no texts) produces a
+// Section with empty Blocks rather than being skipped or panicking.
+func manuscriptDocFromChapters(dir string, parts []partRef) ManuscriptDoc {
 	var doc ManuscriptDoc
-	for _, ch := range chapters {
-		data, err := os.ReadFile(filepath.Join(dir, ch.file))
-		if err != nil {
-			continue
+	for _, p := range parts {
+		for _, ch := range p.chapters {
+			if len(ch.texts) == 0 {
+				doc = append(doc, Section{Title: ch.title, Blocks: nil})
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(dir, ch.folder, ch.texts[0].file))
+			if err != nil {
+				continue
+			}
+			doc = append(doc, Section{Title: ch.title, Blocks: parseSection(data)})
 		}
-		doc = append(doc, Section{Title: ch.title, Blocks: parseSection(data)})
 	}
 	return doc
 }

@@ -68,13 +68,13 @@ func TestMoverMoveFileIntoManuscriptAsChapter(t *testing.T) {
 	}
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}) // apply
 	m = nm.(model)
-	// scene.md moved into novel and was appended as a chapter.
-	if _, err := os.Stat(filepath.Join(proj, "scene.md")); err != nil {
-		t.Fatalf("file should have moved into the manuscript: %v", err)
+	// scene.md moved into novel, wrapped into a new scene/ chapter folder, and appended as a chapter.
+	if _, err := os.Stat(filepath.Join(proj, "scene", "scene.md")); err != nil {
+		t.Fatalf("file should have moved into the manuscript under a new scene/ chapter folder: %v", err)
 	}
 	mf, _, _ := readManifest(proj)
 	last := mf.Items[len(mf.Items)-1]
-	if last.File != "scene.md" {
+	if last.Chapter == nil || len(last.Chapter.Texts) == 0 || last.Chapter.Texts[0].File != "scene.md" {
 		t.Fatalf("file should be appended as a chapter, items=%+v", mf.Items)
 	}
 	if m.screen != screenWriting {

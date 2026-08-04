@@ -139,17 +139,32 @@ func (m *model) promoteOutlineBeat() {
 	}
 	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
 	// doesn't, a re-promote appends a second same-title chapter — low-probability and non-destructive
-	// (uniqueChapterFile never overwrites); the manifest, not the mark, is the source of truth.
+	// (uniqueChapterFolder never overwrites); the manifest, not the mark, is the source of truth.
 	taken := map[string]bool{}
 	for _, it := range mani.Items {
-		taken[it.File] = true
+		if it.Chapter != nil {
+			taken[it.Chapter.Folder] = true
+		}
+		for _, mc := range it.Chapters {
+			taken[mc.Folder] = true
+		}
 	}
-	file := uniqueChapterFile(dir, taken)
-	if werr := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); werr != nil {
+	folder := uniqueChapterFolder(dir, taken)
+	file := folder + ".md"
+	chDir := filepath.Join(dir, folder)
+	if werr := os.MkdirAll(chDir, 0o755); werr != nil {
 		m.status = "échec de la promotion : " + werr.Error()
 		return
 	}
-	mani.Items = append(mani.Items, manifestItem{File: file, Title: title})
+	if werr := atomicWrite(filepath.Join(chDir, file), []byte(""), 0o644); werr != nil {
+		m.status = "échec de la promotion : " + werr.Error()
+		return
+	}
+	mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+		Folder: folder,
+		Title:  title,
+		Texts:  []manifestText{{File: file, Title: title}},
+	}})
 	if werr := writeManifest(dir, mani); werr != nil {
 		m.status = "échec de la promotion : " + werr.Error()
 		return
@@ -159,10 +174,15 @@ func (m *model) promoteOutlineBeat() {
 		if syn == nil {
 			syn = map[string]string{}
 		}
-		syn[file] = strings.Join(notes, "\n")
+		syn[folder] = strings.Join(notes, "\n")
 		chapters := map[string]bool{}
 		for _, it := range mani.Items {
-			chapters[it.File] = true
+			if it.Chapter != nil {
+				chapters[it.Chapter.Folder] = true
+			}
+			for _, mc := range it.Chapters {
+				chapters[mc.Folder] = true
+			}
 		}
 		_ = saveSynopses(dir, syn, chapters)
 	}
@@ -209,11 +229,32 @@ func projectTitle(name string) string {
 	return strings.TrimSpace(s)
 }
 
-// slugify turns a typed section title into a filename slug: lowercase, spaces and
-// underscores to hyphens, stripped of other punctuation.
+// accentFold maps a rune outside a-z/0-9 to its unaccented ASCII equivalent when
+// one exists, so a slug built from an accented French title reads as the words
+// it came from ("Été" → "ete") instead of silently dropping the letter
+// ("Été" → "t"). Covers the accented letters that occur in French prose;
+// anything not listed here still falls through to slugify's existing
+// punctuation-stripping behavior.
+var accentFold = map[rune]rune{
+	'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a', 'å': 'a',
+	'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+	'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+	'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
+	'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
+	'ý': 'y', 'ÿ': 'y',
+	'ç': 'c', 'ñ': 'n',
+	'œ': 'o', 'æ': 'a', // digraphs fold to their leading vowel — good enough for a slug
+}
+
+// slugify turns a typed section title into a filename slug: lowercase, accented
+// letters transliterated to their unaccented ASCII form, spaces and underscores
+// to hyphens, stripped of other punctuation.
 func slugify(title string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(title)) {
+		if folded, ok := accentFold[r]; ok {
+			r = folded
+		}
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)

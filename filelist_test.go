@@ -297,12 +297,14 @@ func TestSidebarShowsTitlesAndCounts(t *testing.T) {
 
 func TestSidebarRendersManifestTitleAndOrder(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two three"), 0o644)
-	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("a b"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":1,"title":"Windermere","items":[`+
-			`{"file":"the-letter.md","title":"The Letter"},`+
-			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
+			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	f := newFilelist()
 	f.root = ""
 	f.width, f.height = 60, 12

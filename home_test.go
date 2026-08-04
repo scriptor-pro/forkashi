@@ -485,10 +485,10 @@ func TestRemoveActiveSourceKeepsPrimary(t *testing.T) {
 
 func TestClassifyLibraryAndFiles(t *testing.T) {
 	ws := t.TempDir()
-	os.MkdirAll(filepath.Join(ws, "my-novel"), 0o755)
+	os.MkdirAll(filepath.Join(ws, "my-novel", "open"), 0o755)
 	os.WriteFile(filepath.Join(ws, "my-novel", "manifest.json"),
-		[]byte(`{"schemaVersion":1,"title":"My Novel","items":[{"file":"01-open.md","title":"Opening"}]}`), 0o644)
-	os.WriteFile(filepath.Join(ws, "my-novel", "01-open.md"), []byte("# Opening\n\nThe fog rolled in off the bay.\n"), 0o644)
+		[]byte(`{"schemaVersion":2,"title":"My Novel","items":[{"chapter":{"folder":"open","title":"Opening","texts":[{"file":"open.md","title":"Opening"}]}}]}`), 0o644)
+	os.WriteFile(filepath.Join(ws, "my-novel", "open", "open.md"), []byte("# Opening\n\nThe fog rolled in off the bay.\n"), 0o644)
 	os.WriteFile(filepath.Join(ws, "my-novel", "notes.md"), []byte("Loose notes.\n"), 0o644)
 	os.MkdirAll(filepath.Join(ws, "research"), 0o755)
 	os.WriteFile(filepath.Join(ws, "research", "sources.md"), []byte("Sources to read.\n"), 0o644)

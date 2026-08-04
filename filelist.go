@@ -109,10 +109,34 @@ func (f *filelist) SetDir(dir string) {
 	// of chapter order/titles/membership for View(), sectionRow(), and callers.
 	f.view = resolveManuscript(dir, files)
 
-	// Build the ordered entry list: dirs first, then chapters in view order, then loose.
-	f.entries = append(f.entries, dirs...)
-	for _, ch := range f.view.chapters {
-		f.entries = append(f.entries, fileEntry{name: ch.file})
+	// Build the ordered entry list: dirs first, then chapters in view order
+	// (flattened across parts — Part headers are the next plan's job), then loose.
+	// A manifest (v2) chapter is represented in f.entries by its folder name, since
+	// it is now a directory on disk, not a direct file. A LEGACY chapter (no
+	// manifest, numeric-prefix fallback) has folder == "" — resolveManuscript
+	// keeps those as single-text chapterRefs with the flat filename in
+	// texts[0].file, so it's represented as a plain (non-dir) file entry instead,
+	// exactly as it was on disk before v2.
+	// A chapter's folder is a real directory on disk, so it would otherwise ALSO
+	// show up in the raw dirs listing above — exclude it there; the chapter loop
+	// below is its single source of truth for where it appears (in manifest order).
+	var plainDirs []fileEntry
+	for _, d := range dirs {
+		if !isChapterOf(f.view, d.name) {
+			plainDirs = append(plainDirs, d)
+		}
+	}
+	f.entries = append(f.entries, plainDirs...)
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder == "" {
+				if len(ch.texts) > 0 {
+					f.entries = append(f.entries, fileEntry{name: ch.texts[0].file})
+				}
+				continue
+			}
+			f.entries = append(f.entries, fileEntry{name: ch.folder, isDir: true})
+		}
 	}
 	f.entries = append(f.entries, f.view.loose...)
 }
@@ -132,12 +156,6 @@ func (f filelist) View(editRow int, editField string) string {
 	if end > len(f.entries) {
 		end = len(f.entries)
 	}
-	// Build a set of chapter filenames for O(1) lookup during rendering.
-	chapterSet := make(map[string]bool, len(f.view.chapters))
-	for _, ch := range f.view.chapters {
-		chapterSet[ch.file] = true
-	}
-
 	editRowStyle := lipgloss.NewStyle().Foreground(accent).Width(f.width)
 	var b strings.Builder
 	if editRow == createRowSentinel {
@@ -149,7 +167,7 @@ func (f filelist) View(editRow int, editField string) string {
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
 		g := f.icons.iconFor(e)
-		section := !e.isDir && chapterSet[e.name]
+		section := f.isChapterEntry(e)
 		switch {
 		case editRow >= 0 && i == editRow:
 			b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
@@ -161,11 +179,11 @@ func (f filelist) View(editRow int, editField string) string {
 				content = " " + renderIcon(g, true) + e.name
 			}
 			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(content, f.width, "…")))
+		case section:
+			b.WriteString(f.sectionRow(e, true))
 		case e.isDir:
 			row := " " + renderIcon(g, false) + lipgloss.NewStyle().Foreground(accent).Render(e.name)
 			b.WriteString(ansi.Truncate(row, f.width, "…"))
-		case section:
-			b.WriteString(f.sectionRow(e, true))
 		default:
 			ext := filepath.Ext(e.name)
 			icon := " " + renderIcon(g, false)
@@ -183,14 +201,29 @@ func (f filelist) View(editRow int, editField string) string {
 	return b.String()
 }
 
+// isChapterEntry reports whether e (an entry from f.entries, as built by SetDir) represents a
+// manuscript chapter — either a v2 chapter folder (matched by isChapterOf on e.name as a
+// folder) or a legacy single-file chapter (matched by its flat filename against texts[0].file,
+// since a legacy chapterRef always has folder == ""; isChapterOf can't see those by name).
+func (f filelist) isChapterEntry(e fileEntry) bool {
+	if e.isDir {
+		return isChapterOf(f.view, e.name)
+	}
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder == "" && len(ch.texts) > 0 && ch.texts[0].file == e.name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // sectionRow builds a width-f.width row for a manuscript section: gutter+icon+
 // title on the left, the word count right-aligned. dimCount styles the count
 // subtle (used for non-selected rows; the selected bar keeps it plain).
 func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
-	n := 0
-	if f.wc != nil {
-		n = f.wc.count(filepath.Join(f.dir, e.name))
-	}
+	n := f.chapterWords(e.name)
 	count := commafy(n) + " m"
 	g := f.icons.iconFor(e)
 	left := " " + renderIcon(g, !dimCount) + f.chapterTitle(e.name)
@@ -210,12 +243,38 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 	return left + strings.Repeat(" ", gap) + rendered
 }
 
-// chapterTitle returns the display title for a chapter file, looking it up from
-// the resolved view. Falls back to sectionTitle (for zero-view or legacy entries).
+// chapterWords sums the word counts of every text in the chapter whose folder is
+// name, looking it up from the resolved view. Falls back to a direct file count
+// (via f.wc) for legacy/zero-view entries where name is actually a flat filename
+// (chapterRef.folder == "" for a legacy chapter — see resolveManuscript).
+func (f filelist) chapterWords(name string) int {
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder != name {
+				continue
+			}
+			total := 0
+			for _, t := range ch.texts {
+				total += f.wc.count(filepath.Join(f.dir, ch.folder, t.file))
+			}
+			return total
+		}
+	}
+	if f.wc != nil {
+		return f.wc.count(filepath.Join(f.dir, name))
+	}
+	return 0
+}
+
+// chapterTitle returns the display title for a chapter folder, looking it up
+// from the resolved view. Falls back to sectionTitle (for zero-view or legacy
+// entries where name is actually a flat filename).
 func (f filelist) chapterTitle(name string) string {
-	for _, ch := range f.view.chapters {
-		if ch.file == name {
-			return ch.title
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder == name {
+				return ch.title
+			}
 		}
 	}
 	return sectionTitle(name)

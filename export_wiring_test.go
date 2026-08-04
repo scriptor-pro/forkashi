@@ -69,11 +69,15 @@ func TestExportWholeManuscriptFromCorkboard(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "my-novel")
-	os.MkdirAll(proj, 0o755)
-	os.WriteFile(filepath.Join(proj, "01-a.md"), []byte("alpha"), 0o644)
-	os.WriteFile(filepath.Join(proj, "02-b.md"), []byte("beta"), 0o644)
+	os.MkdirAll(filepath.Join(proj, "a"), 0o755)
+	os.MkdirAll(filepath.Join(proj, "b"), 0o755)
+	os.WriteFile(filepath.Join(proj, "a", "a.md"), []byte("alpha"), 0o644)
+	os.WriteFile(filepath.Join(proj, "b", "b.md"), []byte("beta"), 0o644)
 	writeManifest(proj, manifest{SchemaVersion: manifestSchemaVersion, Title: "my novel",
-		Items: []manifestItem{{File: "01-a.md", Title: "One"}, {File: "02-b.md", Title: "Two"}}})
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}},
+			{Chapter: &manifestChapter{Folder: "b", Title: "Two", Texts: []manifestText{{File: "b.md", Title: "Two"}}}},
+		}})
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
@@ -99,15 +103,18 @@ func TestExportWholeManuscriptFromCorkboard(t *testing.T) {
 
 func TestExportManifestManuscriptUsesManifestOrder(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("chapter one text"), 0o644)
-	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("chapter two text"), 0o644)
+	// Write chapter folders in reverse alpha order; manifest orders them the-letter first.
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("chapter one text"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("chapter two text"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":1,"title":"Windermere","items":[`+
-			`{"file":"the-letter.md","title":"The Letter"},`+
-			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
+			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	entries := readEntries(dir)
 	v := resolveManuscript(dir, entries)
-	doc := manuscriptDocFromChapters(dir, v.chapters)
+	doc := manuscriptDocFromChapters(dir, v.parts)
 	if len(doc) != 2 {
 		t.Fatalf("expected 2 sections, got %d", len(doc))
 	}

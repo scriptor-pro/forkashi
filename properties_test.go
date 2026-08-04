@@ -112,7 +112,9 @@ func TestPropertiesManuscriptTitleSavedPreservingItems(t *testing.T) {
 	if err := writeManifest(dir, manifest{
 		SchemaVersion: manifestSchemaVersion,
 		Title:         "Old Title",
-		Items:         []manifestItem{{File: "01-one.md", Title: "One"}},
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "one", Title: "One", Texts: []manifestText{{File: "one.md", Title: "One"}}}},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +133,7 @@ func TestPropertiesManuscriptTitleSavedPreservingItems(t *testing.T) {
 	if mani.Title != "New Title" {
 		t.Fatalf("manifest title = %q, want New Title", mani.Title)
 	}
-	if len(mani.Items) != 1 || mani.Items[0].File != "01-one.md" {
+	if len(mani.Items) != 1 || mani.Items[0].Chapter == nil || mani.Items[0].Chapter.Folder != "one" {
 		t.Fatalf("items must be preserved by the read-modify-write: %+v", mani.Items)
 	}
 }

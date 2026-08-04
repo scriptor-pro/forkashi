@@ -113,7 +113,51 @@ func (m *model) applyProjectSettings() {
 }
 
 // enterWriting switches to the writing screen after applying the opened project's settings.
+// A v1 manifest diverts to the migration confirm screen instead — no disk writes happen
+// until the author accepts via confirmMigration.
 func (m *model) enterWriting() {
+	if needsMigration(m.files.dir) {
+		v1, _, err := readManifestV1(m.files.dir)
+		if err == nil {
+			if plan, planErr := migratePlan(m.files.dir, v1); planErr == nil {
+				m.migrationPending = &plan
+				m.migrationDir = m.files.dir
+				return
+			}
+		}
+		// A v1 manifest that fails to plan (malformed title data, etc.) falls
+		// through to the normal refuse-to-guess path: applyProjectSettings +
+		// screenWriting proceed, and resolveManuscript's existing "unsupported
+		// schemaVersion" warning path (readManifest still gates on v2) surfaces
+		// the problem to the author exactly like any other unreadable manifest.
+	}
+	m.applyProjectSettings()
+	m.screen = screenWriting
+}
+
+// confirmMigration executes the pending v1→v2 migration and enters the writing
+// screen. Called when the author accepts the migration confirm screen.
+func (m *model) confirmMigration() {
+	if m.migrationPending == nil {
+		return
+	}
+	v1, _, err := readManifestV1(m.migrationDir)
+	if err == nil {
+		_ = migrateV1ToV2(m.migrationDir, v1) // best-effort; errors surface via the
+		// manuscript's warning path on next resolveManuscript, consistent with
+		// every other write path in this codebase (no modal error dialog).
+	}
+	m.migrationPending = nil
+	m.files.SetDir(m.files.dir) // re-reads entries against the migrated v2 manifest
+	m.applyProjectSettings()
+	m.screen = screenWriting
+}
+
+// cancelMigration dismisses the pending confirm screen without touching disk;
+// the manuscript is left exactly as it was (still v1, still readable next time
+// via needsMigration).
+func (m *model) cancelMigration() {
+	m.migrationPending = nil
 	m.applyProjectSettings()
 	m.screen = screenWriting
 }
@@ -220,8 +264,9 @@ type model struct {
 	homeFiles    []homeFileItem // FILES column: the current dir's folders + documents
 	homeFilesDir string         // the dir FILES currently shows (drill-down within the selection)
 
-	structureDir        string          // the manuscript being restructured
-	structureItems      []manifestItem  // staged chapter order/membership (committed on exit)
+	structureDir   string       // the manuscript being restructured
+	structureItems []chapterRef // staged BARE chapter order/membership (committed on exit);
+	// real Parts are left untouched by this plan's structure mode
 	structureSel        int             // cursor row
 	structurePendingNew map[string]bool // new-blank files to create on commit
 	structureDirty      bool            // any staged edit?
@@ -229,6 +274,8 @@ type model struct {
 	structureAddSel     int             // cursor in the add-pick
 	structureRenaming   bool            // the retitle field is open (reuses nameInput)
 	structureConfirm    bool            // the commit confirm bar is open
+	migrationPending    *migrationStep  // non-nil while the v1→v2 confirm screen is showing
+	migrationDir        string          // dir being migrated (for confirmMigration/cancelMigration)
 	librarySelected     int             // index into projects+folders driving FILES
 	sources             []source        // library sources; [0] is always the primary (writingDir())
 	activeSource        int             // index into sources driving the home library
@@ -813,6 +860,19 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// The v1→v2 migration confirm screen intercepts all keys before anything
+	// else — m.screen stays screenHome while it's pending, so without this
+	// guard the keys would fall through to the home-screen key handling.
+	if km, ok := msg.(tea.KeyMsg); ok && m.migrationPending != nil {
+		switch km.String() {
+		case "enter":
+			m.confirmMigration()
+		case "esc":
+			m.cancelMigration()
+		}
+		return m, nil
+	}
+
 	var cmds []tea.Cmd
 
 	if t, ok := msg.(autosaveTickMsg); ok {
@@ -1618,6 +1678,10 @@ func (m model) View() string {
 		return "chargement…"
 	}
 
+	if m.migrationPending != nil {
+		return migrationConfirmView(m.migrationPending, m.width)
+	}
+
 	// Help overlay renders over any screen (F1 / ? open it from anywhere).
 	if m.showHelp {
 		hH := m.height - 1
@@ -1753,6 +1817,22 @@ func (m model) View() string {
 		return overlay
 	}
 	return body
+}
+
+// migrationConfirmView renders the v1→v2 migration confirm screen: the list of
+// file→folder moves about to happen, and the two available actions.
+func migrationConfirmView(plan *migrationStep, width int) string {
+	var b strings.Builder
+	b.WriteString("Ce manuscrit utilise l'ancien format de chapitres.\n\n")
+	fmt.Fprintf(&b, "  %d chapitres seront convertis en dossiers :\n", len(plan.moves))
+	for _, mv := range plan.moves {
+		fmt.Fprintf(&b, "    %s → %s/%s\n", mv.fromFile, mv.toFolder, mv.toFile)
+	}
+	b.WriteString("\n  Chaque chapitre gagnera un titre par défaut si nécessaire\n")
+	b.WriteString("  (« Chapitre un », « Chapitre deux », …) — les titres déjà\n")
+	b.WriteString("  personnalisés dans le manifest sont conservés tels quels.\n\n")
+	b.WriteString("  [Entrée] convertir maintenant   [Échap] annuler et fermer")
+	return b.String()
 }
 
 // effectivePanels resolves which side panels are shown this render and the
@@ -1960,27 +2040,38 @@ func (m *model) loadFile(path string) {
 // pane dir. A trailing "/" (or an explicit New-project) makes a folder; an
 // explicit New-project then enters it, while the sidebar "name/" convention
 // creates-and-stays. Files default to .md and open a blank buffer.
-// createChapter makes a new blank chapter at the manuscript root and appends it to the manifest
-// (read-modify-write, atomic), then opens it.
+// createChapter makes a new blank chapter — a folder holding one text file — at the
+// manuscript root and appends it to the manifest as a bare chapter (read-modify-write,
+// atomic), then opens it. name is the chapter's display title (also slugified into its
+// birth-stable folder name).
 func (m *model) createChapter(name string) {
 	if strings.Contains(name, "/") {
 		m.status = "un nom de chapitre ne peut pas contenir de séparateur de chemin"
 		return
 	}
-	if filepath.Ext(name) == "" {
-		name += ".md"
-	}
-	dst := filepath.Join(m.files.dir, name)
-	if _, err := os.Stat(dst); err == nil {
-		m.status = "un fichier nommé " + name + " existe déjà"
+	title := name
+	folder := slugify(title)
+	file := folder + ".md"
+	chDir := filepath.Join(m.files.dir, folder)
+	if _, err := os.Stat(chDir); err == nil {
+		m.status = "un chapitre nommé " + folder + " existe déjà"
 		return
 	}
+	if err := os.MkdirAll(chDir, 0o755); err != nil {
+		m.status = "impossible de créer le chapitre : " + err.Error()
+		return
+	}
+	dst := filepath.Join(chDir, file)
 	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
 		m.status = "impossible de créer le chapitre : " + err.Error()
 		return
 	}
 	if mani, present, err := readManifest(m.files.dir); err == nil && present {
-		mani.Items = append(mani.Items, manifestItem{File: name, Title: sectionTitle(name)})
+		mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+			Folder: folder,
+			Title:  title,
+			Texts:  []manifestText{{File: file, Title: title}},
+		}})
 		if werr := writeManifest(m.files.dir, mani); werr != nil {
 			m.status = "chapitre créé mais échec de la mise à jour du manifeste : " + werr.Error()
 		}
@@ -1989,7 +2080,7 @@ func (m *model) createChapter(name string) {
 	m.loadFile(dst)
 	m.focus = focusEditor
 	m.editor.Focus()
-	m.status = "nouveau chapitre " + name
+	m.status = "nouveau chapitre " + title
 }
 
 // createResource makes an unlisted resource doc — loose at the manuscript root, or into a subfolder
@@ -2150,7 +2241,7 @@ func (m *model) startRename() {
 		m.status = "manifeste illisible — structure en lecture seule (manifeste externe)"
 		return
 	}
-	if isChapterOf(v, e.name) {
+	if m.files.isChapterEntry(e) {
 		if v.source == sourceManifest {
 			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
 			m.renamingInPane = true
@@ -2186,7 +2277,7 @@ func (m *model) startDelete() {
 		return
 	}
 	v := m.files.view
-	if isChapterOf(v, e.name) && v.source == sourceManifest {
+	if m.files.isChapterEntry(e) && v.source == sourceManifest {
 		m.status = "les fichiers de chapitre sont en lecture seule (manifeste externe)"
 		return
 	}

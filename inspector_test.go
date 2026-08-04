@@ -365,8 +365,11 @@ func TestFramedPanelActionNoOverflow(t *testing.T) {
 
 func TestComputeProjStatsAggregatesChaptersAndLoose(t *testing.T) {
 	dir := t.TempDir()
-	// A manifest-driven chapter.
-	if err := os.WriteFile(filepath.Join(dir, "chapter-one.md"), []byte("un deux trois quatre cinq"), 0o644); err != nil {
+	// A manifest-driven chapter (folder + one text).
+	if err := os.MkdirAll(filepath.Join(dir, "chapter-one"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "chapter-one", "chapter-one.md"), []byte("un deux trois quatre cinq"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// A loose Resources file, not listed in any manifest.
@@ -375,9 +378,11 @@ func TestComputeProjStatsAggregatesChaptersAndLoose(t *testing.T) {
 	}
 
 	v := manuscriptView{
-		source:   sourceManifest,
-		chapters: []chapterRef{{file: "chapter-one.md", title: "Chapter One"}},
-		loose:    []fileEntry{{name: "notes.md"}},
+		source: sourceManifest,
+		parts: []partRef{{title: "", chapters: []chapterRef{
+			{folder: "chapter-one", title: "Chapter One", texts: []textRef{{file: "chapter-one.md", title: "Chapter One"}}},
+		}}},
+		loose: []fileEntry{{name: "notes.md"}},
 	}
 	wc := newWordCountCache()
 

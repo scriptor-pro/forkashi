@@ -13,7 +13,9 @@ import (
 // schemaVersion first; sorted keys put items first.
 func TestWriteManifestSortedKeys(t *testing.T) {
 	dir := t.TempDir()
-	if err := writeManifest(dir, manifest{Title: "Novel A", Items: []manifestItem{{File: "a.md", Title: "One"}}}); err != nil {
+	if err := writeManifest(dir, manifest{Title: "Novel A", Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}},
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, manifestName))
@@ -26,8 +28,8 @@ func TestWriteManifestSortedKeys(t *testing.T) {
 	if iItems < 0 || iSchema < 0 || iItems > iSchema {
 		t.Fatalf("keys not sorted (want items before schemaVersion):\n%s", s)
 	}
-	if iFile := strings.Index(s, `"file"`); iFile < 0 || iFile > iSchema {
-		t.Fatalf("item key file should precede top-level schemaVersion (items block first):\n%s", s)
+	if iFolder := strings.Index(s, `"folder"`); iFolder < 0 || iFolder > iSchema {
+		t.Fatalf("item key folder should precede top-level schemaVersion (items block first):\n%s", s)
 	}
 	if strings.HasSuffix(s, "\n") {
 		t.Fatalf("manifest must have no trailing newline (matches the companion app's JSONEncoder)")
@@ -43,7 +45,9 @@ func TestWriteManifestSortedKeys(t *testing.T) {
 // on every app handoff, defeating the sorted-keys parity fix. Round-trips to the exact strings.
 func TestWriteManifestNoHTMLEscaping(t *testing.T) {
 	dir := t.TempDir()
-	if err := writeManifest(dir, manifest{Title: "Tom & Jerry", Items: []manifestItem{{File: "a.md", Title: "A < B > C"}}}); err != nil {
+	if err := writeManifest(dir, manifest{Title: "Tom & Jerry", Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "a", Title: "A < B > C", Texts: []manifestText{{File: "a.md", Title: "A < B > C"}}}},
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, manifestName))
@@ -57,7 +61,7 @@ func TestWriteManifestNoHTMLEscaping(t *testing.T) {
 		t.Fatalf("found an HTML \\uXXXX escape — must emit &/</> literally:\n%s", s)
 	}
 	m, _, _ := readManifest(dir)
-	if m.Title != "Tom & Jerry" || m.Items[0].Title != "A < B > C" {
+	if m.Title != "Tom & Jerry" || m.Items[0].Chapter.Title != "A < B > C" {
 		t.Fatalf("round-trip mismatch: %+v", m)
 	}
 }
@@ -81,8 +85,8 @@ func TestCreateManuscriptRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createManuscript: %v", err)
 	}
-	if first != "01-untitled.md" {
-		t.Fatalf("first chapter file = %q, want 01-untitled.md", first)
+	if first != filepath.Join("untitled", "untitled.md") {
+		t.Fatalf("first chapter file = %q, want untitled/untitled.md", first)
 	}
 	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
 		t.Fatalf("first chapter not on disk: %v", err)
@@ -94,12 +98,13 @@ func TestCreateManuscriptRoundTrips(t *testing.T) {
 	if m.SchemaVersion != manifestSchemaVersion || m.Title != "My Novel" {
 		t.Fatalf("manifest = %+v", m)
 	}
-	if len(m.Items) != 1 || m.Items[0].File != "01-untitled.md" || m.Items[0].Title != "Untitled" {
+	if len(m.Items) != 1 || m.Items[0].Chapter == nil || m.Items[0].Chapter.Folder != "untitled" ||
+		m.Items[0].Chapter.Title != "Untitled" {
 		t.Fatalf("items = %+v", m.Items)
 	}
 	// The resolver must see it as an ordered manifest manuscript.
 	v := resolveManuscript(dir, readEntries(dir))
-	if v.source != sourceManifest || !v.ordered() || len(v.chapters) != 1 {
+	if v.source != sourceManifest || !v.ordered() || len(v.parts) != 1 || len(v.parts[0].chapters) != 1 {
 		t.Fatalf("resolved view = %+v", v)
 	}
 }
@@ -117,15 +122,16 @@ func TestCreateManuscriptRefusesExisting(t *testing.T) {
 func TestRenameChapterTitleChangesOnlyTitle(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "book")
 	first, _ := createManuscript(dir, "Book", "Untitled")
-	if err := renameChapterTitle(dir, first, "Opening"); err != nil {
+	folder := filepath.Dir(first)
+	if err := renameChapterTitle(dir, folder, "Opening"); err != nil {
 		t.Fatalf("renameChapterTitle: %v", err)
 	}
 	m, _, _ := readManifest(dir)
-	if m.Items[0].Title != "Opening" {
-		t.Fatalf("title = %q, want Opening", m.Items[0].Title)
+	if m.Items[0].Chapter.Title != "Opening" {
+		t.Fatalf("title = %q, want Opening", m.Items[0].Chapter.Title)
 	}
-	if m.Items[0].File != first {
-		t.Fatalf("filename changed to %q — must be birth-stable", m.Items[0].File)
+	if m.Items[0].Chapter.Folder != folder {
+		t.Fatalf("folder changed to %q — must be birth-stable", m.Items[0].Chapter.Folder)
 	}
 	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
 		t.Fatalf("chapter file must NOT be renamed on disk: %v", err)
@@ -134,23 +140,26 @@ func TestRenameChapterTitleChangesOnlyTitle(t *testing.T) {
 
 func TestRenameChapterTitlePreservesOrderAndOthers(t *testing.T) {
 	dir := t.TempDir()
-	m := manifest{SchemaVersion: 1, Title: "T", Items: []manifestItem{
-		{File: "01-a.md", Title: "A"}, {File: "02-b.md", Title: "B"}, {File: "03-c.md", Title: "C"},
+	m := manifest{SchemaVersion: manifestSchemaVersion, Title: "T", Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "a", Title: "A", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		{Chapter: &manifestChapter{Folder: "b", Title: "B", Texts: []manifestText{{File: "b.md", Title: "B"}}}},
+		{Chapter: &manifestChapter{Folder: "c", Title: "C", Texts: []manifestText{{File: "c.md", Title: "C"}}}},
 	}}
 	if err := writeManifest(dir, m); err != nil {
 		t.Fatalf("writeManifest: %v", err)
 	}
-	if err := renameChapterTitle(dir, "02-b.md", "Bee"); err != nil {
+	if err := renameChapterTitle(dir, "b", "Bee"); err != nil {
 		t.Fatalf("renameChapterTitle: %v", err)
 	}
 	got, _, _ := readManifest(dir)
-	want := []manifestItem{{File: "01-a.md", Title: "A"}, {File: "02-b.md", Title: "Bee"}, {File: "03-c.md", Title: "C"}}
+	wantTitles := []string{"A", "Bee", "C"}
+	wantFolders := []string{"a", "b", "c"}
 	if len(got.Items) != 3 {
 		t.Fatalf("items = %+v", got.Items)
 	}
-	for i := range want {
-		if got.Items[i] != want[i] {
-			t.Fatalf("item %d = %+v, want %+v", i, got.Items[i], want[i])
+	for i := range wantTitles {
+		if got.Items[i].Chapter == nil || got.Items[i].Chapter.Title != wantTitles[i] || got.Items[i].Chapter.Folder != wantFolders[i] {
+			t.Fatalf("item %d = %+v, want title %q folder %q", i, got.Items[i].Chapter, wantTitles[i], wantFolders[i])
 		}
 	}
 }
@@ -158,14 +167,16 @@ func TestRenameChapterTitlePreservesOrderAndOthers(t *testing.T) {
 func TestRenameChapterTitleRefusesNonMember(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "book")
 	createManuscript(dir, "Book", "Untitled")
-	if err := renameChapterTitle(dir, "99-ghost.md", "Nope"); err == nil {
+	if err := renameChapterTitle(dir, "ghost", "Nope"); err == nil {
 		t.Fatal("retitling a non-member should error")
 	}
 }
 
 func TestWriteManifestForcesSchemaVersion(t *testing.T) {
 	dir := t.TempDir()
-	if err := writeManifest(dir, manifest{Title: "X", Items: []manifestItem{{File: "01-a.md", Title: "A"}}}); err != nil {
+	if err := writeManifest(dir, manifest{Title: "X", Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "a", Title: "A", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+	}}); err != nil {
 		t.Fatalf("writeManifest: %v", err)
 	}
 	m, _, err := readManifest(dir)
@@ -181,11 +192,12 @@ func TestStartRenameManifestChapterRetitles(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "book")
 	first, _ := createManuscript(dir, "Book", "Untitled")
+	folder := filepath.Dir(first)
 
 	m := initialModel() // same construction as Task 2 (smoke_test.go:369)
 	m.files.root = ""
 	m.files.SetDir(dir)
-	m.files.selectName(first)
+	m.files.selectName(folder)
 
 	m.startRename()
 	if !m.renaming || !m.renameTarget.manifestChapter {
@@ -199,11 +211,11 @@ func TestStartRenameManifestChapterRetitles(t *testing.T) {
 	m.confirmRename()
 
 	mf, _, _ := readManifest(dir)
-	if mf.Items[0].Title != "The Opening" {
-		t.Fatalf("title = %q, want 'The Opening'", mf.Items[0].Title)
+	if mf.Items[0].Chapter.Title != "The Opening" {
+		t.Fatalf("title = %q, want 'The Opening'", mf.Items[0].Chapter.Title)
 	}
-	if mf.Items[0].File != first {
-		t.Fatalf("filename changed to %q — must stay birth-stable", mf.Items[0].File)
+	if mf.Items[0].Chapter.Folder != folder {
+		t.Fatalf("folder changed to %q — must stay birth-stable", mf.Items[0].Chapter.Folder)
 	}
 	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
 		t.Fatalf("chapter file must not be renamed on disk: %v", err)
@@ -229,92 +241,10 @@ func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
 	if m.files.dir != dir {
 		t.Fatalf("pane dir = %q, want %q (should enter the project)", m.files.dir, dir)
 	}
-	if filepath.Base(m.currentFile) != "01-pas-encore-de-titre.md" {
+	if filepath.Base(m.currentFile) != "pas-encore-de-titre.md" {
 		t.Fatalf("currentFile = %q, want the opened first chapter", m.currentFile)
 	}
 	if m.focus != focusEditor {
 		t.Fatalf("focus = %v, want focusEditor (land writing)", m.focus)
-	}
-}
-
-func mf(files ...string) manifest {
-	m := manifest{SchemaVersion: 1, Title: "T"}
-	for _, f := range files {
-		m.Items = append(m.Items, manifestItem{File: f, Title: f})
-	}
-	return m
-}
-
-func files(m manifest) []string {
-	var out []string
-	for _, it := range m.Items {
-		out = append(out, it.File)
-	}
-	return out
-}
-
-func eqStr(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func TestManifestInsert(t *testing.T) {
-	orig := mf("a", "b", "c")
-	got := manifestInsert(orig, "x", "X", 1)
-	if !eqStr(files(got), []string{"a", "x", "b", "c"}) {
-		t.Fatalf("insert at 1: %v", files(got))
-	}
-	if got.Items[1].Title != "X" {
-		t.Fatalf("inserted title = %q", got.Items[1].Title)
-	}
-	// clamp
-	if !eqStr(files(manifestInsert(orig, "x", "X", 99)), []string{"a", "b", "c", "x"}) {
-		t.Fatal("insert past end should append")
-	}
-	if !eqStr(files(manifestInsert(orig, "x", "X", -5)), []string{"x", "a", "b", "c"}) {
-		t.Fatal("insert before start should prepend")
-	}
-	// no mutation of the argument
-	if !eqStr(files(orig), []string{"a", "b", "c"}) {
-		t.Fatalf("insert mutated its argument: %v", files(orig))
-	}
-}
-
-func TestManifestRemove(t *testing.T) {
-	orig := mf("a", "b", "c")
-	if !eqStr(files(manifestRemove(orig, "b")), []string{"a", "c"}) {
-		t.Fatal("remove b")
-	}
-	if !eqStr(files(manifestRemove(orig, "zzz")), []string{"a", "b", "c"}) {
-		t.Fatal("removing an absent file should be a no-op")
-	}
-	if !eqStr(files(orig), []string{"a", "b", "c"}) {
-		t.Fatal("remove mutated its argument")
-	}
-}
-
-func TestManifestReorder(t *testing.T) {
-	orig := mf("a", "b", "c", "d")
-	// move c (index 2) up one → index 1
-	if !eqStr(files(manifestReorder(orig, "c", 1)), []string{"a", "c", "b", "d"}) {
-		t.Fatalf("reorder c up: %v", files(manifestReorder(orig, "c", 1)))
-	}
-	// move c down one → index 3 (in the post-removal list)
-	if !eqStr(files(manifestReorder(orig, "c", 3)), []string{"a", "b", "d", "c"}) {
-		t.Fatalf("reorder c down: %v", files(manifestReorder(orig, "c", 3)))
-	}
-	// absent → no-op
-	if !eqStr(files(manifestReorder(orig, "zzz", 0)), []string{"a", "b", "c", "d"}) {
-		t.Fatal("reorder absent should be a no-op")
-	}
-	if !eqStr(files(orig), []string{"a", "b", "c", "d"}) {
-		t.Fatal("reorder mutated its argument")
 	}
 }
