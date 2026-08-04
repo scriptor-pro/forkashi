@@ -110,7 +110,11 @@ Choix clé : **un manuscrit sans Partie est représenté comme "une Partie sans 
 tous ses chapitres, plutôt que d'avoir deux formes différentes de `manuscriptView` (plate vs
 groupée). Chaque site consommateur itère uniformément
 `for _, p := range v.parts { for _, ch := range p.chapters { ... } }` et n'affiche l'en-tête de
-Partie que si `p.title != ""` — pas de branchement conditionnel dupliqué à chaque site.
+Partie que si `p.title != ""` — pas de branchement conditionnel dupliqué à chaque site. Ce test
+`p.title != ""` suffit pour la sidebar/corkboard/pager (afficher un en-tête n'a pas de coût de
+mise en page à gérer) ; l'export a une règle plus stricte pour rester sans régression visuelle
+(page blanche) — voir §Export : une page de titre de Partie n'y est générée qu'à partir de 2
+Parties réellement titrées dans le manuscrit, pas dès qu'une seule existe.
 
 `resolveManuscript`/`manifestView` (`manuscript.go`) construisent cette forme à partir du manifest
 v2 ; `chapterRef`/`textRef` restent la seule interface que les 7 sites consommateurs connaissent
@@ -230,10 +234,20 @@ garde toujours le contrôle explicite :
   paragraphe — pas de rupture de page (les textes d'un même chapitre sont une continuité narrative,
   contrairement aux chapitres eux-mêmes qui commencent chacun sur une nouvelle
   page/section).
-- **Titre de Partie** : éditable comme un titre de chapitre ; à l'export, une rupture de
-  section/page avec ce titre précède les chapitres de la Partie — même mécanique que la rupture
-  déjà utilisée entre chapitres, un niveau au-dessus. Une Partie sans titre (le partRef synthétique
-  des chapitres hors-partie) n'insère aucune rupture supplémentaire.
+- **Titre de Partie** : éditable comme un titre de chapitre. L'AST d'export (`export_ast.go`,
+  `ManuscriptDoc []Section`, un `Section` par chapitre) n'a aujourd'hui aucun niveau Partie — cette
+  spec n'en ajoute pas non plus à l'AST en tant que rupture systématique : une page de titre de
+  Partie n'est insérée QUE si le manuscrit compte **au moins 2 Parties réellement titrées**
+  (`p.title != ""`) au total. En-dessous de ce seuil (0 Partie, ou une seule), aucune page de titre
+  de Partie n'est jamais générée et le rendu reste identique à aujourd'hui — chapitres seuls,
+  rupture de page par chapitre comme actuellement, aucune régression visuelle (en particulier :
+  pas de page blanche introduite par la Partie synthétique qui porte les chapitres hors-partie,
+  ni par un manuscrit n'ayant créé qu'une seule Partie explicite).
+  Raison : avec une seule Partie, une page de titre n'apporterait aucune information de
+  navigation (rien à distinguer) ; elle ne devient utile qu'à partir de 2 Parties à départager.
+  Quand le seuil est atteint, seules les Parties dont `title != ""` insèrent leur page de titre
+  avant leur premier chapitre — la Partie synthétique (chapitres hors-partie, titre toujours vide)
+  n'en insère jamais, même si le seuil de 2 est atteint par ailleurs.
 
 ## Promotion depuis l'outline
 
