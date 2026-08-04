@@ -9,12 +9,30 @@ import (
 )
 
 const manifestName = "manifest.json"
-const manifestSchemaVersion = 1
+const manifestSchemaVersion = 2
 
-// manifestItem is one ordered chapter entry: a bare filename + a display title.
-type manifestItem struct {
+// manifestText is one ordered text (scene) inside a chapter: a bare filename (slug,
+// no numeric prefix — order lives in the manifest, not the filename) plus a display title.
+type manifestText struct {
 	File  string `json:"file"`
 	Title string `json:"title"`
+}
+
+// manifestChapter is one chapter: a folder (slug, birth-stable — never renamed by a
+// retitle or reorder) holding one or more ordered texts.
+type manifestChapter struct {
+	Folder string         `json:"folder"`
+	Title  string         `json:"title"`
+	Texts  []manifestText `json:"texts"`
+}
+
+// manifestItem is one top-level manuscript entry: EITHER a bare chapter (Chapter set,
+// Part empty, Chapters nil) OR a Part grouping its own ordered chapters (Part set,
+// Chapters set, Chapter nil). Mutually exclusive — never both.
+type manifestItem struct {
+	Part     string            `json:"part,omitempty"`
+	Chapters []manifestChapter `json:"chapters,omitempty"`
+	Chapter  *manifestChapter  `json:"chapter,omitempty"`
 }
 
 // manifest is the shared per-manuscript order/membership/title file. okashi reads it AND
@@ -56,8 +74,8 @@ func readManifest(dir string) (m manifest, present bool, err error) {
 }
 
 // writeManifest serializes m to dir/manifest.json atomically. okashi owns manifest writes for
-// its own AND the shared corpus (design §0); the schema is forced to EXACTLY v1 so
-// the companion app reads it verbatim. The serialization matches the companion app's
+// its own AND the shared corpus (design §0); the schema is forced to EXACTLY
+// manifestSchemaVersion so the companion app reads it verbatim. The serialization matches the companion app's
 // JSONEncoder(.prettyPrinted, .sortedKeys): alphabetically-sorted keys, 2-space indent, no
 // trailing newline — so when the two apps alternate writes the NSFileVersion diff stays small
 // and legible instead of a whole-file reformat (storage-spine §67-69). Go sorts map keys
@@ -86,116 +104,4 @@ func writeManifest(dir string, m manifest) error {
 		return err
 	}
 	return atomicWrite(filepath.Join(dir, manifestName), bytes.TrimRight(buf.Bytes(), "\n"), 0o644)
-}
-
-// createManuscript makes a brand-new manuscript at dir: the folder, an empty first
-// chapter "01-<slug>.md", and a v1 manifest listing it. firstChapter is that chapter's
-// display title. It refuses to clobber an existing manifest and returns the first
-// chapter's filename so the caller can open it.
-func createManuscript(dir, title, firstChapter string) (string, error) {
-	if hasManifest(dir) {
-		return "", fmt.Errorf("a manuscript already exists at %s", dir)
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	file := "01-" + slugify(firstChapter) + ".md"
-	if err := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); err != nil {
-		return "", err
-	}
-	return file, writeManifest(dir, manifest{
-		SchemaVersion: manifestSchemaVersion,
-		Title:         title,
-		Items:         []manifestItem{{File: file, Title: firstChapter}},
-	})
-}
-
-// renameChapterTitle edits ONLY the items[].title of the chapter file in dir's manifest,
-// preserving order and membership; the filename is birth-stable (design §5.7). It
-// read-modify-writes (re-reads immediately before writing, §0) and refuses a file that is
-// not a listed chapter or a dir without a readable manifest.
-func renameChapterTitle(dir, file, newTitle string) error {
-	m, present, err := readManifest(dir)
-	if err != nil {
-		return err
-	}
-	if !present {
-		return fmt.Errorf("no manifest in %s", dir)
-	}
-	found := false
-	for i := range m.Items {
-		if m.Items[i].File == file {
-			m.Items[i].Title = newTitle
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("%s is not a chapter of %s", file, dir)
-	}
-	return writeManifest(dir, m)
-}
-
-// manifestInsert returns a copy of m with a new {file,title} item inserted at index at (clamped to
-// [0,len]). Callers ensure file is not already listed. The argument is not mutated.
-func manifestInsert(m manifest, file, title string, at int) manifest {
-	if at < 0 {
-		at = 0
-	}
-	if at > len(m.Items) {
-		at = len(m.Items)
-	}
-	items := make([]manifestItem, 0, len(m.Items)+1)
-	items = append(items, m.Items[:at]...)
-	items = append(items, manifestItem{File: file, Title: title})
-	items = append(items, m.Items[at:]...)
-	m.Items = items
-	return m
-}
-
-// manifestRemove returns a copy of m without the item whose File == file (no-op if absent). The
-// argument is not mutated.
-func manifestRemove(m manifest, file string) manifest {
-	items := make([]manifestItem, 0, len(m.Items))
-	for _, it := range m.Items {
-		if it.File != file {
-			items = append(items, it)
-		}
-	}
-	m.Items = items
-	return m
-}
-
-// manifestReorder returns a copy of m with the item File==file moved to index to (clamped) in the
-// list AFTER the item is removed. No-op if file isn't listed. The argument is not mutated.
-func manifestReorder(m manifest, file string, to int) manifest {
-	from := -1
-	for i, it := range m.Items {
-		if it.File == file {
-			from = i
-			break
-		}
-	}
-	if from < 0 {
-		return m
-	}
-	moved := m.Items[from]
-	rest := make([]manifestItem, 0, len(m.Items)-1)
-	for i, it := range m.Items {
-		if i != from {
-			rest = append(rest, it)
-		}
-	}
-	if to < 0 {
-		to = 0
-	}
-	if to > len(rest) {
-		to = len(rest)
-	}
-	out := make([]manifestItem, 0, len(m.Items))
-	out = append(out, rest[:to]...)
-	out = append(out, moved)
-	out = append(out, rest[to:]...)
-	m.Items = out
-	return m
 }
