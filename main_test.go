@@ -77,6 +77,27 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "un", "un.md")); err != nil {
 		t.Fatalf("migrated file must exist: %v", err)
 	}
+
+	// Regression coverage for the Task 6 fix (commit 25cb692): confirmMigration
+	// must refresh the sidebar (m.files.SetDir) after migrating, not just leave
+	// migration's on-disk effect for a future manual reload. Before that fix,
+	// m.files.entries still listed the old flat v1 filename here.
+	foundOldFlatFile := false
+	foundNewChapterFolder := false
+	for _, e := range m.files.entries {
+		if e.name == "01-un.md" {
+			foundOldFlatFile = true
+		}
+		if e.name == "un" && e.isDir {
+			foundNewChapterFolder = true
+		}
+	}
+	if foundOldFlatFile {
+		t.Fatalf("m.files.entries must not still list the old v1 flat file after migration, got: %+v", m.files.entries)
+	}
+	if !foundNewChapterFolder {
+		t.Fatalf("m.files.entries must list the new v2 chapter folder after migration, got: %+v", m.files.entries)
+	}
 }
 
 func TestCancelMigrationLeavesV1ManifestUntouched(t *testing.T) {
