@@ -102,6 +102,52 @@ func TestMoveDocumentLooseIntoManuscriptAsChapter(t *testing.T) {
 	}
 }
 
+// TestMoveDocumentLooseIntoManuscriptAsChapterDedupesFolderCollision covers the
+// reviewer's finding: moveDocument only checked os.Stat(dst) at the
+// destination manuscript ROOT, never at the derived chapter-folder path. A
+// loose file whose title-derived slug happens to match a chapter folder
+// ALREADY in the destination manifest used to make MkdirAll silently no-op
+// into the existing folder, appending a second manifest item that pointed at
+// the same on-disk folder as the first. After the fix, the new chapter must
+// be deduped ("deleted-scene-2") rather than collide.
+func TestMoveDocumentLooseIntoManuscriptAsChapterDedupesFolderCollision(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "novel")
+	// createManuscript's first chapter is slugified from "Deleted scene", i.e.
+	// folder "deleted-scene" — matching the slug the moved file will derive.
+	createManuscript(proj, "Novel", "Deleted scene")
+	os.WriteFile(filepath.Join(root, "deleted-scene.md"), []byte("x"), 0o644)
+
+	if err := moveDocument(root, "deleted-scene.md", proj, true); err != nil {
+		t.Fatal(err)
+	}
+
+	m, _, err := readManifest(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Items) != 2 {
+		t.Fatalf("items = %+v, want 2 (original chapter + moved-in chapter)", m.Items)
+	}
+	folders := map[string]bool{}
+	for _, it := range m.Items {
+		if it.Chapter == nil {
+			t.Fatalf("item missing Chapter: %+v", it)
+		}
+		folders[it.Chapter.Folder] = true
+	}
+	if len(folders) != 2 || !folders["deleted-scene"] || !folders["deleted-scene-2"] {
+		t.Fatalf("folders = %+v, want distinct {deleted-scene, deleted-scene-2}", folders)
+	}
+	// Both folders must actually exist on disk with their own file — no overwrite.
+	if _, err := os.Stat(filepath.Join(proj, "deleted-scene", "deleted-scene.md")); err != nil {
+		t.Fatalf("original chapter file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "deleted-scene-2", "deleted-scene.md")); err != nil {
+		t.Fatalf("moved-in chapter file missing from deduped folder: %v", err)
+	}
+}
+
 func TestMoveDocumentLooseIntoManuscriptAsResource(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "res.md"), []byte("x"), 0o644)

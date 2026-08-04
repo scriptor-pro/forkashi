@@ -86,7 +86,23 @@ func moveDocument(srcDir, file, dstDir string, asChapter bool) error {
 		}
 		if present {
 			title := sectionTitle(file)
-			folder := slugify(title)
+			// The title-derived slug can already be a chapter folder present in the
+			// destination manifest — the os.Stat above only guards the manuscript
+			// root, not this chapter subfolder, so a clear dst-root collision check
+			// doesn't mean the derived chapter folder is free. Left unchecked,
+			// MkdirAll below silently no-ops into the existing folder and two
+			// manifest items end up sharing one folder on disk. Dedupe against every
+			// chapter folder already in the destination manifest, "-2", "-3", …,
+			// same numeric-suffix scheme as uniqueChapterFolder (structure.go) and
+			// migratePlan's slug dedup (migration.go), via the shared
+			// uniqueSlugAgainst helper.
+			taken := map[string]bool{}
+			for _, it := range dm.Items {
+				if it.Chapter != nil {
+					taken[it.Chapter.Folder] = true
+				}
+			}
+			folder := uniqueSlugAgainst(slugify(title), taken)
 			chDir := filepath.Join(dstDir, folder)
 			if err := os.MkdirAll(chDir, 0o755); err != nil {
 				return err
