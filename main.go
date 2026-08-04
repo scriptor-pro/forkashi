@@ -113,7 +113,50 @@ func (m *model) applyProjectSettings() {
 }
 
 // enterWriting switches to the writing screen after applying the opened project's settings.
+// A v1 manifest diverts to the migration confirm screen instead — no disk writes happen
+// until the author accepts via confirmMigration.
 func (m *model) enterWriting() {
+	if needsMigration(m.files.dir) {
+		v1, _, err := readManifestV1(m.files.dir)
+		if err == nil {
+			if plan, planErr := migratePlan(m.files.dir, v1); planErr == nil {
+				m.migrationPending = &plan
+				m.migrationDir = m.files.dir
+				return
+			}
+		}
+		// A v1 manifest that fails to plan (malformed title data, etc.) falls
+		// through to the normal refuse-to-guess path: applyProjectSettings +
+		// screenWriting proceed, and resolveManuscript's existing "unsupported
+		// schemaVersion" warning path (readManifest still gates on v2) surfaces
+		// the problem to the author exactly like any other unreadable manifest.
+	}
+	m.applyProjectSettings()
+	m.screen = screenWriting
+}
+
+// confirmMigration executes the pending v1→v2 migration and enters the writing
+// screen. Called when the author accepts the migration confirm screen.
+func (m *model) confirmMigration() {
+	if m.migrationPending == nil {
+		return
+	}
+	v1, _, err := readManifestV1(m.migrationDir)
+	if err == nil {
+		_ = migrateV1ToV2(m.migrationDir, v1) // best-effort; errors surface via the
+		// manuscript's warning path on next resolveManuscript, consistent with
+		// every other write path in this codebase (no modal error dialog).
+	}
+	m.migrationPending = nil
+	m.applyProjectSettings()
+	m.screen = screenWriting
+}
+
+// cancelMigration dismisses the pending confirm screen without touching disk;
+// the manuscript is left exactly as it was (still v1, still readable next time
+// via needsMigration).
+func (m *model) cancelMigration() {
+	m.migrationPending = nil
 	m.applyProjectSettings()
 	m.screen = screenWriting
 }
@@ -229,6 +272,8 @@ type model struct {
 	structureAddSel     int             // cursor in the add-pick
 	structureRenaming   bool            // the retitle field is open (reuses nameInput)
 	structureConfirm    bool            // the commit confirm bar is open
+	migrationPending    *migrationStep  // non-nil while the v1→v2 confirm screen is showing
+	migrationDir        string          // dir being migrated (for confirmMigration/cancelMigration)
 	librarySelected     int             // index into projects+folders driving FILES
 	sources             []source        // library sources; [0] is always the primary (writingDir())
 	activeSource        int             // index into sources driving the home library
@@ -813,6 +858,19 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// The v1→v2 migration confirm screen intercepts all keys before anything
+	// else — m.screen stays screenHome while it's pending, so without this
+	// guard the keys would fall through to the home-screen key handling.
+	if km, ok := msg.(tea.KeyMsg); ok && m.migrationPending != nil {
+		switch km.String() {
+		case "enter":
+			m.confirmMigration()
+		case "esc":
+			m.cancelMigration()
+		}
+		return m, nil
+	}
+
 	var cmds []tea.Cmd
 
 	if t, ok := msg.(autosaveTickMsg); ok {
@@ -1606,6 +1664,10 @@ func (m model) View() string {
 		return "loading…"
 	}
 
+	if m.migrationPending != nil {
+		return migrationConfirmView(m.migrationPending, m.width)
+	}
+
 	// Help overlay renders over any screen (F1 / ? open it from anywhere).
 	if m.showHelp {
 		hH := m.height - 1
@@ -1734,6 +1796,22 @@ func (m model) View() string {
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+}
+
+// migrationConfirmView renders the v1→v2 migration confirm screen: the list of
+// file→folder moves about to happen, and the two available actions.
+func migrationConfirmView(plan *migrationStep, width int) string {
+	var b strings.Builder
+	b.WriteString("Ce manuscrit utilise l'ancien format de chapitres.\n\n")
+	fmt.Fprintf(&b, "  %d chapitres seront convertis en dossiers :\n", len(plan.moves))
+	for _, mv := range plan.moves {
+		fmt.Fprintf(&b, "    %s → %s/%s\n", mv.fromFile, mv.toFolder, mv.toFile)
+	}
+	b.WriteString("\n  Chaque chapitre gagnera un titre par défaut si nécessaire\n")
+	b.WriteString("  (« Chapitre un », « Chapitre deux », …) — les titres déjà\n")
+	b.WriteString("  personnalisés dans le manifest sont conservés tels quels.\n\n")
+	b.WriteString("  [Entrée] convertir maintenant   [Échap] annuler et fermer")
+	return b.String()
 }
 
 // effectivePanels resolves which side panels are shown this render and the
