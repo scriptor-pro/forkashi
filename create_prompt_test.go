@@ -14,9 +14,10 @@ import (
 func createFlowModel(t *testing.T) (m model, dir string) {
 	t.Helper()
 	dir = t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	mkChapterDir(t, dir, "a", map[string]string{"a.md": "x"})
 	writeManifest(dir, manifest{SchemaVersion: manifestSchemaVersion, Title: "W",
-		Items: []manifestItem{{File: "01-a.md", Title: "One"}}})
+		Items: []manifestItem{{Chapter: &manifestChapter{Folder: "a", Title: "One",
+			Texts: []manifestText{{File: "a.md", Title: "One"}}}}}})
 	fl := newFilelist()
 	fl.root, fl.width, fl.height = dir, 30, 30
 	fl.SetDir(dir)
@@ -42,11 +43,11 @@ func TestCtrlNChapterAppendsToManifest(t *testing.T) {
 	m = nm.(model)
 	m = typeName(m, "the-fog")
 
-	if _, err := os.Stat(filepath.Join(dir, "the-fog.md")); err != nil {
-		t.Fatal("chapter file should be created")
+	if _, err := os.Stat(filepath.Join(dir, "the-fog", "the-fog.md")); err != nil {
+		t.Fatal("chapter folder + text file should be created")
 	}
 	mani, _, _ := readManifest(dir)
-	if len(mani.Items) != 2 || mani.Items[1].File != "the-fog.md" {
+	if len(mani.Items) != 2 || mani.Items[1].Chapter == nil || mani.Items[1].Chapter.Folder != "the-fog" {
 		t.Fatalf("chapter should be appended to the manifest: %+v", mani.Items)
 	}
 }

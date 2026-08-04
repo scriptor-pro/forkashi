@@ -12,7 +12,7 @@ import (
 )
 
 func TestCorkboardAltMoveMirrorsOutline(t *testing.T) {
-	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
+	dir := seedCorkManuscript(t) // a, b, c
 	m := model{}
 	m.files.dir = dir
 	m.enterCorkboard()
@@ -23,13 +23,13 @@ func TestCorkboardAltMoveMirrorsOutline(t *testing.T) {
 	if m.structureSel != 1 || !m.structureDirty {
 		t.Fatalf("alt+down should move + follow (sel=%d dirty=%v)", m.structureSel, m.structureDirty)
 	}
-	if m.structureItems[0].File != "02-b.md" || m.structureItems[1].File != "01-a.md" {
+	if m.structureItems[0].folder != "b" || m.structureItems[1].folder != "a" {
 		t.Fatalf("alt+down should swap items 0 and 1, got %v", m.structureItems)
 	}
 	// alt+↑ moves it back.
 	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyUp, Alt: true})
 	m = mm.(model)
-	if m.structureSel != 0 || m.structureItems[0].File != "01-a.md" {
+	if m.structureSel != 0 || m.structureItems[0].folder != "a" {
 		t.Fatalf("alt+up should restore the order (sel=%d items=%v)", m.structureSel, m.structureItems)
 	}
 }
@@ -57,7 +57,10 @@ func TestCorkboardCardMeta(t *testing.T) {
 }
 
 func TestCorkboardStatusLine(t *testing.T) {
-	items := []manifestItem{{File: "a.md"}, {File: "b.md"}}
+	items := []chapterRef{
+		{folder: "a", texts: []textRef{{file: "a.md"}}},
+		{folder: "b", texts: []textRef{{file: "b.md"}}},
+	}
 	// wc == nil → total counts as 0; still reports the chapter count, no target fragment.
 	got := corkboardStatusLine(items, "/x", nil, projectGoals{})
 	if !strings.Contains(got, "2 chapters") {
@@ -76,26 +79,31 @@ func TestCorkboardStatusLine(t *testing.T) {
 	}
 	// With a real word-count cache the total sums the chapters (3 + 2 = 5 words).
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.md"), []byte("one two three"), 0o644)
-	os.WriteFile(filepath.Join(dir, "b.md"), []byte("four five"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "a"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "b"), 0o755)
+	os.WriteFile(filepath.Join(dir, "a", "a.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "b", "b.md"), []byte("four five"), 0o644)
 	if got := corkboardStatusLine(items, dir, newWordCountCache(), projectGoals{}); !strings.Contains(got, "5 words") {
 		t.Fatalf("want summed total '5 words', got %q", got)
 	}
 }
 
+// seedCorkManuscript builds a 3-bare-chapter v2 manuscript: folders a/, b/, c/ each holding one
+// text file (a.md, b.md, c.md), matching the fixture pattern introduced in manuscript_test.go
+// (Task 2, mkChapterDir).
 func seedCorkManuscript(t *testing.T) (dir string) {
 	t.Helper()
 	dir = t.TempDir()
-	for _, f := range []string{"01-a.md", "02-b.md", "03-c.md"} {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte("body of "+f), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	mkChapterDir(t, dir, "a", map[string]string{"a.md": "body of a.md"})
+	mkChapterDir(t, dir, "b", map[string]string{"b.md": "body of b.md"})
+	mkChapterDir(t, dir, "c", map[string]string{"c.md": "body of c.md"})
 	if err := writeManifest(dir, manifest{
 		SchemaVersion: manifestSchemaVersion,
 		Title:         "The Work",
 		Items: []manifestItem{
-			{File: "01-a.md", Title: "One"}, {File: "02-b.md", Title: "Two"}, {File: "03-c.md", Title: "Three"},
+			{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}},
+			{Chapter: &manifestChapter{Folder: "b", Title: "Two", Texts: []manifestText{{File: "b.md", Title: "Two"}}}},
+			{Chapter: &manifestChapter{Folder: "c", Title: "Three", Texts: []manifestText{{File: "c.md", Title: "Three"}}}},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -129,7 +137,7 @@ func TestCorkboardSynopsisEditWritesSidecar(t *testing.T) {
 	m := model{}
 	m.files.dir = dir
 	m.enterCorkboard()
-	m.structureSel = 1 // chapter 02-b.md
+	m.structureSel = 1 // chapter b
 
 	// e → edit; type; esc → commit + immediate sidecar write.
 	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
@@ -143,8 +151,9 @@ func TestCorkboardSynopsisEditWritesSidecar(t *testing.T) {
 	if m.synEditing {
 		t.Fatal("esc should commit and close the editor")
 	}
-	// Persisted to the sidecar and not requiring a manifest commit.
-	if loadSynopses(dir)["02-b.md"] != "The train is late." {
+	// Persisted to the sidecar (keyed by folder, birth-stable chapter identity) and not requiring
+	// a manifest commit.
+	if loadSynopses(dir)["b"] != "The train is late." {
 		t.Fatalf("synopsis not written to sidecar: %+v", loadSynopses(dir))
 	}
 	if m.structureDirty {
@@ -175,7 +184,8 @@ func TestCorkboardReorderCommitsViaStructurePath(t *testing.T) {
 	m = mm.(model)
 
 	mani, _, _ := readManifest(dir)
-	if len(mani.Items) != 3 || mani.Items[0].File != "02-b.md" || mani.Items[1].File != "01-a.md" {
+	if len(mani.Items) != 3 || mani.Items[0].Chapter == nil || mani.Items[0].Chapter.Folder != "b" ||
+		mani.Items[1].Chapter == nil || mani.Items[1].Chapter.Folder != "a" {
 		t.Fatalf("reorder not committed to the manifest: %+v", mani.Items)
 	}
 	if m.screen != screenWriting {
@@ -188,7 +198,7 @@ func TestCorkboardRemoveDemotesChapter(t *testing.T) {
 	m := model{editor: textarea.New()}
 	m.files.dir = dir
 	m.enterCorkboard()
-	m.structureSel = 1 // 02-b.md
+	m.structureSel = 1 // b
 	// x → demote to Resource (staged), then esc → confirm → y commit.
 	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	m = mm.(model)
@@ -204,12 +214,12 @@ func TestCorkboardRemoveDemotesChapter(t *testing.T) {
 		t.Fatalf("chapter should be demoted (2 items left), got %+v", mani.Items)
 	}
 	for _, it := range mani.Items {
-		if it.File == "02-b.md" {
-			t.Fatal("02-b.md should no longer be a listed chapter")
+		if it.Chapter != nil && it.Chapter.Folder == "b" {
+			t.Fatal("b should no longer be a listed chapter")
 		}
 	}
 	// The file itself is untouched (non-destructive demote).
-	if _, err := os.Stat(filepath.Join(dir, "02-b.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "b", "b.md")); err != nil {
 		t.Fatal("demote must not delete the file")
 	}
 }
@@ -221,13 +231,13 @@ func TestCorkboardEnterOpensChapter(t *testing.T) {
 	m.files.root = dir
 	m.files.SetDir(dir)
 	m.enterCorkboard()
-	m.structureSel = 2 // 03-c.md
+	m.structureSel = 2 // c
 	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter})
 	m = mm.(model)
 	if m.screen != screenWriting {
 		t.Fatalf("enter should open the chapter + return to writing, got %v", m.screen)
 	}
-	if m.currentFile != filepath.Join(dir, "03-c.md") {
+	if m.currentFile != filepath.Join(dir, "c", "c.md") {
 		t.Fatalf("enter should open the selected chapter, got %q", m.currentFile)
 	}
 }
@@ -254,7 +264,7 @@ func TestCorkboardDiscardResetsStagedState(t *testing.T) {
 	}
 	// The on-disk manifest is untouched by a discard.
 	mani, _, _ := readManifest(dir)
-	if mani.Items[0].File != "01-a.md" {
+	if mani.Items[0].Chapter == nil || mani.Items[0].Chapter.Folder != "a" {
 		t.Fatalf("discard must not change the manifest, got %+v", mani.Items)
 	}
 }
@@ -273,35 +283,36 @@ func TestCorkboardViewWindows(t *testing.T) {
 // A staged (uncommitted) x-demote must not cause a synopsis edit to prune the still-live chapter's
 // synopsis off disk (the Critical the review caught).
 func TestCorkboardSynopsisEditPreservesStagedRemovedChapter(t *testing.T) {
-	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
-	saveSynopses(dir, map[string]string{"01-a.md": "A syn", "02-b.md": "B syn", "03-c.md": "C syn"},
-		map[string]bool{"01-a.md": true, "02-b.md": true, "03-c.md": true})
+	dir := seedCorkManuscript(t) // a, b, c
+	saveSynopses(dir, map[string]string{"a": "A syn", "b": "B syn", "c": "C syn"},
+		map[string]bool{"a": true, "b": true, "c": true})
 	m := model{editor: textarea.New()}
 	m.files.dir = dir
 	m.enterCorkboard()
 	m.structureSel = 1
-	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // stage demote of 02-b (not committed)
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // stage demote of b (not committed)
 	m = mm.(model)
 	m.structureSel = 0
-	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}) // edit 01-a synopsis
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}) // edit a's synopsis
 	m = mm.(model)
 	m.synArea.SetValue("A edited")
 	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
 	m = mm.(model)
 
 	syn := loadSynopses(dir)
-	if syn["02-b.md"] != "B syn" {
+	if syn["b"] != "B syn" {
 		t.Fatalf("a staged-removed-but-still-on-disk chapter's synopsis must survive, got %v", syn)
 	}
-	if syn["01-a.md"] != "A edited" {
+	if syn["a"] != "A edited" {
 		t.Fatalf("the edited synopsis should be saved, got %v", syn)
 	}
 }
 
-// The corkboard 'a' (add new blank chapter) → commit must create the file and list it (preserves
-// the applyAdd + commitStructure file-creation coverage from the retired structure_test.go).
+// The corkboard 'a' (add new blank chapter) → commit must create the folder+file and list it
+// (preserves the applyAdd + commitStructure file-creation coverage from the retired
+// structure_test.go).
 func TestCorkboardAddNewChapterCreatesFile(t *testing.T) {
-	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
+	dir := seedCorkManuscript(t) // a, b, c
 	m := model{editor: textarea.New()}
 	m.files.dir = dir
 	m.enterCorkboard()
@@ -326,17 +337,20 @@ func TestCorkboardAddNewChapterCreatesFile(t *testing.T) {
 	if len(mani.Items) != 4 {
 		t.Fatalf("commit should list the 4th chapter, got %d", len(mani.Items))
 	}
-	orig := map[string]bool{"01-a.md": true, "02-b.md": true, "03-c.md": true}
-	var newFile string
+	orig := map[string]bool{"a": true, "b": true, "c": true}
+	var newFolder, newFile string
 	for _, it := range mani.Items {
-		if !orig[it.File] {
-			newFile = it.File
+		if it.Chapter != nil && !orig[it.Chapter.Folder] {
+			newFolder = it.Chapter.Folder
+			if len(it.Chapter.Texts) > 0 {
+				newFile = it.Chapter.Texts[0].File
+			}
 		}
 	}
-	if newFile == "" {
+	if newFolder == "" {
 		t.Fatal("a new chapter should be added")
 	}
-	if _, err := os.Stat(filepath.Join(dir, newFile)); err != nil {
-		t.Fatalf("commit should create the new blank file %s: %v", newFile, err)
+	if _, err := os.Stat(filepath.Join(dir, newFolder, newFile)); err != nil {
+		t.Fatalf("commit should create the new blank chapter file %s/%s: %v", newFolder, newFile, err)
 	}
 }

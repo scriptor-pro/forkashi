@@ -1076,9 +1076,10 @@ func TestOutlineModeEntryExit(t *testing.T) {
 // ctrl+k opens the full-screen corkboard (the manuscript navigator); the left pane stays a plain list.
 func TestCtrlKOpensCorkboard(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "a"), 0o755)
+	os.WriteFile(filepath.Join(dir, "a", "a.md"), []byte("body"), 0o644)
 	writeManifest(dir, manifest{SchemaVersion: manifestSchemaVersion, Title: "W",
-		Items: []manifestItem{{File: "01-a.md", Title: "One"}}})
+		Items: []manifestItem{{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}}}})
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting

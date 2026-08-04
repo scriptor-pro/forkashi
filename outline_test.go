@@ -86,10 +86,10 @@ func TestOutlinePromoteBeat(t *testing.T) {
 		t.Fatalf("promote should append one chapter (want 4 items), got %d", len(mani.Items))
 	}
 	last := mani.Items[3]
-	if last.Title != "New Chapter" {
-		t.Fatalf("new chapter title = %q, want %q", last.Title, "New Chapter")
+	if last.Chapter == nil || last.Chapter.Title != "New Chapter" {
+		t.Fatalf("new chapter title = %+v, want %q", last.Chapter, "New Chapter")
 	}
-	if syn := loadSynopses(dir)[last.File]; syn != "a note\ntwo" {
+	if syn := loadSynopses(dir)[last.Chapter.Folder]; syn != "a note\ntwo" {
 		t.Fatalf("synopsis seed = %q, want %q", syn, "a note\ntwo")
 	}
 	if line0 := strings.SplitN(m.editor.Value(), "\n", 2)[0]; line0 != "- [x] New Chapter" {
@@ -151,13 +151,13 @@ func TestOutlineEntryFlushesOutgoingChapter(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(model)
 	m.files.SetDir(dir)
-	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.loadFile(filepath.Join(dir, "a", "a.md"))
 	m.editor.SetValue("edited chapter body")
 	m.dirty = true
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // enter the outline
 	m = nm.(model)
-	if got, _ := os.ReadFile(filepath.Join(dir, "01-a.md")); string(got) != "edited chapter body" {
+	if got, _ := os.ReadFile(filepath.Join(dir, "a", "a.md")); string(got) != "edited chapter body" {
 		t.Fatalf("entering the outline should flush the outgoing chapter, got %q", string(got))
 	}
 }

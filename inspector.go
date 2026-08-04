@@ -512,10 +512,17 @@ func computeProjStats(dir string, v manuscriptView, wc *wordCountCache) projStat
 	if wc == nil {
 		return projStats{}
 	}
-	ps := projStats{manuscript: len(v.chapters) > 0, chapters: len(v.chapters)}
-	for _, ch := range v.chapters {
-		ps.words += wc.count(filepath.Join(dir, ch.file))
+	ps := projStats{}
+	for _, p := range v.parts {
+		ps.chapters += len(p.chapters)
+		for _, ch := range p.chapters {
+			if len(ch.texts) == 0 {
+				continue
+			}
+			ps.words += wc.count(filepath.Join(dir, ch.folder, ch.texts[0].file))
+		}
 	}
+	ps.manuscript = ps.chapters > 0
 	for _, e := range v.loose {
 		ps.words += wc.count(filepath.Join(dir, e.name))
 	}

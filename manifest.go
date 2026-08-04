@@ -105,3 +105,74 @@ func writeManifest(dir string, m manifest) error {
 	}
 	return atomicWrite(filepath.Join(dir, manifestName), bytes.TrimRight(buf.Bytes(), "\n"), 0o644)
 }
+
+// createManuscript makes a brand-new manuscript at dir: the folder, a first chapter folder
+// holding one empty text file, and a v2 manifest listing it as a bare chapter (no Part).
+// firstChapter is that chapter's display title. It refuses to clobber an existing manifest
+// and returns the first chapter's text filename (relative to its chapter folder) so the
+// caller can build the full path (filepath.Join(dir, folder, file)) to open it.
+func createManuscript(dir, title, firstChapter string) (string, error) {
+	if hasManifest(dir) {
+		return "", fmt.Errorf("a manuscript already exists at %s", dir)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	folder := slugify(firstChapter)
+	file := folder + ".md"
+	chDir := filepath.Join(dir, folder)
+	if err := os.MkdirAll(chDir, 0o755); err != nil {
+		return "", err
+	}
+	if err := atomicWrite(filepath.Join(chDir, file), []byte(""), 0o644); err != nil {
+		return "", err
+	}
+	err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         title,
+		Items: []manifestItem{{Chapter: &manifestChapter{
+			Folder: folder,
+			Title:  firstChapter,
+			Texts:  []manifestText{{File: file, Title: firstChapter}},
+		}}},
+	})
+	return filepath.Join(folder, file), err
+}
+
+// renameChapterTitle edits ONLY the items[].chapter.title (or items[].chapters[].title, for a
+// chapter inside a Part) of the chapter whose folder matches in dir's manifest, preserving
+// order and membership; the folder is birth-stable (design §5.7 — filenames are birth-stable
+// in v1, folders play that role in v2). It read-modify-writes (re-reads immediately before
+// writing, §0) and refuses a folder that is not a listed chapter or a dir without a readable
+// manifest.
+func renameChapterTitle(dir, folder, newTitle string) error {
+	m, present, err := readManifest(dir)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return fmt.Errorf("no manifest in %s", dir)
+	}
+	found := false
+	for i := range m.Items {
+		if m.Items[i].Chapter != nil && m.Items[i].Chapter.Folder == folder {
+			m.Items[i].Chapter.Title = newTitle
+			found = true
+			break
+		}
+		for j := range m.Items[i].Chapters {
+			if m.Items[i].Chapters[j].Folder == folder {
+				m.Items[i].Chapters[j].Title = newTitle
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%s is not a chapter of %s", folder, dir)
+	}
+	return writeManifest(dir, m)
+}

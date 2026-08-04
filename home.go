@@ -87,31 +87,46 @@ func (m *model) homeFilesFor(dir string, showFolders bool) []homeFileItem {
 	if err != nil {
 		return nil
 	}
-	var folders []homeFileItem
+	var dirNames []string
 	var fes []fileEntry
 	for _, e := range sub {
 		if strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		if e.IsDir() {
-			if showFolders {
-				folders = append(folders, homeFileItem{name: e.Name(), path: filepath.Join(dir, e.Name()), isDir: true})
-			}
+			dirNames = append(dirNames, e.Name())
 			continue
 		}
 		if m.files.allowed[strings.ToLower(filepath.Ext(e.Name()))] {
 			fes = append(fes, fileEntry{name: e.Name()})
 		}
 	}
-	sort.Slice(folders, func(i, j int) bool { return folders[i].name < folders[j].name })
 	view := resolveManuscript(dir, fes)
+	// A v2 chapter's folder is a real directory on disk — exclude it from the plain
+	// folders list (below) so it isn't listed twice: once as a drillable folder, once
+	// as its chapter entry (mirrors the same fix in filelist.go's SetDir).
+	var folders []homeFileItem
+	if showFolders {
+		for _, name := range dirNames {
+			if isChapterOf(view, name) {
+				continue
+			}
+			folders = append(folders, homeFileItem{name: name, path: filepath.Join(dir, name), isDir: true})
+		}
+	}
+	sort.Slice(folders, func(i, j int) bool { return folders[i].name < folders[j].name })
 	mk := func(name, file string) homeFileItem {
 		p := filepath.Join(dir, file)
 		return homeFileItem{name: name, path: p, words: m.files.wc.count(p), snippet: m.snippets.get(p)}
 	}
 	out := folders
-	for _, ch := range view.chapters {
-		out = append(out, mk(ch.title, ch.file))
+	for _, p := range view.parts {
+		for _, ch := range p.chapters {
+			if len(ch.texts) == 0 {
+				continue
+			}
+			out = append(out, mk(ch.title, filepath.Join(ch.folder, ch.texts[0].file)))
+		}
 	}
 	for _, l := range view.loose {
 		out = append(out, mk(l.name, l.name))

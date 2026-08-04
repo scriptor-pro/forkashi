@@ -8,10 +8,14 @@ import (
 	"syscall"
 )
 
-// moveDocument relocates document `file` from srcDir to dstDir. It moves the file, removes it from
-// the source manifest if it was a chapter there, and — if dstDir is a manuscript and asChapter is
-// true — appends it to the destination manifest; otherwise it lands as a loose Resource. Refuses a
-// no-op (same folder), a destination name collision, and an unreadable manifest on either side.
+// moveDocument relocates a loose document `file` from srcDir to dstDir (the mover only ever
+// offers loose filesystem files — an on-disk chapter FOLDER moves via moveFolder instead). It
+// moves the file, removes it from the source manifest if srcDir/file was itself a chapter's
+// sole text (a chapter folder browsed directly and its text file picked — folder left behind,
+// now an empty/orphaned dir), and — if dstDir is a manuscript and asChapter is true — wraps the
+// moved file into a brand-new same-slug chapter folder and appends it to the destination
+// manifest as a bare chapter; otherwise it lands loose as a Resource. Refuses a no-op (same
+// folder), a destination name collision, and an unreadable manifest on either side.
 func moveDocument(srcDir, file, dstDir string, asChapter bool) error {
 	if srcDir == dstDir {
 		return fmt.Errorf("source and destination are the same folder")
@@ -28,13 +32,18 @@ func moveDocument(srcDir, file, dstDir string, asChapter bool) error {
 		return fmt.Errorf("%s already exists in the destination", file)
 	}
 
-	// Was it a listed chapter of the source manuscript?
-	wasChapter := false
-	if sm, present, err := readManifest(srcDir); err == nil && present {
+	// Was srcDir itself a chapter folder whose sole text is this file? (reachable by drilling the
+	// mover into a chapter folder and picking its text file directly.)
+	wasChapterFolder := ""
+	if sm, present, err := readManifest(filepath.Dir(srcDir)); err == nil && present {
+		folder := filepath.Base(srcDir)
 		for _, it := range sm.Items {
-			if it.File == file {
-				wasChapter = true
-				break
+			if it.Chapter != nil && it.Chapter.Folder == folder {
+				for _, t := range it.Chapter.Texts {
+					if t.File == file {
+						wasChapterFolder = folder
+					}
+				}
 			}
 		}
 	}
@@ -44,28 +53,53 @@ func moveDocument(srcDir, file, dstDir string, asChapter bool) error {
 		return err
 	}
 
-	// Source manifest: drop the chapter (read-modify-write). The file has already moved, so a
-	// re-read failure here is an inconsistent state — propagate it rather than report success.
-	if wasChapter {
-		sm, present, err := readManifest(srcDir)
+	// Source manifest: drop the chapter item whose folder held this file (read-modify-write). The
+	// file has already moved, so a re-read failure here is an inconsistent state — propagate it
+	// rather than report success. The (now textless) chapter folder itself is left on disk.
+	if wasChapterFolder != "" {
+		srcManiDir := filepath.Dir(srcDir)
+		sm, present, err := readManifest(srcManiDir)
 		if err != nil {
 			return fmt.Errorf("moved %s but could not update the source manifest: %w", file, err)
 		}
 		if present {
-			if err := writeManifest(srcDir, manifestRemove(sm, file)); err != nil {
+			var kept []manifestItem
+			for _, it := range sm.Items {
+				if it.Chapter != nil && it.Chapter.Folder == wasChapterFolder {
+					continue
+				}
+				kept = append(kept, it)
+			}
+			sm.Items = kept
+			if err := writeManifest(srcManiDir, sm); err != nil {
 				return err
 			}
 		}
 	}
 
-	// Destination manifest: append as a chapter when requested and the dest is a manuscript.
+	// Destination manifest: wrap the moved file into a new chapter folder and append it as a bare
+	// chapter, when requested and the dest is a manuscript.
 	if asChapter && hasManifest(dstDir) {
 		dm, present, err := readManifest(dstDir)
 		if err != nil {
 			return err
 		}
 		if present {
-			if err := writeManifest(dstDir, manifestInsert(dm, file, sectionTitle(file), len(dm.Items))); err != nil {
+			title := sectionTitle(file)
+			folder := slugify(title)
+			chDir := filepath.Join(dstDir, folder)
+			if err := os.MkdirAll(chDir, 0o755); err != nil {
+				return err
+			}
+			if err := safeMove(dst, filepath.Join(chDir, file)); err != nil {
+				return err
+			}
+			dm.Items = append(dm.Items, manifestItem{Chapter: &manifestChapter{
+				Folder: folder,
+				Title:  title,
+				Texts:  []manifestText{{File: file, Title: title}},
+			}})
+			if err := writeManifest(dstDir, dm); err != nil {
 				return err
 			}
 		}

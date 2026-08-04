@@ -263,8 +263,9 @@ type model struct {
 	homeFiles    []homeFileItem // FILES column: the current dir's folders + documents
 	homeFilesDir string         // the dir FILES currently shows (drill-down within the selection)
 
-	structureDir        string          // the manuscript being restructured
-	structureItems      []manifestItem  // staged chapter order/membership (committed on exit)
+	structureDir   string       // the manuscript being restructured
+	structureItems []chapterRef // staged BARE chapter order/membership (committed on exit);
+	// real Parts are left untouched by this plan's structure mode
 	structureSel        int             // cursor row
 	structurePendingNew map[string]bool // new-blank files to create on commit
 	structureDirty      bool            // any staged edit?
@@ -2019,27 +2020,38 @@ func (m *model) loadFile(path string) {
 // pane dir. A trailing "/" (or an explicit New-project) makes a folder; an
 // explicit New-project then enters it, while the sidebar "name/" convention
 // creates-and-stays. Files default to .md and open a blank buffer.
-// createChapter makes a new blank chapter at the manuscript root and appends it to the manifest
-// (read-modify-write, atomic), then opens it.
+// createChapter makes a new blank chapter — a folder holding one text file — at the
+// manuscript root and appends it to the manifest as a bare chapter (read-modify-write,
+// atomic), then opens it. name is the chapter's display title (also slugified into its
+// birth-stable folder name).
 func (m *model) createChapter(name string) {
 	if strings.Contains(name, "/") {
 		m.status = "a chapter name can't contain a path separator"
 		return
 	}
-	if filepath.Ext(name) == "" {
-		name += ".md"
-	}
-	dst := filepath.Join(m.files.dir, name)
-	if _, err := os.Stat(dst); err == nil {
-		m.status = "a file named " + name + " already exists"
+	title := name
+	folder := slugify(title)
+	file := folder + ".md"
+	chDir := filepath.Join(m.files.dir, folder)
+	if _, err := os.Stat(chDir); err == nil {
+		m.status = "a chapter named " + folder + " already exists"
 		return
 	}
+	if err := os.MkdirAll(chDir, 0o755); err != nil {
+		m.status = "couldn't create chapter: " + err.Error()
+		return
+	}
+	dst := filepath.Join(chDir, file)
 	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
 		m.status = "couldn't create chapter: " + err.Error()
 		return
 	}
 	if mani, present, err := readManifest(m.files.dir); err == nil && present {
-		mani.Items = append(mani.Items, manifestItem{File: name, Title: sectionTitle(name)})
+		mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+			Folder: folder,
+			Title:  title,
+			Texts:  []manifestText{{File: file, Title: title}},
+		}})
 		if werr := writeManifest(m.files.dir, mani); werr != nil {
 			m.status = "chapter created but manifest update failed: " + werr.Error()
 		}
@@ -2048,7 +2060,7 @@ func (m *model) createChapter(name string) {
 	m.loadFile(dst)
 	m.focus = focusEditor
 	m.editor.Focus()
-	m.status = "new chapter " + name
+	m.status = "new chapter " + title
 }
 
 // createResource makes an unlisted resource doc — loose at the manuscript root, or into a subfolder
@@ -2209,7 +2221,7 @@ func (m *model) startRename() {
 		m.status = "manifest unreadable — structure is read-only (external manifest)"
 		return
 	}
-	if isChapterOf(v, e.name) {
+	if m.files.isChapterEntry(e) {
 		if v.source == sourceManifest {
 			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
 			m.renamingInPane = true
@@ -2245,7 +2257,7 @@ func (m *model) startDelete() {
 		return
 	}
 	v := m.files.view
-	if isChapterOf(v, e.name) && v.source == sourceManifest {
+	if m.files.isChapterEntry(e) && v.source == sourceManifest {
 		m.status = "chapter files are read-only (external manifest)"
 		return
 	}

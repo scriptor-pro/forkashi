@@ -57,12 +57,12 @@ func TestRenameManifestChapterRetitles(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "novel")
-	os.MkdirAll(proj, 0o755)
-	os.WriteFile(filepath.Join(proj, "the-letter.md"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(proj, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(proj, "the-letter", "the-letter.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":1,"title":"N","items":[{"file":"the-letter.md","title":"The Letter"}]}`), 0o644)
+		`{"schemaVersion":2,"title":"N","items":[{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}}]}`), 0o644)
 	m := sidebarModel(t, proj)
-	m.files.selectName("the-letter.md")
+	m.files.selectName("the-letter")
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = nm.(model)
@@ -79,17 +79,17 @@ func TestRenameManifestChapterRetitles(t *testing.T) {
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
 
-	// File must remain on disk, untouched.
-	if _, err := os.Stat(filepath.Join(proj, "the-letter.md")); err != nil {
+	// File + folder must remain on disk, untouched.
+	if _, err := os.Stat(filepath.Join(proj, "the-letter", "the-letter.md")); err != nil {
 		t.Fatalf("chapter file must not be renamed on disk: %v", err)
 	}
 	// Manifest title must be updated.
 	mf, _, _ := readManifest(proj)
-	if mf.Items[0].Title != "A New Title" {
-		t.Fatalf("manifest title = %q, want 'A New Title'", mf.Items[0].Title)
+	if mf.Items[0].Chapter.Title != "A New Title" {
+		t.Fatalf("manifest title = %q, want 'A New Title'", mf.Items[0].Chapter.Title)
 	}
-	if mf.Items[0].File != "the-letter.md" {
-		t.Fatalf("manifest filename changed to %q — must be birth-stable", mf.Items[0].File)
+	if mf.Items[0].Chapter.Folder != "the-letter" {
+		t.Fatalf("manifest folder changed to %q — must be birth-stable", mf.Items[0].Chapter.Folder)
 	}
 }
 
@@ -97,11 +97,11 @@ func TestRenameAllowedForResourceInManuscript(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "novel")
-	os.MkdirAll(proj, 0o755)
-	os.WriteFile(filepath.Join(proj, "a.md"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(proj, "a"), 0o755)
+	os.WriteFile(filepath.Join(proj, "a", "a.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(proj, "notes.md"), []byte("y"), 0o644) // unlisted = Resource
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":1,"title":"N","items":[{"file":"a.md","title":"One"}]}`), 0o644)
+		`{"schemaVersion":2,"title":"N","items":[{"chapter":{"folder":"a","title":"One","texts":[{"file":"a.md","title":"One"}]}}]}`), 0o644)
 	m := sidebarModel(t, proj)
 	m.files.selectName("notes.md")
 
@@ -272,9 +272,9 @@ func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
 	proj := filepath.Join(root, "novel")
 	os.MkdirAll(proj, 0o755)
 	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644)
-	// schemaVersion 2 triggers refuse mode (unsupported future version).
+	// schemaVersion 3 triggers refuse mode (unsupported future version).
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
+		`{"schemaVersion":3,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
 	m := sidebarModel(t, proj)
 	m.files.selectName("01-opening.md")
 

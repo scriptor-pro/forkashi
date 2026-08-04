@@ -10,12 +10,14 @@ import (
 
 func TestPagerManifestTitleAndOrder(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two"), 0o644)
-	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("one two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("a b"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":1,"title":"Windermere","items":[`+
-			`{"file":"the-letter.md","title":"The Letter"},`+
-			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
+			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	var p pagerModel
 	p.load(dir, 60)
 	// First header should use manifest order and manifest title.
@@ -95,7 +97,7 @@ func TestPagerClampsWidthToTerminal(t *testing.T) {
 }
 
 func TestPagerResizeReclampsWidth(t *testing.T) {
-	m, _ := manuscriptModel(t) // 100-col terminal
+	m, _ := manuscriptModel(t)                                            // 100-col terminal
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // sidebar m → pager
 	m = nm.(model)
 	before := m.pager.width
