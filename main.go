@@ -148,6 +148,7 @@ func (m *model) confirmMigration() {
 		// every other write path in this codebase (no modal error dialog).
 	}
 	m.migrationPending = nil
+	m.files.SetDir(m.files.dir) // re-reads entries against the migrated v2 manifest
 	m.applyProjectSettings()
 	m.screen = screenWriting
 }
