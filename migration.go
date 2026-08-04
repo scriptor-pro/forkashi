@@ -86,15 +86,27 @@ type migrationStep struct {
 // the folder/file slug is derived from its title (falling back to a default
 // "Chapitre N" title only if the v1 title is empty — the safety net documented
 // in the design; a valid v1 manifest already has titles filled in).
+//
+// v1 never enforced title uniqueness (its identity was the filename, not the
+// title), so two v1 items can slugify to the same folder. Left undetected,
+// the second migrationMove's os.Rename would land in the same folder as the
+// first and silently overwrite its content. uniqueSlugAgainst below dedupes
+// against every slug already claimed earlier in this same plan —
+// deterministically, in items[] order — appending "-2", "-3", … the same way
+// uniqueChapterFolder (structure.go) dedupes against disk for the normal
+// add-chapter path; here nothing is on disk yet, so uniqueness is tracked
+// purely against the in-progress plan.
 func migratePlan(dir string, v1 manifestV1) (migrationStep, error) {
 	var step migrationStep
 	step.out.Title = v1.Title
+	taken := map[string]bool{}
 	for i, it := range v1.Items {
 		title := it.Title
 		if title == "" {
 			title = defaultChapterTitle(i + 1)
 		}
-		slug := slugify(title)
+		slug := uniqueSlugAgainst(slugify(title), taken)
+		taken[slug] = true
 		toFile := slug + ".md"
 		step.moves = append(step.moves, migrationMove{
 			fromFile: it.File,
@@ -110,6 +122,23 @@ func migratePlan(dir string, v1 manifestV1) (migrationStep, error) {
 		})
 	}
 	return step, nil
+}
+
+// uniqueSlugAgainst returns base unchanged if it's not yet in taken, otherwise
+// the first "base-2", "base-3", … not in taken. Shared by migratePlan (taken =
+// slugs already claimed earlier in the same plan; nothing is on disk yet) and
+// moveDocument's promote-to-chapter path (taken = chapter folders already in
+// the destination manifest).
+func uniqueSlugAgainst(base string, taken map[string]bool) string {
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		candidate := fmt.Sprintf("%s-%d", base, n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }
 
 // migrateV1ToV2 executes the migration for dir: moves each v1 chapter file into

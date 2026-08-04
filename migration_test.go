@@ -113,6 +113,57 @@ func TestMigrateV1ToV2MovesFilesAndWritesV2Manifest(t *testing.T) {
 	}
 }
 
+// TestMigrateV1ToV2DedupesCollidingSlugs reproduces the reviewer's finding: v1
+// never enforced title uniqueness (identity was the filename), so two v1 items
+// sharing the same title slugify to the same folder/file. Before the fix, the
+// second os.Rename silently overwrote the first item's content and
+// migrateV1ToV2 still returned nil — data loss reported as success. After the
+// fix, the second item's slug must be deduped ("chapitre-2"), so both files
+// survive with distinct content and the v2 manifest lists two distinct folders.
+func TestMigrateV1ToV2DedupesCollidingSlugs(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-chapitre.md"), []byte("first"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-chapitre.md"), []byte("second"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName),
+		[]byte(`{"schemaVersion":1,"title":"N","items":[
+			{"file":"01-chapitre.md","title":"Chapitre"},{"file":"02-chapitre.md","title":"Chapitre"}]}`), 0o644)
+
+	v1, present, err := readManifestV1(dir)
+	if !present || err != nil {
+		t.Fatalf("readManifestV1: present=%v err=%v", present, err)
+	}
+	if err := migrateV1ToV2(dir, v1); err != nil {
+		t.Fatal(err)
+	}
+
+	data1, err := os.ReadFile(filepath.Join(dir, "chapitre", "chapitre.md"))
+	if err != nil || string(data1) != "first" {
+		t.Fatalf("chapitre/chapitre.md: data=%q err=%v, want \"first\"", data1, err)
+	}
+	data2, err := os.ReadFile(filepath.Join(dir, "chapitre-2", "chapitre-2.md"))
+	if err != nil || string(data2) != "second" {
+		t.Fatalf("chapitre-2/chapitre-2.md: data=%q err=%v, want \"second\"", data2, err)
+	}
+
+	m, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("readManifest post-migration: present=%v err=%v", present, err)
+	}
+	if len(m.Items) != 2 {
+		t.Fatalf("post-migration items = %+v, want 2", m.Items)
+	}
+	folders := map[string]bool{}
+	for _, it := range m.Items {
+		if it.Chapter == nil {
+			t.Fatalf("item missing Chapter: %+v", it)
+		}
+		folders[it.Chapter.Folder] = true
+	}
+	if !folders["chapitre"] || !folders["chapitre-2"] || len(folders) != 2 {
+		t.Fatalf("post-migration folders = %+v, want distinct {chapitre, chapitre-2}", folders)
+	}
+}
+
 func TestMigrateV1ToV2FailsAtomicallyIfAMoveFails(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-un.md"), []byte("x"), 0o644)
