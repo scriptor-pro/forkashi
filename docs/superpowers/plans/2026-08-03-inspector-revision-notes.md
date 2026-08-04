@@ -41,7 +41,7 @@ inchangé) au même endroit où `doc`/`proj` sont déjà calculés, juste avant 
 - Produces: `func renderNotesSection(notes []note, width int) string` — consommé par Task 2
   (`inspectorModel.View()`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Ajoute à `inspector_test.go` (à la fin du fichier, avant ou après les tests de lisibilité existants) :
 
@@ -102,12 +102,12 @@ func TestRenderNotesSectionListsMultipleNotesInOrder(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `go test ./... -run TestRenderNotesSection -v 2>&1 | tail -40`
 Expected: FAIL — `renderNotesSection` undefined (does not compile).
 
-- [ ] **Step 3: Implement `renderNotesSection`**
+- [x] **Step 3: Implement `renderNotesSection`**
 
 Ajoute dans `inspector.go`, juste après `renderOutline` (après la ligne `}` qui ferme cette fonction,
 ~ligne 139) :
@@ -138,17 +138,17 @@ Note d'implémentation : la troncature réserve 2 colonnes pour le préfixe `"  
 espaces, cohérente avec les autres lignes de contenu de l'inspecteur — voir `kvRow`, qui préfixe aussi
 `"  "` avant chaque label), donc `ansi.Truncate(first, width-2, "…")` et non `width`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./... -run TestRenderNotesSection -v 2>&1 | tail -60`
 Expected: all 5 tests PASS.
 
-- [ ] **Step 5: Build and vet**
+- [x] **Step 5: Build and vet**
 
 Run: `go build ./... && go vet ./...`
 Expected: clean, no errors, no warnings.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add inspector.go inspector_test.go
@@ -179,7 +179,7 @@ EOF
   goalStats, analysis analysisState, notes []note) string` — c'est la signature finale, plus rien
   ne la modifie dans les tâches suivantes.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Ajoute à `inspector_test.go` :
 
@@ -213,13 +213,13 @@ func TestInspectorViewOmitsNotesSectionWhenNoFileOpen(t *testing.T) {
 Ces trois tests ne compileront pas encore (mauvais nombre d'arguments), ce qui est attendu à cette
 étape — voir Step 2.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `go build ./... 2>&1 | head -30`
 Expected: compile error — `too many arguments in call to in.View` (les 3 nouveaux tests appellent déjà
 la signature à 7 arguments qui n'existe pas encore).
 
-- [ ] **Step 3: Update the `View()` signature and wire in the Notes section**
+- [x] **Step 3: Update the `View()` signature and wire in the Notes section**
 
 Dans `inspector.go`, modifie la signature de `View` (ligne 546) :
 
@@ -268,7 +268,7 @@ len(doc.overused) > 0 { ... }`, ~ligne 650), ajoute la section Notes juste avant
 juste avant le `}` qui ferme le `if doc.words > 0 {` — tout le reste du bloc est identique à
 l'existant, reproduit ici pour éviter toute ambiguïté sur l'emplacement exact.)
 
-- [ ] **Step 4: Update the 12 existing `.View(...)` call sites in `inspector_test.go`**
+- [x] **Step 4: Update the 12 existing `.View(...)` call sites in `inspector_test.go`**
 
 Chacun des appels suivants (repérés avant modification) doit recevoir un 7ᵉ argument `nil` (aucune
 note — ces tests ne portent pas sur les notes) :
@@ -298,7 +298,7 @@ Répète ce même ajout (`, nil` avant le `)` final) pour les 11 autres lignes l
 la recherche/remplacement de ton éditeur plutôt que de retaper chaque ligne — le seul changement est
 l'insertion de `, nil` avant le dernier `)` de chaque appel `.View(`.
 
-- [ ] **Step 5: Update the `main.go` call site**
+- [x] **Step 5: Update the `main.go` call site**
 
 Dans `main.go`, remplace la ligne 1744 :
 
@@ -313,18 +313,18 @@ par (ajoute le chargement des notes juste avant, et le nouvel argument) :
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis, notes)
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `go test ./... -run TestInspector -v 2>&1 | tail -80`
 Expected: all inspector tests PASS, including the 3 new ones from Step 1.
 
-- [ ] **Step 7: Build, vet, full test suite**
+- [x] **Step 7: Build, vet, full test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1 2>&1 | tail -30`
 Expected: clean build, no vet warnings, all tests PASS (this also catches any other call site to
 `inspectorModel.View` outside `inspector_test.go`/`main.go` if one was missed).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add inspector.go inspector_test.go main.go
@@ -351,12 +351,12 @@ EOF
 - Consumes: la fonctionnalité complète des Tasks 1–2.
 - Produces: rien de nouveau — confirme que tout fonctionne ensemble visuellement.
 
-- [ ] **Step 1: Full build, vet, test suite**
+- [x] **Step 1: Full build, vet, test suite**
 
 Run: `go build ./... && go vet ./... && go test ./... -count=1 2>&1 | tail -30`
 Expected: clean build, no vet warnings, all tests PASS.
 
-- [ ] **Step 2: Manual walkthrough in tmux**
+- [x] **Step 2: Manual walkthrough in tmux**
 
 ```bash
 go build -o /tmp/forkashi-notes-check .
@@ -394,7 +394,7 @@ Documente toute anomalie visuelle (désalignement, débordement) trouvée pendan
 fichier:ligne si la cause est identifiable, sans nécessairement la corriger dans cette tâche si c'est
 mineur ; signale-la comme un finding.
 
-- [ ] **Step 3: Clean up**
+- [x] **Step 3: Clean up**
 
 ```bash
 tmux send-keys -t notescheck 'C-c'
@@ -403,7 +403,7 @@ rm -f /tmp/forkashi-notes-check
 rm -rf /tmp/notes-check-home /tmp/notes-check-proj
 ```
 
-- [ ] **Step 4: Report findings**
+- [x] **Step 4: Report findings**
 
 No commit for this task (verification only). Si l'étape 2 a fait apparaître une anomalie visuelle, la
 signaler — ne pas la corriger silencieusement sous cette tâche sauf correction triviale et
