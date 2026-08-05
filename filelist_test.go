@@ -411,6 +411,75 @@ func TestMoveByStopsAtEndWithoutInfiniteLoopWhenTrailingHeaders(t *testing.T) {
 	}
 }
 
+// TestMoveByDegenerateAllHeadersFallsBackToDocumentedSafeIndex covers the fully
+// degenerate case the review flagged: every entry in f.entries is a Part header,
+// so there is no selectable index anywhere in the list for moveBy to land on.
+// This should never occur in practice (a Part is never rendered with zero
+// chapters/loose files under it), but moveBy must stay safe by construction: it
+// must land on the documented fallback (index 0), not on whatever index the
+// walk/clamp logic happens to leave pos at.
+//
+// This is distinct from — and does not contradict — the invariant "never select
+// a header when a selectable entry exists" exercised by the other TestMoveBy*
+// tests above: here no selectable entry exists anywhere, so the only thing left
+// to verify is that the fallback is the deterministic, documented one.
+func TestMoveByDegenerateAllHeadersFallsBackToDocumentedSafeIndex(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "Partie Un", isPartHeader: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "Partie Trois", isPartHeader: true},
+	}
+
+	f.selected = 0
+	f.moveBy(1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 0
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 2
+	f.moveBy(1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) from the last index on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 2
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) from the last index on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+}
+
+// TestMoveByFallsBackToSelectableEntryElsewhereWhenHeadersSurroundSelection
+// covers the intermediate degenerate case: f.selected itself sits on a header
+// (which moveBy's normal walk never produces on its own, but structure-mode
+// edits or a future caller could), and no selectable entry exists in the walk
+// direction — but one does exist elsewhere in the list. moveBy must fold to it
+// rather than settling for the header at f.selected, which the old "last-resort
+// guard: pos = f.selected" fallback used to do.
+func TestMoveByFallsBackToSelectableEntryElsewhereWhenHeadersSurroundSelection(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Un", isPartHeader: true},
+		{name: "Partie Deux", isPartHeader: true},
+	}
+	f.selected = 1 // starts on a header — abnormal, but must still resolve safely
+	f.moveBy(1)    // no selectable entry forward (index 2 is also a header)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("moveBy(1) must never leave f.selected on a header when a selectable entry exists elsewhere in the list, got index %d", f.selected)
+	}
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) must fold back to the only selectable entry (index 0), got %d", f.selected)
+	}
+}
+
 func TestSelectRowSkipsPartHeaderForward(t *testing.T) {
 	f := newFilelist()
 	f.entries = []fileEntry{

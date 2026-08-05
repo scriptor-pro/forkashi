@@ -322,7 +322,29 @@ func (f *filelist) moveBy(n int) {
 		pos = len(f.entries) - 1
 	}
 	if f.entries[pos].isPartHeader {
-		pos = f.selected // last-resort guard: never let a header become selected
+		// Nothing selectable was reachable in the walk direction. f.selected
+		// alone is not a safe fallback here — it can itself already be sitting
+		// on a header (e.g. every entry in f.entries is a header), so fall back
+		// to scanning the whole list for any selectable entry, independent of
+		// direction or prior selection.
+		pos = f.selected
+		if f.entries[pos].isPartHeader {
+			pos = -1
+			for i := range f.entries {
+				if !f.entries[i].isPartHeader {
+					pos = i
+					break
+				}
+			}
+			if pos == -1 {
+				// Fully degenerate case: every entry in f.entries is a header,
+				// so no selectable index exists anywhere. Should never occur in
+				// practice (a Part is never rendered with zero chapters/loose
+				// files under it), but stay safe-by-construction: land on 0,
+				// the documented fallback, rather than leaving pos undefined.
+				pos = 0
+			}
+		}
 	}
 	f.selected = pos
 	f.scrollIntoView()
