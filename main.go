@@ -162,6 +162,79 @@ func (m *model) cancelMigration() {
 	m.screen = screenWriting
 }
 
+// enterTextPicker opens the text-picker screen for the sidebar's currently selected
+// chapter. Called only when filelist.activate() returned activateTextPicker — the
+// caller (Update's sidebar key handling) already confirmed the selection is a
+// chapter folder with zero or 2+ texts.
+func (m *model) enterTextPicker() {
+	folder, ok := m.files.selectedEntryName()
+	if !ok {
+		return
+	}
+	ch := chapterByFolder(m.files.view, folder)
+	m.textPickerChapter = &ch
+	m.textPickerSel = 0
+	m.textPickerDir = m.files.dir
+	m.screen = screenTextPicker
+}
+
+// updateTextPicker handles input while the text-picker screen is showing: up/down
+// move the selection, enter opens the chosen text and enters the writing screen,
+// esc dismisses without opening anything.
+func (m model) updateTextPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
+	km, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	texts := m.textPickerChapter.texts
+	switch km.Type {
+	case tea.KeyUp:
+		if m.textPickerSel > 0 {
+			m.textPickerSel--
+		}
+	case tea.KeyDown:
+		if m.textPickerSel < len(texts)-1 {
+			m.textPickerSel++
+		}
+	case tea.KeyEnter:
+		if len(texts) == 0 {
+			return m, nil // empty state: nothing to open
+		}
+		t := texts[m.textPickerSel]
+		path := filepath.Join(m.textPickerDir, m.textPickerChapter.folder, t.file)
+		m.textPickerChapter = nil
+		m.loadFile(path)
+		m.focus = focusEditor
+		m.editor.Focus()
+		m.screen = screenWriting
+	case tea.KeyEsc:
+		m.textPickerChapter = nil
+		m.screen = screenWriting
+	}
+	return m, nil
+}
+
+// textPickerView renders the list of a chapter's texts, one per line, each with
+// its own word count — or an empty-state message if the chapter has none.
+func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, width int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "── %s ──\n\n", ch.title)
+	if len(ch.texts) == 0 {
+		b.WriteString("  (aucun texte dans ce chapitre)")
+		return b.String()
+	}
+	for i, t := range ch.texts {
+		marker := "  "
+		if i == sel {
+			marker = selectedStyle.Render("▸ ")
+		}
+		words := wc.count(filepath.Join(dir, ch.folder, t.file))
+		fmt.Fprintf(&b, "%s%s  %s m\n", marker, t.title, commafy(words))
+	}
+	b.WriteString("\n↑↓ sélectionner · Entrée ouvrir · Échap annuler")
+	return b.String()
+}
+
 // smartQuote returns the curly form of a straight quote. It's an opening quote
 // at the start of a line or after whitespace / an opening bracket; otherwise
 // closing (which also yields the right apostrophe in contractions).
@@ -226,6 +299,7 @@ const (
 	screenCorkboard
 	screenNotes
 	screenOutline
+	screenTextPicker
 )
 
 const (
@@ -276,6 +350,9 @@ type model struct {
 	structureConfirm    bool            // the commit confirm bar is open
 	migrationPending    *migrationStep  // non-nil while the v1→v2 confirm screen is showing
 	migrationDir        string          // dir being migrated (for confirmMigration/cancelMigration)
+	textPickerChapter   *chapterRef     // non-nil while the text-picker screen is showing
+	textPickerSel       int             // selected index into textPickerChapter.texts
+	textPickerDir       string          // manuscript root, for resolving the chapter's folder path
 	librarySelected     int             // index into projects+folders driving FILES
 	sources             []source        // library sources; [0] is always the primary (writingDir())
 	activeSource        int             // index into sources driving the home library
@@ -1000,6 +1077,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenOutline {
 		return m.updateOutline(msg)
+	}
+
+	if m.screen == screenTextPicker {
+		return m.updateTextPicker(msg)
 	}
 
 	// Manuscript ctrl+n: pick chapter or resource before naming.
@@ -1739,6 +1820,10 @@ func (m model) View() string {
 
 	if m.screen == screenOutline {
 		return m.outlineView()
+	}
+
+	if m.screen == screenTextPicker {
+		return textPickerView(m.textPickerChapter, m.textPickerSel, m.textPickerDir, m.files.wc, m.width)
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

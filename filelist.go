@@ -461,6 +461,16 @@ func chapterByFolder(v manuscriptView, folder string) chapterRef {
 	return chapterRef{}
 }
 
+// selectedEntryName returns the raw name of the selected entry (folder or file),
+// or ok=false if nothing is selected. Used by enterTextPicker to recover which
+// chapter folder the cursor was on.
+func (f filelist) selectedEntryName() (string, bool) {
+	if f.selected < 0 || f.selected >= len(f.entries) {
+		return "", false
+	}
+	return f.entries[f.selected].name, true
+}
+
 // selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").
 func (f filelist) selectedFile() (string, bool) {
 	if f.selected < 0 || f.selected >= len(f.entries) {

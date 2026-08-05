@@ -3,7 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // These tests set OKASHI_DIR before calling initialModel(), rather than calling
@@ -121,5 +124,126 @@ func TestCancelMigrationLeavesV1ManifestUntouched(t *testing.T) {
 	}
 	if !contains(string(data), `"schemaVersion":1`) {
 		t.Fatalf("cancelling must leave the v1 manifest untouched, got: %s", data)
+	}
+}
+
+func TestEnterTextPickerOpensOnMultiTextChapter(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un deux trois"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("quatre cinq"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+
+	if m.screen != screenTextPicker {
+		t.Fatalf("enterTextPicker must switch to screenTextPicker, got %v", m.screen)
+	}
+	if m.textPickerChapter == nil || m.textPickerChapter.folder != "chapitre-un" {
+		t.Fatalf("textPickerChapter must be set to the selected chapter, got %+v", m.textPickerChapter)
+	}
+}
+
+func TestTextPickerViewShowsEachTextWithWordCount(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un deux trois"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("quatre cinq"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+	m.width, m.height = 60, 20
+	view := m.View()
+
+	if !strings.Contains(view, "Scène Un") || !strings.Contains(view, "Scène Deux") {
+		t.Fatalf("picker must list both text titles, got:\n%s", view)
+	}
+	if !strings.Contains(view, "3 m") || !strings.Contains(view, "2 m") {
+		t.Fatalf("picker must show each text's own word count, got:\n%s", view)
+	}
+}
+
+func TestTextPickerEnterOpensSelectedTextInEditor(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+	m.textPickerSel = 1 // "Scène Deux"
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	mm := updated.(model)
+
+	if mm.screen != screenWriting {
+		t.Fatalf("confirming a text must enter the writing screen, got %v", mm.screen)
+	}
+	want := filepath.Join(dir, "chapitre-un", "scene-deux.md")
+	if mm.currentFile != want {
+		t.Fatalf("currentFile = %q, want %q", mm.currentFile, want)
+	}
+}
+
+func TestTextPickerEscCancelsWithoutOpening(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mm := updated.(model)
+
+	if mm.screen == screenTextPicker {
+		t.Fatal("esc must dismiss the picker")
+	}
+	if mm.currentFile != "" {
+		t.Fatalf("esc must not open any file, got currentFile = %q", mm.currentFile)
+	}
+}
+
+func TestTextPickerShowsEmptyStateForZeroTextChapter(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"vide","title":"Vide","texts":[]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("vide")
+	m.enterTextPicker()
+	m.width, m.height = 60, 20
+	view := m.View()
+
+	if !strings.Contains(view, "aucun texte") {
+		t.Fatalf("an empty chapter's picker must show an empty-state message, got:\n%s", view)
 	}
 }
