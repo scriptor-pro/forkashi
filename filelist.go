@@ -68,6 +68,19 @@ func withinRoot(dir, root string) bool {
 	return rel == "." || !strings.HasPrefix(rel, "..")
 }
 
+// partWordTotal sums the word count of every text in every chapter of p, using wc
+// (same cache filelist already threads through chapterWords) — the number shown on
+// a Part's header row.
+func partWordTotal(dir string, p partRef, wc *wordCountCache) int {
+	total := 0
+	for _, ch := range p.chapters {
+		for _, t := range ch.texts {
+			total += wc.count(filepath.Join(dir, ch.folder, t.file))
+		}
+	}
+	return total
+}
+
 // SetDir loads dir's entries (filtered, sorted dirs-first) and resets the cursor.
 func (f *filelist) SetDir(dir string) {
 	if f.root != "" && !withinRoot(dir, f.root) {
@@ -129,6 +142,10 @@ func (f *filelist) SetDir(dir string) {
 	}
 	f.entries = append(f.entries, plainDirs...)
 	for _, p := range f.view.parts {
+		if p.title != "" {
+			label := p.title + "  " + commafy(partWordTotal(dir, p, f.wc)) + " m"
+			f.entries = append(f.entries, fileEntry{name: label, isPartHeader: true})
+		}
 		for _, ch := range p.chapters {
 			if ch.folder == "" {
 				if len(ch.texts) > 0 {
@@ -170,6 +187,9 @@ func (f filelist) View(editRow int, editField string) string {
 		g := f.icons.iconFor(e)
 		section := f.isChapterEntry(e)
 		switch {
+		case e.isPartHeader:
+			row := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(ansi.Truncate(e.name, f.width, "…"))
+			b.WriteString(row)
 		case editRow >= 0 && i == editRow:
 			b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
 		case i == f.selected:

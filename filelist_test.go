@@ -521,3 +521,69 @@ func TestPaneLabel(t *testing.T) {
 		t.Fatalf("category paneLabel = %q, want the folder name", got)
 	}
 }
+
+func TestSidebarShowsPartHeaderWithWordTotal(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two three four five"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	view := f.View(-1, "")
+	if !strings.Contains(view, "Part One") {
+		t.Fatalf("sidebar must show the Part title, got:\n%s", view)
+	}
+	if !strings.Contains(view, "5 m") {
+		t.Fatalf("sidebar's Part header must show the total word count of its chapters, got:\n%s", view)
+	}
+}
+
+func TestSidebarOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.isPartHeader {
+			t.Fatalf("a manuscript with no real Part must not render any header row, got entries: %+v", f.entries)
+		}
+	}
+}
+
+func TestSidebarShowsMixedBareChaptersAndPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "prologue"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "prologue", "prologue.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	view := f.View(-1, "")
+	iPrologue := strings.Index(view, "Prologue")
+	iPartOne := strings.Index(view, "Part One")
+	iLetter := strings.Index(view, "The Letter")
+	if iPrologue == -1 || iPartOne == -1 || iLetter == -1 {
+		t.Fatalf("all three must appear, got:\n%s", view)
+	}
+	if !(iPrologue < iPartOne && iPartOne < iLetter) {
+		t.Fatalf("order must be Prologue (bare), then Part One header, then The Letter, got:\n%s", view)
+	}
+}
