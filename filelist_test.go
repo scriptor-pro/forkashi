@@ -368,6 +368,63 @@ func TestFileListInlineCreateRow(t *testing.T) {
 	}
 }
 
+func TestMoveByDownSkipsPartHeader(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.selected = 0
+	f.moveBy(1)
+	if f.selected != 2 {
+		t.Fatalf("moveBy(1) from index 0 must skip the header at index 1 and land on 2, got %d", f.selected)
+	}
+}
+
+func TestMoveByUpSkipsPartHeader(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.selected = 2
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) from index 2 must skip the header at index 1 and land on 0, got %d", f.selected)
+	}
+}
+
+func TestMoveByStopsAtEndWithoutInfiniteLoopWhenTrailingHeaders(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+	}
+	f.selected = 0
+	f.moveBy(1)
+	// No selectable entry below index 0 other than the header — selection must clamp,
+	// never land on a header, never loop forever.
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) with only a trailing header must clamp back to the last selectable index, got %d", f.selected)
+	}
+}
+
+func TestSelectRowSkipsPartHeaderForward(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.height = 10
+	f.selectRow(1) // clicking directly on the header row
+	if f.selected != 2 {
+		t.Fatalf("clicking a header row must select the next selectable entry (forward), got %d", f.selected)
+	}
+}
+
 func TestPaneLabel(t *testing.T) {
 	root := t.TempDir()
 	// A manuscript whose title differs from its folder name.

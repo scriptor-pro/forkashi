@@ -22,8 +22,9 @@ func renderIcon(g glyph, selected bool) string {
 }
 
 type fileEntry struct {
-	name  string
-	isDir bool
+	name         string
+	isDir        bool
+	isPartHeader bool // a non-selectable Part title row; cursor movement skips it
 }
 
 // filelist is a minimal, mouse-friendly file browser we fully own.
@@ -284,13 +285,46 @@ func (f *filelist) moveBy(n int) {
 	if len(f.entries) == 0 {
 		return
 	}
-	f.selected += n
-	if f.selected < 0 {
-		f.selected = 0
+	step := 1
+	if n < 0 {
+		step = -1
 	}
-	if f.selected >= len(f.entries) {
-		f.selected = len(f.entries) - 1
+	remaining := n
+	if remaining < 0 {
+		remaining = -remaining
 	}
+	pos := f.selected
+	for remaining > 0 {
+		next := pos + step
+		if next < 0 || next >= len(f.entries) {
+			break // hit an edge — stop, don't wrap, don't land past the list
+		}
+		pos = next
+		if !f.entries[pos].isPartHeader {
+			remaining--
+		}
+	}
+	// pos may have landed on a header if every remaining entry in this direction
+	// is a header (or the list ends in one) — walk further in the same direction
+	// until a selectable entry is found, or give up and keep the prior selection.
+	for pos >= 0 && pos < len(f.entries) && f.entries[pos].isPartHeader {
+		next := pos + step
+		if next < 0 || next >= len(f.entries) {
+			pos = f.selected // no selectable entry this way — clamp back
+			break
+		}
+		pos = next
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= len(f.entries) {
+		pos = len(f.entries) - 1
+	}
+	if f.entries[pos].isPartHeader {
+		pos = f.selected // last-resort guard: never let a header become selected
+	}
+	f.selected = pos
 	f.scrollIntoView()
 }
 
@@ -305,7 +339,10 @@ func (f *filelist) scrollIntoView() {
 	}
 }
 
-// selectRow sets the selection from a row index within the visible window.
+// selectRow sets the selection from a row index within the visible window. A click
+// landing on a Part-header row selects the next selectable entry below it instead
+// (headers are never selectable) — forward, matching moveBy's own default direction
+// for an explicit position jump.
 func (f *filelist) selectRow(visibleRow int) {
 	if visibleRow < 0 {
 		return
@@ -313,6 +350,12 @@ func (f *filelist) selectRow(visibleRow int) {
 	idx := f.offset + visibleRow
 	if idx >= len(f.entries) {
 		return
+	}
+	for idx < len(f.entries) && f.entries[idx].isPartHeader {
+		idx++
+	}
+	if idx >= len(f.entries) {
+		return // nothing selectable below the clicked header — leave selection as-is
 	}
 	f.selected = idx
 }
