@@ -656,3 +656,46 @@ func TestHomeColumnsResponsive(t *testing.T) {
 		t.Fatalf("narrow terminal should show one fitting column, got regions=%d widths=%v", len(regions), widths)
 	}
 }
+
+func TestHomeFilesForShowsPartHeaderWithWordTotal(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	items := m.homeFilesFor(dir, true)
+
+	found := false
+	for _, it := range items {
+		if it.isPartHeader && strings.Contains(it.name, "Part One") && strings.Contains(it.name, "3 m") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("homeFilesFor must include a Part-header item with the title and word total, got: %+v", items)
+	}
+}
+
+func TestHomeFilesForOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	items := m.homeFilesFor(dir, true)
+
+	for _, it := range items {
+		if it.isPartHeader {
+			t.Fatalf("no real Part exists — must not synthesize a header, got: %+v", items)
+		}
+	}
+}
