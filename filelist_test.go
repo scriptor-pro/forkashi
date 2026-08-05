@@ -587,3 +587,79 @@ func TestSidebarShowsMixedBareChaptersAndPart(t *testing.T) {
 		t.Fatalf("order must be Prologue (bare), then Part One header, then The Letter, got:\n%s", view)
 	}
 }
+
+// TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement exercises Task 1's
+// header-skipping moveBy/selectRow against f.entries as SetDir actually builds
+// them (not a hand-built f.entries slice, which is all the Task 1 tests used) —
+// specifically for a Part declared in the manifest with zero resolvable
+// chapters under it (its folder listed in "chapters" doesn't exist on disk), so
+// its header row exists but is immediately followed by the next entry with no
+// selectable row in between. This is the real-world shape of the "list ends in
+// a header" / "header immediately followed by another entry" cases Task 1's
+// moveBy fallback was built for, now wired through the real manifest → SetDir
+// → f.entries path instead of a synthetic f.entries literal.
+func TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two"), 0o644)
+	// "Empty Part" lists a chapter folder that does not exist on disk, so it
+	// resolves to zero chapters (manifestView's resolve() skips it) — the Part
+	// header still renders (its title is non-empty), but nothing follows it
+	// until the next Part's header.
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"part":"Empty Part","chapters":[`+
+			`{"folder":"missing","title":"Ghost","texts":[{"file":"missing.md","title":"Ghost"}]}]},`+
+			`{"part":"Part Two","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+
+	// Confirm the shape we're testing actually occurred: two header rows back
+	// to back (or header then non-header), never two adjacent selectable rows
+	// mistaken for the empty-part case — i.e. "Empty Part" really has nothing
+	// selectable between it and "Part Two".
+	var headerIdx, secondHeaderIdx = -1, -1
+	for i, e := range f.entries {
+		if e.isPartHeader && strings.Contains(e.name, "Empty Part") {
+			headerIdx = i
+		}
+		if e.isPartHeader && strings.Contains(e.name, "Part Two") {
+			secondHeaderIdx = i
+		}
+	}
+	if headerIdx == -1 || secondHeaderIdx == -1 {
+		t.Fatalf("expected both Part headers in f.entries, got: %+v", f.entries)
+	}
+	if secondHeaderIdx != headerIdx+1 {
+		t.Fatalf("Empty Part's header must be immediately followed by Part Two's header (no chapters in between), got entries: %+v", f.entries)
+	}
+
+	// Land the cursor right before the run of two headers and move down: it
+	// must skip both and land on "the-letter", never rest on a header.
+	f.selected = headerIdx - 1
+	if f.selected < 0 || f.entries[f.selected].isPartHeader {
+		t.Fatalf("test setup invalid: index before the header run must be a real selectable entry, got %+v at %d", f.entries, headerIdx-1)
+	}
+	f.moveBy(1)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("moveBy(1) must never land on a header, even across two adjacent real headers, got selected=%d entries=%+v", f.selected, f.entries)
+	}
+	if f.entries[f.selected].name != "the-letter" {
+		t.Fatalf("moveBy(1) must skip both headers and land on the-letter, got %q", f.entries[f.selected].name)
+	}
+
+	// Clicking directly on the empty Part's header row must also resolve
+	// forward, through the second header, to the same selectable chapter.
+	f.selected = 0
+	f.offset = 0
+	f.selectRow(headerIdx)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("selectRow on a header must never leave selection on a header, got selected=%d entries=%+v", f.selected, f.entries)
+	}
+	if f.entries[f.selected].name != "the-letter" {
+		t.Fatalf("selectRow on Empty Part's header must resolve forward past both headers to the-letter, got %q", f.entries[f.selected].name)
+	}
+}
