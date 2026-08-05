@@ -466,6 +466,36 @@ func (m model) corkboardView() string {
 		hdr := marker + fmtNum(i+1) + " · " + openMark + it.title
 		cards = append(cards, framedPanel(hdr, body, cardW, cardRows, wc))
 	}
+
+	// Real Parts (not staged in m.structureItems — structure mode doesn't edit
+	// Parts yet) render read-only, after the editable bare-chapter cards.
+	rv := resolveManuscript(m.structureDir, readEntries(m.structureDir))
+	for _, p := range rv.parts {
+		if p.title == "" {
+			continue // synthetic part — its chapters are already the editable cards above
+		}
+		header := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(
+			p.title + "  " + commafy(partWordTotal(m.structureDir, p, m.files.wc)) + " m")
+		cards = append(cards, header)
+		for _, ch := range p.chapters {
+			wc := ""
+			if len(ch.texts) > 0 {
+				wc = commafy(m.files.wc.count(filepath.Join(m.structureDir, ch.folder, ch.texts[0].file))) + " m"
+			}
+			_, rawBody, dim := corkboardCardMeta(false, m.synopses[ch.folder], m.corkFirstLines[ch.folder])
+			var body string
+			if rawBody == "" {
+				body = lipgloss.NewStyle().Foreground(subtle).Render("(pas de synopsis)")
+			} else {
+				body = wrapClamp(rawBody, cardW-4, bodyRows)
+				if dim {
+					body = lipgloss.NewStyle().Foreground(subtle).Render(body)
+				}
+			}
+			cards = append(cards, framedPanel("  "+ch.title, body, cardW, cardRows, wc))
+		}
+	}
+
 	if len(cards) == 0 {
 		cards = append(cards, lipgloss.NewStyle().Foreground(subtle).Render("(aucun chapitre)"))
 	}

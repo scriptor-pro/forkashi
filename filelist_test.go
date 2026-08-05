@@ -94,15 +94,15 @@ func TestFilelistActivate(t *testing.T) {
 
 	// Select the file (entries: "..", "note.md") and activate it.
 	f.selected = 1
-	path, ok := f.activate()
-	if !ok || path != filepath.Join(dir, "note.md") {
-		t.Fatalf("activate file = (%q, %v), want (%q, true)", path, ok, filepath.Join(dir, "note.md"))
+	path, result := f.activate()
+	if result != activateFile || path != filepath.Join(dir, "note.md") {
+		t.Fatalf("activate file = (%q, %v), want (%q, activateFile)", path, result, filepath.Join(dir, "note.md"))
 	}
 
 	// Activating ".." navigates up and opens nothing.
 	f.SetDir(dir)
 	f.selected = 0
-	if _, ok := f.activate(); ok {
+	if _, result := f.activate(); result != activateNone {
 		t.Fatal("activating .. should not open a file")
 	}
 	if f.dir != filepath.Dir(dir) {
@@ -368,6 +368,132 @@ func TestFileListInlineCreateRow(t *testing.T) {
 	}
 }
 
+func TestMoveByDownSkipsPartHeader(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.selected = 0
+	f.moveBy(1)
+	if f.selected != 2 {
+		t.Fatalf("moveBy(1) from index 0 must skip the header at index 1 and land on 2, got %d", f.selected)
+	}
+}
+
+func TestMoveByUpSkipsPartHeader(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.selected = 2
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) from index 2 must skip the header at index 1 and land on 0, got %d", f.selected)
+	}
+}
+
+func TestMoveByStopsAtEndWithoutInfiniteLoopWhenTrailingHeaders(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+	}
+	f.selected = 0
+	f.moveBy(1)
+	// No selectable entry below index 0 other than the header — selection must clamp,
+	// never land on a header, never loop forever.
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) with only a trailing header must clamp back to the last selectable index, got %d", f.selected)
+	}
+}
+
+// TestMoveByDegenerateAllHeadersFallsBackToDocumentedSafeIndex covers the fully
+// degenerate case the review flagged: every entry in f.entries is a Part header,
+// so there is no selectable index anywhere in the list for moveBy to land on.
+// This should never occur in practice (a Part is never rendered with zero
+// chapters/loose files under it), but moveBy must stay safe by construction: it
+// must land on the documented fallback (index 0), not on whatever index the
+// walk/clamp logic happens to leave pos at.
+//
+// This is distinct from — and does not contradict — the invariant "never select
+// a header when a selectable entry exists" exercised by the other TestMoveBy*
+// tests above: here no selectable entry exists anywhere, so the only thing left
+// to verify is that the fallback is the deterministic, documented one.
+func TestMoveByDegenerateAllHeadersFallsBackToDocumentedSafeIndex(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "Partie Un", isPartHeader: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "Partie Trois", isPartHeader: true},
+	}
+
+	f.selected = 0
+	f.moveBy(1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 0
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 2
+	f.moveBy(1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) from the last index on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+
+	f.selected = 2
+	f.moveBy(-1)
+	if f.selected != 0 {
+		t.Fatalf("moveBy(-1) from the last index on an all-header list must fall back to the documented safe index 0, got %d", f.selected)
+	}
+}
+
+// TestMoveByFallsBackToSelectableEntryElsewhereWhenHeadersSurroundSelection
+// covers the intermediate degenerate case: f.selected itself sits on a header
+// (which moveBy's normal walk never produces on its own, but structure-mode
+// edits or a future caller could), and no selectable entry exists in the walk
+// direction — but one does exist elsewhere in the list. moveBy must fold to it
+// rather than settling for the header at f.selected, which the old "last-resort
+// guard: pos = f.selected" fallback used to do.
+func TestMoveByFallsBackToSelectableEntryElsewhereWhenHeadersSurroundSelection(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Un", isPartHeader: true},
+		{name: "Partie Deux", isPartHeader: true},
+	}
+	f.selected = 1 // starts on a header — abnormal, but must still resolve safely
+	f.moveBy(1)    // no selectable entry forward (index 2 is also a header)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("moveBy(1) must never leave f.selected on a header when a selectable entry exists elsewhere in the list, got index %d", f.selected)
+	}
+	if f.selected != 0 {
+		t.Fatalf("moveBy(1) must fold back to the only selectable entry (index 0), got %d", f.selected)
+	}
+}
+
+func TestSelectRowSkipsPartHeaderForward(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{
+		{name: "chap-un", isDir: true},
+		{name: "Partie Deux", isPartHeader: true},
+		{name: "chap-deux", isDir: true},
+	}
+	f.height = 10
+	f.selectRow(1) // clicking directly on the header row
+	if f.selected != 2 {
+		t.Fatalf("clicking a header row must select the next selectable entry (forward), got %d", f.selected)
+	}
+}
+
 func TestPaneLabel(t *testing.T) {
 	root := t.TempDir()
 	// A manuscript whose title differs from its folder name.
@@ -393,5 +519,223 @@ func TestPaneLabel(t *testing.T) {
 	f.SetDir(cat)
 	if got := f.paneLabel(); got != "research" {
 		t.Fatalf("category paneLabel = %q, want the folder name", got)
+	}
+}
+
+func TestSidebarShowsPartHeaderWithWordTotal(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two three four five"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"Windermere","items":[`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	view := f.View(-1, "")
+	if !strings.Contains(view, "Part One") {
+		t.Fatalf("sidebar must show the Part title, got:\n%s", view)
+	}
+	if !strings.Contains(view, "5 m") {
+		t.Fatalf("sidebar's Part header must show the total word count of its chapters, got:\n%s", view)
+	}
+}
+
+func TestSidebarOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.isPartHeader {
+			t.Fatalf("a manuscript with no real Part must not render any header row, got entries: %+v", f.entries)
+		}
+	}
+}
+
+func TestSidebarShowsMixedBareChaptersAndPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "prologue"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "prologue", "prologue.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	view := f.View(-1, "")
+	iPrologue := strings.Index(view, "Prologue")
+	iPartOne := strings.Index(view, "Part One")
+	iLetter := strings.Index(view, "The Letter")
+	if iPrologue == -1 || iPartOne == -1 || iLetter == -1 {
+		t.Fatalf("all three must appear, got:\n%s", view)
+	}
+	if !(iPrologue < iPartOne && iPartOne < iLetter) {
+		t.Fatalf("order must be Prologue (bare), then Part One header, then The Letter, got:\n%s", view)
+	}
+}
+
+// TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement exercises Task 1's
+// header-skipping moveBy/selectRow against f.entries as SetDir actually builds
+// them (not a hand-built f.entries slice, which is all the Task 1 tests used) —
+// specifically for a Part declared in the manifest with zero resolvable
+// chapters under it (its folder listed in "chapters" doesn't exist on disk), so
+// its header row exists but is immediately followed by the next entry with no
+// selectable row in between. This is the real-world shape of the "list ends in
+// a header" / "header immediately followed by another entry" cases Task 1's
+// moveBy fallback was built for, now wired through the real manifest → SetDir
+// → f.entries path instead of a synthetic f.entries literal.
+func TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two"), 0o644)
+	// "Empty Part" lists a chapter folder that does not exist on disk, so it
+	// resolves to zero chapters (manifestView's resolve() skips it) — the Part
+	// header still renders (its title is non-empty), but nothing follows it
+	// until the next Part's header.
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"part":"Empty Part","chapters":[`+
+			`{"folder":"missing","title":"Ghost","texts":[{"file":"missing.md","title":"Ghost"}]}]},`+
+			`{"part":"Part Two","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+
+	// Confirm the shape we're testing actually occurred: two header rows back
+	// to back (or header then non-header), never two adjacent selectable rows
+	// mistaken for the empty-part case — i.e. "Empty Part" really has nothing
+	// selectable between it and "Part Two".
+	var headerIdx, secondHeaderIdx = -1, -1
+	for i, e := range f.entries {
+		if e.isPartHeader && strings.Contains(e.name, "Empty Part") {
+			headerIdx = i
+		}
+		if e.isPartHeader && strings.Contains(e.name, "Part Two") {
+			secondHeaderIdx = i
+		}
+	}
+	if headerIdx == -1 || secondHeaderIdx == -1 {
+		t.Fatalf("expected both Part headers in f.entries, got: %+v", f.entries)
+	}
+	if secondHeaderIdx != headerIdx+1 {
+		t.Fatalf("Empty Part's header must be immediately followed by Part Two's header (no chapters in between), got entries: %+v", f.entries)
+	}
+
+	// Land the cursor right before the run of two headers and move down: it
+	// must skip both and land on "the-letter", never rest on a header.
+	f.selected = headerIdx - 1
+	if f.selected < 0 || f.entries[f.selected].isPartHeader {
+		t.Fatalf("test setup invalid: index before the header run must be a real selectable entry, got %+v at %d", f.entries, headerIdx-1)
+	}
+	f.moveBy(1)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("moveBy(1) must never land on a header, even across two adjacent real headers, got selected=%d entries=%+v", f.selected, f.entries)
+	}
+	if f.entries[f.selected].name != "the-letter" {
+		t.Fatalf("moveBy(1) must skip both headers and land on the-letter, got %q", f.entries[f.selected].name)
+	}
+
+	// Clicking directly on the empty Part's header row must also resolve
+	// forward, through the second header, to the same selectable chapter.
+	f.selected = 0
+	f.offset = 0
+	f.selectRow(headerIdx)
+	if f.entries[f.selected].isPartHeader {
+		t.Fatalf("selectRow on a header must never leave selection on a header, got selected=%d entries=%+v", f.selected, f.entries)
+	}
+	if f.entries[f.selected].name != "the-letter" {
+		t.Fatalf("selectRow on Empty Part's header must resolve forward past both headers to the-letter, got %q", f.entries[f.selected].name)
+	}
+}
+
+func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("opening")
+	path, result := f.activate()
+	if result != activateFile {
+		t.Fatalf("a single-text chapter must activate as activateFile, got %v", result)
+	}
+	want := filepath.Join(dir, "opening", "opening.md")
+	if path != want {
+		t.Fatalf("path = %q, want %q", path, want)
+	}
+}
+
+func TestActivateMultiTextChapterSignalsPicker(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("y"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("chapitre-un")
+	_, result := f.activate()
+	if result != activateTextPicker {
+		t.Fatalf("a multi-text chapter must activate as activateTextPicker, got %v", result)
+	}
+}
+
+func TestActivatePlainFolderStillNavigates(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "notes"), 0o755)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("notes")
+	_, result := f.activate()
+	if result != activateNone {
+		t.Fatalf("a plain (non-chapter) folder must still navigate (activateNone), got %v", result)
+	}
+	if f.dir != filepath.Join(dir, "notes") {
+		t.Fatalf("navigating into a plain folder must update f.dir, got %q", f.dir)
+	}
+}
+
+func TestActivateEmptyChapterSignalsPickerWithNoTexts(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"vide","title":"Vide","texts":[]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("vide")
+	_, result := f.activate()
+	if result != activateTextPicker {
+		t.Fatalf("an empty chapter must also route to the picker (which shows an empty state), not crash or navigate, got %v", result)
 	}
 }

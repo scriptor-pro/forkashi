@@ -33,6 +33,7 @@ type homeFileItem struct {
 	name, path, snippet string
 	words               int
 	isDir               bool
+	isPartHeader        bool
 }
 
 // classifyLibrary splits the workspace's top-level subdirs into manuscripts (projects) and
@@ -121,6 +122,12 @@ func (m *model) homeFilesFor(dir string, showFolders bool) []homeFileItem {
 	}
 	out := folders
 	for _, p := range view.parts {
+		if p.title != "" {
+			out = append(out, homeFileItem{
+				name:         p.title + "  " + commafy(partWordTotal(dir, p, m.files.wc)) + " m",
+				isPartHeader: true,
+			})
+		}
 		for _, ch := range p.chapters {
 			if len(ch.texts) == 0 {
 				continue
@@ -573,6 +580,22 @@ func (m *model) focusAt(r homeRegion, idx int) {
 	}
 }
 
+// skipHomeFilesHeader nudges m.homeIndex past a Part-header row in the FILES column,
+// in the given direction (1 = down, -1 = up) — a header is never selectable, mirroring
+// filelist.moveBy's own header-skipping for the sidebar. A no-op outside regionFiles.
+func (m *model) skipHomeFilesHeader(dir int) {
+	if m.homeRegion != regionFiles {
+		return
+	}
+	for m.homeIndex >= 0 && m.homeIndex < len(m.homeFiles) && m.homeFiles[m.homeIndex].isPartHeader {
+		next := m.homeIndex + dir
+		if next < 0 || next >= len(m.homeFiles) {
+			break // only headers remain this way — leave selection on the header rather than loop
+		}
+		m.homeIndex = next
+	}
+}
+
 // homeMove navigates the launcher: up/down within a column (flowing into Actions),
 // left/right across Recent ↔ Library ↔ Files.
 func clampIdx(i, n int) int {
@@ -673,10 +696,12 @@ func (m *model) homeMove(dx, dy int) {
 					return
 				}
 				m.focusAt(m.homeRegion, m.homeIndex+1)
+				m.skipHomeFilesHeader(1)
 				return
 			}
 			if m.homeIndex > 0 { // up within the column
 				m.focusAt(m.homeRegion, m.homeIndex-1)
+				m.skipHomeFilesHeader(-1)
 				return
 			}
 			if m.regionCount(regionRecent) > 0 { // top of the column → up into the strip
@@ -831,6 +856,14 @@ func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	for i := off; i < len(m.homeFiles); i++ {
 		f := m.homeFiles[i]
 		sel := m.homeRegion == regionFiles && m.homeIndex == i
+		if f.isPartHeader {
+			if len(lines)+1 > h {
+				break
+			}
+			text := ansi.Truncate(f.name, contentW, "…")
+			lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(accent).Render(text))
+			continue
+		}
 		if f.isDir {
 			if len(lines)+1 > h {
 				break
@@ -1286,6 +1319,9 @@ func (m *model) openHomeSelection() tea.Cmd {
 			return nil
 		}
 		f := m.homeFiles[m.homeIndex]
+		if f.isPartHeader {
+			return nil // defensive: a header is never a valid selection to act on
+		}
 		if f.isDir { // drill into the subfolder (or up via "..") — stay on the home
 			m.homeFilesDir = f.path
 			m.recomputeHomeFiles()

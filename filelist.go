@@ -22,8 +22,9 @@ func renderIcon(g glyph, selected bool) string {
 }
 
 type fileEntry struct {
-	name  string
-	isDir bool
+	name         string
+	isDir        bool
+	isPartHeader bool // a non-selectable Part title row; cursor movement skips it
 }
 
 // filelist is a minimal, mouse-friendly file browser we fully own.
@@ -65,6 +66,19 @@ func withinRoot(dir, root string) bool {
 		return false
 	}
 	return rel == "." || !strings.HasPrefix(rel, "..")
+}
+
+// partWordTotal sums the word count of every text in every chapter of p, using wc
+// (same cache filelist already threads through chapterWords) — the number shown on
+// a Part's header row.
+func partWordTotal(dir string, p partRef, wc *wordCountCache) int {
+	total := 0
+	for _, ch := range p.chapters {
+		for _, t := range ch.texts {
+			total += wc.count(filepath.Join(dir, ch.folder, t.file))
+		}
+	}
+	return total
 }
 
 // SetDir loads dir's entries (filtered, sorted dirs-first) and resets the cursor.
@@ -128,6 +142,10 @@ func (f *filelist) SetDir(dir string) {
 	}
 	f.entries = append(f.entries, plainDirs...)
 	for _, p := range f.view.parts {
+		if p.title != "" {
+			label := p.title + "  " + commafy(partWordTotal(dir, p, f.wc)) + " m"
+			f.entries = append(f.entries, fileEntry{name: label, isPartHeader: true})
+		}
 		for _, ch := range p.chapters {
 			if ch.folder == "" {
 				if len(ch.texts) > 0 {
@@ -169,6 +187,9 @@ func (f filelist) View(editRow int, editField string) string {
 		g := f.icons.iconFor(e)
 		section := f.isChapterEntry(e)
 		switch {
+		case e.isPartHeader:
+			row := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(ansi.Truncate(e.name, f.width, "…"))
+			b.WriteString(row)
 		case editRow >= 0 && i == editRow:
 			b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
 		case i == f.selected:
@@ -284,13 +305,68 @@ func (f *filelist) moveBy(n int) {
 	if len(f.entries) == 0 {
 		return
 	}
-	f.selected += n
-	if f.selected < 0 {
-		f.selected = 0
+	step := 1
+	if n < 0 {
+		step = -1
 	}
-	if f.selected >= len(f.entries) {
-		f.selected = len(f.entries) - 1
+	remaining := n
+	if remaining < 0 {
+		remaining = -remaining
 	}
+	pos := f.selected
+	for remaining > 0 {
+		next := pos + step
+		if next < 0 || next >= len(f.entries) {
+			break // hit an edge — stop, don't wrap, don't land past the list
+		}
+		pos = next
+		if !f.entries[pos].isPartHeader {
+			remaining--
+		}
+	}
+	// pos may have landed on a header if every remaining entry in this direction
+	// is a header (or the list ends in one) — walk further in the same direction
+	// until a selectable entry is found, or give up and keep the prior selection.
+	for pos >= 0 && pos < len(f.entries) && f.entries[pos].isPartHeader {
+		next := pos + step
+		if next < 0 || next >= len(f.entries) {
+			pos = f.selected // no selectable entry this way — clamp back
+			break
+		}
+		pos = next
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= len(f.entries) {
+		pos = len(f.entries) - 1
+	}
+	if f.entries[pos].isPartHeader {
+		// Nothing selectable was reachable in the walk direction. f.selected
+		// alone is not a safe fallback here — it can itself already be sitting
+		// on a header (e.g. every entry in f.entries is a header), so fall back
+		// to scanning the whole list for any selectable entry, independent of
+		// direction or prior selection.
+		pos = f.selected
+		if f.entries[pos].isPartHeader {
+			pos = -1
+			for i := range f.entries {
+				if !f.entries[i].isPartHeader {
+					pos = i
+					break
+				}
+			}
+			if pos == -1 {
+				// Fully degenerate case: every entry in f.entries is a header,
+				// so no selectable index exists anywhere. Should never occur in
+				// practice (a Part is never rendered with zero chapters/loose
+				// files under it), but stay safe-by-construction: land on 0,
+				// the documented fallback, rather than leaving pos undefined.
+				pos = 0
+			}
+		}
+	}
+	f.selected = pos
 	f.scrollIntoView()
 }
 
@@ -305,7 +381,10 @@ func (f *filelist) scrollIntoView() {
 	}
 }
 
-// selectRow sets the selection from a row index within the visible window.
+// selectRow sets the selection from a row index within the visible window. A click
+// landing on a Part-header row selects the next selectable entry below it instead
+// (headers are never selectable) — forward, matching moveBy's own default direction
+// for an explicit position jump.
 func (f *filelist) selectRow(visibleRow int) {
 	if visibleRow < 0 {
 		return
@@ -314,25 +393,82 @@ func (f *filelist) selectRow(visibleRow int) {
 	if idx >= len(f.entries) {
 		return
 	}
+	for idx < len(f.entries) && f.entries[idx].isPartHeader {
+		idx++
+	}
+	if idx >= len(f.entries) {
+		return // nothing selectable below the clicked header — leave selection as-is
+	}
 	f.selected = idx
 }
 
-// activate acts on the selected entry: directories (and "..") navigate and
-// return ok=false; a file returns its absolute path with ok=true.
-func (f *filelist) activate() (string, bool) {
-	if len(f.entries) == 0 {
-		return "", false
+// activateResult is what activate() found at the cursor: a plain-dir navigation (or
+// nothing selectable) needs no further action from the caller; a single-text chapter
+// or ordinary file is ready to open at path; a multi-text (or empty) chapter needs
+// the caller to open the text picker instead of opening a file directly.
+type activateResult int
+
+const (
+	activateNone activateResult = iota
+	activateFile
+	activateTextPicker
+)
+
+// activate acts on the selected entry. A "..", a plain directory, or a Part-header
+// row (guarded above by moveBy/selectRow, but defensively checked here too) navigates
+// and returns activateNone. A v2 chapter folder with exactly one text returns its
+// path with activateFile — unchanged behavior from before multi-text chapters
+// existed. A v2 chapter folder with zero or 2+ texts returns activateTextPicker; the
+// caller opens the picker screen instead of a file. Anything else (an ordinary file,
+// or a legacy single-file chapter) returns its path with activateFile.
+func (f *filelist) activate() (string, activateResult) {
+	if len(f.entries) == 0 || f.selected >= len(f.entries) {
+		return "", activateNone
 	}
 	e := f.entries[f.selected]
+	if e.isPartHeader {
+		return "", activateNone // defensive: moveBy/selectRow never select a header
+	}
 	if e.isDir {
+		if isChapterOf(f.view, e.name) {
+			ch := chapterByFolder(f.view, e.name)
+			if len(ch.texts) == 1 {
+				return filepath.Join(f.dir, ch.folder, ch.texts[0].file), activateFile
+			}
+			return "", activateTextPicker
+		}
 		if e.name == ".." {
 			f.SetDir(filepath.Dir(f.dir))
 		} else {
 			f.SetDir(filepath.Join(f.dir, e.name))
 		}
+		return "", activateNone
+	}
+	return filepath.Join(f.dir, e.name), activateFile
+}
+
+// chapterByFolder returns the chapterRef whose folder matches, across all parts. The
+// caller (activate) only calls this after isChapterOf already confirmed a match, so
+// the zero-value fallback is unreachable in practice.
+func chapterByFolder(v manuscriptView, folder string) chapterRef {
+	for _, p := range v.parts {
+		for _, ch := range p.chapters {
+			if ch.folder == folder {
+				return ch
+			}
+		}
+	}
+	return chapterRef{}
+}
+
+// selectedEntryName returns the raw name of the selected entry (folder or file),
+// or ok=false if nothing is selected. Used by enterTextPicker to recover which
+// chapter folder the cursor was on.
+func (f filelist) selectedEntryName() (string, bool) {
+	if f.selected < 0 || f.selected >= len(f.entries) {
 		return "", false
 	}
-	return filepath.Join(f.dir, e.name), true
+	return f.entries[f.selected].name, true
 }
 
 // selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").

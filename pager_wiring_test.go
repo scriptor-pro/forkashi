@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -129,5 +130,53 @@ func TestPagerClickThenDoubleClickJumps(t *testing.T) {
 	}
 	if m.editor.Line() != 1 {
 		t.Fatalf("double-click jump should land on source line 1 (gamma), got %d", m.editor.Line())
+	}
+}
+
+func TestPagerShowsPartHeaderBeforeItsChapters(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("Contenu."), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+
+	var p pagerModel
+	p.load(dir, 60)
+
+	iPart := -1
+	iChapter := -1
+	for i, l := range p.lines {
+		if l.header && strings.Contains(l.text, "Part One") {
+			iPart = i
+		}
+		if l.header && strings.Contains(l.text, "The Letter") {
+			iChapter = i
+		}
+	}
+	if iPart == -1 {
+		t.Fatalf("pager must render a header line for the Part title, got lines: %+v", p.lines)
+	}
+	if iPart >= iChapter {
+		t.Fatalf("the Part header must come BEFORE its chapter's own header, got Part at %d, chapter at %d", iPart, iChapter)
+	}
+}
+
+func TestPagerOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+
+	var p pagerModel
+	p.load(dir, 60)
+
+	for _, l := range p.lines {
+		if l.header && l.text != "── Opening ──" {
+			t.Fatalf("no real Part exists — the only header line must be the chapter's own, got: %q", l.text)
+		}
 	}
 }
