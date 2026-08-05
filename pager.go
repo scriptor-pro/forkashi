@@ -50,6 +50,15 @@ func (p *pagerModel) load(dir string, width int) {
 
 	running := 0
 	for _, part := range v.parts {
+		if part.title != "" {
+			p.lines = append(p.lines, pagerLine{
+				text:     "── " + part.title + " ──",
+				file:     "",
+				src:      -1,
+				header:   true,
+				cumWords: running,
+			})
+		}
 		for _, ch := range part.chapters {
 			if len(ch.texts) == 0 {
 				continue // empty chapter: header with no body would panic on ch.texts[0]
