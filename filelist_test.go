@@ -94,15 +94,15 @@ func TestFilelistActivate(t *testing.T) {
 
 	// Select the file (entries: "..", "note.md") and activate it.
 	f.selected = 1
-	path, ok := f.activate()
-	if !ok || path != filepath.Join(dir, "note.md") {
-		t.Fatalf("activate file = (%q, %v), want (%q, true)", path, ok, filepath.Join(dir, "note.md"))
+	path, result := f.activate()
+	if result != activateFile || path != filepath.Join(dir, "note.md") {
+		t.Fatalf("activate file = (%q, %v), want (%q, activateFile)", path, result, filepath.Join(dir, "note.md"))
 	}
 
 	// Activating ".." navigates up and opens nothing.
 	f.SetDir(dir)
 	f.selected = 0
-	if _, ok := f.activate(); ok {
+	if _, result := f.activate(); result != activateNone {
 		t.Fatal("activating .. should not open a file")
 	}
 	if f.dir != filepath.Dir(dir) {
@@ -661,5 +661,81 @@ func TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement(t *testing.T) {
 	}
 	if f.entries[f.selected].name != "the-letter" {
 		t.Fatalf("selectRow on Empty Part's header must resolve forward past both headers to the-letter, got %q", f.entries[f.selected].name)
+	}
+}
+
+func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("opening")
+	path, result := f.activate()
+	if result != activateFile {
+		t.Fatalf("a single-text chapter must activate as activateFile, got %v", result)
+	}
+	want := filepath.Join(dir, "opening", "opening.md")
+	if path != want {
+		t.Fatalf("path = %q, want %q", path, want)
+	}
+}
+
+func TestActivateMultiTextChapterSignalsPicker(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("y"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("chapitre-un")
+	_, result := f.activate()
+	if result != activateTextPicker {
+		t.Fatalf("a multi-text chapter must activate as activateTextPicker, got %v", result)
+	}
+}
+
+func TestActivatePlainFolderStillNavigates(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "notes"), 0o755)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("notes")
+	_, result := f.activate()
+	if result != activateNone {
+		t.Fatalf("a plain (non-chapter) folder must still navigate (activateNone), got %v", result)
+	}
+	if f.dir != filepath.Join(dir, "notes") {
+		t.Fatalf("navigating into a plain folder must update f.dir, got %q", f.dir)
+	}
+}
+
+func TestActivateEmptyChapterSignalsPickerWithNoTexts(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"vide","title":"Vide","texts":[]}}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	f.selectName("vide")
+	_, result := f.activate()
+	if result != activateTextPicker {
+		t.Fatalf("an empty chapter must also route to the picker (which shows an empty state), not crash or navigate, got %v", result)
 	}
 }

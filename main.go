@@ -1402,10 +1402,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.files.selectRow(row)
 		now := time.Now()
 		if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
-			if path, ok := m.files.activate(); ok {
+			if path, result := m.files.activate(); result == activateFile {
 				m.loadFile(path)
 				m.focus = focusEditor
 				m.editor.Focus()
+			} else if result == activateTextPicker {
+				m.enterTextPicker()
 			}
 			m.lastClickTime = time.Time{} // consume the double-click
 		} else {
@@ -1610,10 +1612,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "down", "j":
 					m.files.moveBy(1)
 				case "enter", "right", "l":
-					if path, ok := m.files.activate(); ok {
+					if path, result := m.files.activate(); result == activateFile {
 						m.loadFile(path)
 						m.focus = focusEditor
 						m.editor.Focus()
+					} else if result == activateTextPicker {
+						m.enterTextPicker()
 					}
 				case "left", "h", "backspace":
 					m.files.SetDir(filepath.Dir(m.files.dir))

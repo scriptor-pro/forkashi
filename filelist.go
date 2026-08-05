@@ -402,22 +402,63 @@ func (f *filelist) selectRow(visibleRow int) {
 	f.selected = idx
 }
 
-// activate acts on the selected entry: directories (and "..") navigate and
-// return ok=false; a file returns its absolute path with ok=true.
-func (f *filelist) activate() (string, bool) {
-	if len(f.entries) == 0 {
-		return "", false
+// activateResult is what activate() found at the cursor: a plain-dir navigation (or
+// nothing selectable) needs no further action from the caller; a single-text chapter
+// or ordinary file is ready to open at path; a multi-text (or empty) chapter needs
+// the caller to open the text picker instead of opening a file directly.
+type activateResult int
+
+const (
+	activateNone activateResult = iota
+	activateFile
+	activateTextPicker
+)
+
+// activate acts on the selected entry. A "..", a plain directory, or a Part-header
+// row (guarded above by moveBy/selectRow, but defensively checked here too) navigates
+// and returns activateNone. A v2 chapter folder with exactly one text returns its
+// path with activateFile — unchanged behavior from before multi-text chapters
+// existed. A v2 chapter folder with zero or 2+ texts returns activateTextPicker; the
+// caller opens the picker screen instead of a file. Anything else (an ordinary file,
+// or a legacy single-file chapter) returns its path with activateFile.
+func (f *filelist) activate() (string, activateResult) {
+	if len(f.entries) == 0 || f.selected >= len(f.entries) {
+		return "", activateNone
 	}
 	e := f.entries[f.selected]
+	if e.isPartHeader {
+		return "", activateNone // defensive: moveBy/selectRow never select a header
+	}
 	if e.isDir {
+		if isChapterOf(f.view, e.name) {
+			ch := chapterByFolder(f.view, e.name)
+			if len(ch.texts) == 1 {
+				return filepath.Join(f.dir, ch.folder, ch.texts[0].file), activateFile
+			}
+			return "", activateTextPicker
+		}
 		if e.name == ".." {
 			f.SetDir(filepath.Dir(f.dir))
 		} else {
 			f.SetDir(filepath.Join(f.dir, e.name))
 		}
-		return "", false
+		return "", activateNone
 	}
-	return filepath.Join(f.dir, e.name), true
+	return filepath.Join(f.dir, e.name), activateFile
+}
+
+// chapterByFolder returns the chapterRef whose folder matches, across all parts. The
+// caller (activate) only calls this after isChapterOf already confirmed a match, so
+// the zero-value fallback is unreachable in practice.
+func chapterByFolder(v manuscriptView, folder string) chapterRef {
+	for _, p := range v.parts {
+		for _, ch := range p.chapters {
+			if ch.folder == folder {
+				return ch
+			}
+		}
+	}
+	return chapterRef{}
 }
 
 // selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").
