@@ -354,3 +354,32 @@ func TestCorkboardAddNewChapterCreatesFile(t *testing.T) {
 		t.Fatalf("commit should create the new blank chapter file %s/%s: %v", newFolder, newFile, err)
 	}
 }
+
+func TestCorkboardViewShowsRealPartHeaderReadOnly(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "prologue"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
+	os.WriteFile(filepath.Join(dir, "prologue", "prologue.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},`+
+			`{"part":"Part One","chapters":[`+
+			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.SetDir(dir)
+	m.enterCorkboard()
+	m.width, m.height = 100, 30
+	view := m.corkboardView()
+
+	if !strings.Contains(view, "Part One") {
+		t.Fatalf("corkboard must show the real Part's title, got:\n%s", view)
+	}
+	// The staged (editable) chapters remain only the bare ones — Part One's chapter
+	// is shown but not part of m.structureItems (structure mode doesn't edit Parts yet).
+	if len(m.structureItems) != 1 || m.structureItems[0].folder != "prologue" {
+		t.Fatalf("structureItems must still only stage the bare chapter, got %+v", m.structureItems)
+	}
+}
