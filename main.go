@@ -215,13 +215,16 @@ func (m model) updateTextPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // textPickerView renders the list of a chapter's texts, one per line, each with
-// its own word count — or an empty-state message if the chapter has none.
-func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, width int) string {
+// its own word count — or an empty-state message if the chapter has none. Placed
+// centered over the full width/height (AltScreen only diffs changed lines, so an
+// un-filled panel would otherwise leave the previous screen's content showing
+// through around it, exactly like the exportChooser overlay in View).
+func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, width, height int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "── %s ──\n\n", ch.title)
 	if len(ch.texts) == 0 {
 		b.WriteString("  (aucun texte dans ce chapitre)")
-		return b.String()
+		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, b.String())
 	}
 	for i, t := range ch.texts {
 		marker := "  "
@@ -232,7 +235,7 @@ func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, wid
 		fmt.Fprintf(&b, "%s%s  %s m\n", marker, t.title, commafy(words))
 	}
 	b.WriteString("\n↑↓ sélectionner · Entrée ouvrir · Échap annuler")
-	return b.String()
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, b.String())
 }
 
 // smartQuote returns the curly form of a straight quote. It's an opening quote
@@ -1823,7 +1826,7 @@ func (m model) View() string {
 	}
 
 	if m.screen == screenTextPicker {
-		return textPickerView(m.textPickerChapter, m.textPickerSel, m.textPickerDir, m.files.wc, m.width)
+		return textPickerView(m.textPickerChapter, m.textPickerSel, m.textPickerDir, m.files.wc, m.width, m.height)
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone
