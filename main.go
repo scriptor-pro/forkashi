@@ -623,12 +623,12 @@ func bellCmd() tea.Cmd {
 }
 
 // analysisActionRowY is the inspector body row (content-relative, 0 = tab bar)
-// for the "Check grammar" action button — rendered below the Passive row (10),
-// after a blank row (11), at row 12. Does NOT shift the 5 checkbox rows.
-// The backend name renders at 13 and the Auto-recheck toggle at 14.
+// for the "Check grammar" action button — rendered below the Grammar row (5),
+// after a blank row (6), at row 7. Does NOT shift the 2 checkbox rows.
+// The backend name renders at 8 and the Auto-recheck toggle at 9.
 const (
-	analysisActionRowY = 12
-	analysisAutoRowY   = 14
+	analysisActionRowY = 7
+	analysisAutoRowY   = 9
 )
 
 // grammarResultMsg is returned by checkGrammarCmd when the backend finishes.
@@ -689,10 +689,9 @@ func (m *model) syncDim() {
 }
 
 // applyDecorator sets the editor's Decorator from the current analysis toggles.
-// Compose order: spell first, then grammar, then POS — so spell underline wins.
+// Compose order: spell first, then grammar — so spell underline wins.
 func (m *model) applyDecorator() {
 	a := m.analysis
-	posOn := a.adverb || a.adjective || a.passive
 	grammarOn := a.grammar
 	apple := m.appleFindings[m.currentFile] // Tier 2 (Apple) findings, gated by grammar
 	build := func(line string, idx int) []textarea.Decoration {
@@ -711,15 +710,12 @@ func (m *model) applyDecorator() {
 				}
 			}
 		}
-		if posOn {
-			d = append(d, posDecorator(line, a.adverb, a.adjective, a.passive)...)
-		}
 		if m.searchHighlight != "" {
 			d = append(d, searchDecorator(line, m.searchHighlight)...)
 		}
 		return d
 	}
-	if a.spell || grammarOn || posOn || m.searchHighlight != "" {
+	if a.spell || grammarOn || m.searchHighlight != "" {
 		m.editor.Decorator = build
 	} else {
 		m.editor.Decorator = nil
@@ -1339,12 +1335,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.analysis.spell = !m.analysis.spell
 					case 1:
 						m.analysis.grammar = !m.analysis.grammar
-					case 2:
-						m.analysis.adverb = !m.analysis.adverb
-					case 3:
-						m.analysis.adjective = !m.analysis.adjective
-					case 4:
-						m.analysis.passive = !m.analysis.passive
 					}
 					m.applyDecorator()
 					return m, nil

@@ -1165,30 +1165,6 @@ func TestSpellcheckToggleViaAnalysisClick(t *testing.T) {
 	}
 }
 
-func TestPOSToggleViaAnalysisClick(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
-	t.Setenv("OKASHI_DIR", dir)
-	m := initialModel()
-	m.screen = screenWriting
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	m = nm.(model)
-	m.inspector.visible = true
-	m.inspector.tab = tabAnalysis
-	m.layout()
-	// Adverb is now row index 2 (after Grammar was inserted at index 1).
-	// analysisRowY is content-relative; add 1 for the framed panel's top border.
-	x := m.width - inspectorWidth + 4
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(2) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	m = nm.(model)
-	if !m.analysis.adverb {
-		t.Fatal("clicking the Adverb row should enable it")
-	}
-	if m.editor.Decorator == nil {
-		t.Fatal("a POS category on should set the editor Decorator")
-	}
-}
-
 func TestInspectorTabClick(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
@@ -1300,37 +1276,6 @@ func TestCursorSpellHint(t *testing.T) {
 		t.Fatal("no hint while renaming")
 	}
 	m.renaming = false
-}
-
-func TestFramedInspectorClickAlignment(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
-	t.Setenv("OKASHI_DIR", dir)
-	m := initialModel()
-	m.screen = screenWriting
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	m = nm.(model)
-	m.inspector.visible = true
-	m.inspector.tab = tabAnalysis
-	m.layout()
-	// Click the Adverbe checkbox row at its on-screen position; it must toggle adverb.
-	x := m.width - inspectorWidth + 4 // into the content (left border+padding+indent)
-	// y must be wherever Adverbe actually renders on screen — find it:
-	lines := strings.Split(ansi.Strip(m.View()), "\n")
-	yAdverb := -1
-	for i, ln := range lines {
-		if strings.Contains(ln, "Adverbe") {
-			yAdverb = i
-		}
-	}
-	if yAdverb < 0 {
-		t.Fatal("Adverbe row not found on screen")
-	}
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: yAdverb, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	m = nm.(model)
-	if !m.analysis.adverb {
-		t.Fatalf("clicking the on-screen Adverbe row (y=%d) must toggle adverb — geometry misaligned", yAdverb)
-	}
 }
 
 func TestStatusShowsSpellHint(t *testing.T) {

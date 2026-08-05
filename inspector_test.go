@@ -179,9 +179,9 @@ func TestInspectorTabAtX(t *testing.T) {
 
 func TestInspectorAnalysisTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
-	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: false}, nil)
-	if !strings.Contains(on, "Orthographe") || !strings.Contains(on, "SYNTAXE") {
-		t.Fatalf("analysis tab should list Orthographe and SYNTAXE:\n%s", on)
+	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true}, nil)
+	if !strings.Contains(on, "Orthographe") {
+		t.Fatalf("analysis tab should list Orthographe:\n%s", on)
 	}
 	if !strings.Contains(on, "[x] Orthographe") {
 		t.Fatalf("spell on → checked box:\n%s", on)
@@ -205,33 +205,6 @@ func TestInspectorAnalysisRowAtY(t *testing.T) {
 	}
 }
 
-func TestAnalysisTabPOSList(t *testing.T) {
-	in := inspectorModel{visible: true, tab: tabAnalysis}
-	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true}, nil)
-	for _, w := range []string{"Orthographe", "Grammaire", "SYNTAXE", "Adverbe", "Adjectif", "Passif"} {
-		if !strings.Contains(out, w) {
-			t.Fatalf("analysis tab missing %q:\n%s", w, out)
-		}
-	}
-	if !strings.Contains(out, "[x] Orthographe") || !strings.Contains(out, "[x] Adverbe") {
-		t.Fatalf("toggled-on checkboxes should render [x]:\n%s", out)
-	}
-	// Verify rows render at the expected Y positions.
-	// Row indices: 0=Orthographe, 1=Grammaire, 2=Adverbe, 3=Adjectif, 4=Passif.
-	lines := strings.Split(out, "\n")
-	for i, label := range []string{"Orthographe", "Grammaire", "Adverbe", "Adjectif", "Passif"} {
-		y := analysisRowY(i)
-		if y >= len(lines) || !strings.Contains(lines[y], label) {
-			t.Fatalf("row %d (analysisRowY(%d)=%d) should contain %q, got %q", i, i, y, label, func() string {
-				if y < len(lines) {
-					return lines[y]
-				}
-				return "<out of range>"
-			}())
-		}
-	}
-}
-
 func TestTabBarFitsOneRow(t *testing.T) {
 	in := inspectorModel{visible: true}
 	bar := in.tabBar()
@@ -247,8 +220,8 @@ func TestAnalysisRowAtY(t *testing.T) {
 	if r, ok := inspectorAnalysisRowAtY(analysisRowY(0)); !ok || r != 0 {
 		t.Fatalf("Spellcheck row → %d ok=%v, want 0", r, ok)
 	}
-	if r, ok := inspectorAnalysisRowAtY(analysisRowY(4)); !ok || r != 4 {
-		t.Fatalf("Passive row → %d ok=%v, want 4", r, ok)
+	if r, ok := inspectorAnalysisRowAtY(analysisRowY(1)); !ok || r != 1 {
+		t.Fatalf("Grammar row → %d ok=%v, want 1", r, ok)
 	}
 	if _, ok := inspectorAnalysisRowAtY(0); ok {
 		t.Fatal("the tab-bar row is not a checkbox row")
@@ -264,8 +237,8 @@ func TestAnalysisGrammarRow(t *testing.T) {
 }
 
 func TestAnalysisRowYWithGrammar(t *testing.T) {
-	// 5 checkboxes now: Spellcheck, Grammar, Adverb, Adjective, Passive.
-	for i := 0; i < 5; i++ {
+	// 2 checkboxes: Spellcheck, Grammar.
+	for i := 0; i < 2; i++ {
 		y := analysisRowY(i)
 		if r, ok := inspectorAnalysisRowAtY(y); !ok || r != i {
 			t.Fatalf("analysisRowY(%d)=%d → inspectorAnalysisRowAtY=%d,%v", i, y, r, ok)
