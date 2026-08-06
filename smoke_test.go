@@ -485,6 +485,31 @@ func TestSmartQuoteHelper(t *testing.T) {
 	}
 }
 
+func TestPunctuationSpacing(t *testing.T) {
+	cases := []struct {
+		prev      rune
+		hasPrev   bool
+		sign      rune
+		wantInsec rune
+		wantOK    bool
+	}{
+		{' ', true, '!', rune(0x202F), true}, // ordinary space before ! → fine nbsp
+		{' ', true, '?', rune(0x202F), true}, // ordinary space before ? → fine nbsp
+		{' ', true, ';', rune(0x202F), true}, // ordinary space before ; → fine nbsp
+		{' ', true, ':', rune(0x00A0), true}, // ordinary space before : → normal nbsp
+		{'a', true, '!', 0, false},           // no preceding space → no-op
+		{0, false, '!', 0, false},            // start of line → no-op
+		{rune(0x202F), true, '!', 0, false},  // already a fine nbsp, not an ordinary space → no-op
+	}
+	for _, c := range cases {
+		gotInsec, gotOK := punctuationSpacing(c.prev, c.hasPrev, c.sign)
+		if gotOK != c.wantOK || (gotOK && gotInsec != c.wantInsec) {
+			t.Fatalf("punctuationSpacing(%q,%v,%q) = %q,%v want %q,%v",
+				c.prev, c.hasPrev, c.sign, gotInsec, gotOK, c.wantInsec, c.wantOK)
+		}
+	}
+}
+
 func TestResolveSmartQuotes(t *testing.T) {
 	t.Setenv("OKASHI_SMARTQUOTES", "")
 	if !resolveSmartQuotes() {
@@ -512,6 +537,25 @@ func TestEditorSmartQuoteInsert(t *testing.T) {
 	expected := "«" + string(rune(0x00A0)) // opening chevron + non-breaking space
 	if m.editor.Value() != expected {
 		t.Fatalf("typing \" at start should insert an opening chevron + nbsp, got %q", m.editor.Value())
+	}
+}
+
+func TestEditorPunctuationSpacingInsert(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.smartQuotes = true
+	m.editor.SetValue("a ")
+	m.editor.SetCursor(2)
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	m = nm.(model)
+	expected := "a" + string(rune(0x202F)) + "!"
+	if m.editor.Value() != expected {
+		t.Fatalf("typing ! after 'a ' should convert the space to a fine nbsp, got %q", m.editor.Value())
 	}
 }
 

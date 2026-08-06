@@ -185,6 +185,24 @@ func smartQuote(prev rune, hasPrev bool, q rune) string {
 	return string(q)
 }
 
+var fineInsecableSigns = map[rune]bool{'!': true, '?': true, ';': true}
+
+// punctuationSpacing reports whether the space immediately before the cursor should become
+// non-breaking before inserting sign, and which non-breaking space to use. ok=false means no
+// change (the preceding character is not an ordinary space — nothing to convert).
+func punctuationSpacing(prev rune, hasPrev bool, sign rune) (insecable rune, ok bool) {
+	if !hasPrev || prev != ' ' {
+		return 0, false
+	}
+	if fineInsecableSigns[sign] {
+		return rune(0x202F), true // espace fine insécable
+	}
+	if sign == ':' {
+		return rune(0x00A0), true // espace insécable normale
+	}
+	return 0, false
+}
+
 var listItemRe = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s+(.*)$`)
 
 // listContinuation inspects a list line for Enter handling. ok=false means it's
@@ -1657,6 +1675,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			(km.Runes[0] == '\'' || km.Runes[0] == '"') {
 			prev, hasPrev := m.editor.CharBeforeCursor()
 			m.editor.InsertString(smartQuote(prev, hasPrev, km.Runes[0]))
+			m.dirty = true
+			m.lastEditAt = time.Now()
+			m.invalidateAppleFindings()
+			return m, nil
+		}
+		if km, ok := msg.(tea.KeyMsg); ok && m.smartQuotes &&
+			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
+			(km.Runes[0] == '!' || km.Runes[0] == '?' || km.Runes[0] == ';' || km.Runes[0] == ':') {
+			prev, hasPrev := m.editor.CharBeforeCursor()
+			if insecable, ok := punctuationSpacing(prev, hasPrev, km.Runes[0]); ok {
+				m.editor.ReplaceCharBeforeCursor(insecable)
+			}
+			m.editor.InsertRune(km.Runes[0])
 			m.dirty = true
 			m.lastEditAt = time.Now()
 			m.invalidateAppleFindings()
