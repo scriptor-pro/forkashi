@@ -203,6 +203,27 @@ func punctuationSpacing(prev rune, hasPrev bool, sign rune) (insecable rune, ok 
 	return 0, false
 }
 
+// nupleInsert reports how many copies of sign to actually insert at the cursor, given count —
+// the number of sign already present immediately before the cursor.
+//   - count <= 0 (first of a new run): insert 1.
+//   - count == 1: insert 2 (jump straight to 3 total — 2 is never a valid resting state in a
+//     normal typing flow, since this same function already skipped it going from 0 to 1 to 3).
+//   - count == 2: reachable only if the buffer already holds a non-conforming run (e.g. pasted
+//     text, not produced by this function itself) — top up to 3 by inserting 1.
+//   - count >= 3: insert 0 (the keystroke is swallowed, the sequence is already at its ceiling).
+func nupleInsert(count int) int {
+	switch {
+	case count <= 0:
+		return 1
+	case count == 1:
+		return 2
+	case count == 2:
+		return 1
+	default: // count >= 3
+		return 0
+	}
+}
+
 var listItemRe = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s+(.*)$`)
 
 // listContinuation inspects a list line for Enter handling. ok=false means it's
@@ -1683,11 +1704,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if km, ok := msg.(tea.KeyMsg); ok && m.smartQuotes &&
 			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
 			(km.Runes[0] == '!' || km.Runes[0] == '?' || km.Runes[0] == ';' || km.Runes[0] == ':') {
+			sign := km.Runes[0]
 			prev, hasPrev := m.editor.CharBeforeCursor()
-			if insecable, ok := punctuationSpacing(prev, hasPrev, km.Runes[0]); ok {
+			if insecable, ok := punctuationSpacing(prev, hasPrev, sign); ok {
 				m.editor.ReplaceCharBeforeCursor(insecable)
 			}
-			m.editor.InsertRune(km.Runes[0])
+			if sign == '!' || sign == '?' {
+				count := m.editor.RunCountBeforeCursor(sign)
+				for i := 0; i < nupleInsert(count); i++ {
+					m.editor.InsertRune(sign)
+				}
+			} else {
+				m.editor.InsertRune(sign)
+			}
 			m.dirty = true
 			m.lastEditAt = time.Now()
 			m.invalidateAppleFindings()

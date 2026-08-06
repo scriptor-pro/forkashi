@@ -559,6 +559,77 @@ func TestEditorPunctuationSpacingInsert(t *testing.T) {
 	}
 }
 
+func TestNupleInsert(t *testing.T) {
+	cases := []struct {
+		count int
+		want  int
+	}{
+		{0, 1},  // first of a new run
+		{-1, 1}, // defensive: treated like 0
+		{1, 2},  // jump straight to 3 total (2 is never a valid resting state)
+		{2, 1},  // top up a non-conforming run (e.g. pasted) to 3
+		{3, 0},  // already at ceiling — swallow the keystroke
+		{4, 0},  // above ceiling (non-conforming) — still swallow
+	}
+	for _, c := range cases {
+		if got := nupleInsert(c.count); got != c.want {
+			t.Fatalf("nupleInsert(%d) = %d, want %d", c.count, got, c.want)
+		}
+	}
+}
+
+func TestEditorNupleCeilingInsert(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.smartQuotes = true
+
+	// Typing "!" once → 1 mark.
+	m.editor.SetValue("a")
+	m.editor.SetCursor(1)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	m = nm.(model)
+	if m.editor.Value() != "a!" {
+		t.Fatalf("1st ! : got %q, want %q", m.editor.Value(), "a!")
+	}
+
+	// Typing "!" again right after → jumps straight to 3 (never rests at 2).
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	m = nm.(model)
+	if m.editor.Value() != "a!!!" {
+		t.Fatalf("2nd ! : got %q, want %q (should jump to 3, never rest at 2)", m.editor.Value(), "a!!!")
+	}
+
+	// A 3rd keystroke at the ceiling is swallowed — no change.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	m = nm.(model)
+	if m.editor.Value() != "a!!!" {
+		t.Fatalf("3rd ! : got %q, want %q (ceiling reached, keystroke swallowed)", m.editor.Value(), "a!!!")
+	}
+}
+
+func TestEditorNupleTopUpNonConforming(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.smartQuotes = true
+
+	// Simulate a non-conforming pre-existing run (e.g. pasted text): "a??" then type "?".
+	m.editor.SetValue("a??")
+	m.editor.SetCursor(3)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	m = nm.(model)
+	if m.editor.Value() != "a???" {
+		t.Fatalf("top-up from non-conforming run: got %q, want %q", m.editor.Value(), "a???")
+	}
+}
+
 func TestListContinuation(t *testing.T) {
 	cases := []struct {
 		line   string
