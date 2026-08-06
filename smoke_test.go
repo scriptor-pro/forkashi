@@ -464,17 +464,19 @@ func TestEscTogglesFocusAndTabIndents(t *testing.T) {
 	}
 }
 func TestSmartQuoteHelper(t *testing.T) {
+	nbsp := string(rune(0x00A0))
 	cases := []struct {
 		prev    rune
 		hasPrev bool
 		q       rune
-		want    rune
+		want    string
 	}{
-		{0, false, '\'', rune(0x2018)},  // start of line → opening '
-		{' ', true, '"', rune(0x201C)},  // after space → opening "
-		{'n', true, '\'', rune(0x2019)}, // contraction don't → closing '
-		{'d', true, '"', rune(0x201D)},  // after letter → closing "
-		{'(', true, '\'', rune(0x2018)}, // after ( → opening
+		{0, false, '\'', string(rune(0x2018))},  // start of line → opening '
+		{'n', true, '\'', string(rune(0x2019))}, // contraction don't → closing '
+		{'(', true, '\'', string(rune(0x2018))}, // after ( → opening
+		{0, false, '"', "«" + nbsp},             // start of line → opening chevron + nbsp
+		{' ', true, '"', "«" + nbsp},            // after space → opening chevron + nbsp
+		{'d', true, '"', nbsp + "»"},            // after letter → closing chevron
 	}
 	for _, c := range cases {
 		if got := smartQuote(c.prev, c.hasPrev, c.q); got != c.want {
@@ -507,9 +509,9 @@ func TestEditorSmartQuoteInsert(t *testing.T) {
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'"'}})
 	m = nm.(model)
-	expected := string([]rune{rune(0x201C)}) // left double quote
+	expected := "«" + string(rune(0x00A0)) // opening chevron + non-breaking space
 	if m.editor.Value() != expected {
-		t.Fatalf("typing \" at start should insert a left double curly quote, got %q", m.editor.Value())
+		t.Fatalf("typing \" at start should insert an opening chevron + nbsp, got %q", m.editor.Value())
 	}
 }
 

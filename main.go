@@ -162,25 +162,27 @@ func (m *model) cancelMigration() {
 	m.screen = screenWriting
 }
 
-// smartQuote returns the curly form of a straight quote. It's an opening quote
-// at the start of a line or after whitespace / an opening bracket; otherwise
+// smartQuote returns the curly form of a straight quote, as a string (the French
+// double-quote form is multi-character: chevron + non-breaking space). It's an opening
+// quote at the start of a line or after whitespace / an opening bracket; otherwise
 // closing (which also yields the right apostrophe in contractions).
-func smartQuote(prev rune, hasPrev bool, q rune) rune {
+func smartQuote(prev rune, hasPrev bool, q rune) string {
 	opening := !hasPrev || prev == ' ' || prev == '\t' || prev == '\n' ||
 		prev == '(' || prev == '[' || prev == '{'
+	nbsp := string(rune(0x00A0)) // espace insécable normale
 	switch q {
 	case '\'':
 		if opening {
-			return rune(0x2018) // U+2018 left single quote
+			return string(rune(0x2018)) // U+2018 left single quote
 		}
-		return rune(0x2019) // U+2019 right single quote
+		return string(rune(0x2019)) // U+2019 right single quote
 	case '"':
 		if opening {
-			return rune(0x201C) // U+201C left double quote
+			return "«" + nbsp
 		}
-		return rune(0x201D) // U+201D right double quote
+		return nbsp + "»"
 	}
-	return q
+	return string(q)
 }
 
 var listItemRe = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s+(.*)$`)
@@ -1654,7 +1656,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
 			(km.Runes[0] == '\'' || km.Runes[0] == '"') {
 			prev, hasPrev := m.editor.CharBeforeCursor()
-			m.editor.InsertString(string(smartQuote(prev, hasPrev, km.Runes[0])))
+			m.editor.InsertString(smartQuote(prev, hasPrev, km.Runes[0]))
 			m.dirty = true
 			m.lastEditAt = time.Now()
 			m.invalidateAppleFindings()
