@@ -55,3 +55,44 @@ func TestLineHelpers(t *testing.T) {
 		t.Fatalf("after ClearLine: %q col=%d", m.Value(), m.col)
 	}
 }
+
+func TestReplaceCharBeforeCursor(t *testing.T) {
+	m := New()
+	m.SetValue("a!")
+	m.SetCursor(2)
+	m.ReplaceCharBeforeCursor(' ')
+	if got := m.Value(); got != "a " {
+		t.Fatalf("after ReplaceCharBeforeCursor: %q, want %q", got, "a ")
+	}
+	if m.col != 2 {
+		t.Fatalf("cursor col = %d, want 2 (unchanged)", m.col)
+	}
+
+	m.SetCursor(0)
+	m.ReplaceCharBeforeCursor('x') // no-op at start of line
+	if got := m.Value(); got != "a " {
+		t.Fatalf("ReplaceCharBeforeCursor at col 0 should be no-op, got %q", got)
+	}
+}
+
+func TestRunCountBeforeCursor(t *testing.T) {
+	m := New()
+	m.SetValue("a!!!b")
+	m.SetCursor(4) // just before 'b', after "a!!!"
+	if n := m.RunCountBeforeCursor('!'); n != 3 {
+		t.Fatalf("RunCountBeforeCursor('!') = %d, want 3", n)
+	}
+	if n := m.RunCountBeforeCursor('?'); n != 0 {
+		t.Fatalf("RunCountBeforeCursor('?') = %d, want 0 (wrong rune)", n)
+	}
+
+	m.SetCursor(0)
+	if n := m.RunCountBeforeCursor('!'); n != 0 {
+		t.Fatalf("RunCountBeforeCursor at col 0 = %d, want 0", n)
+	}
+
+	m.SetCursor(1) // just after "a"
+	if n := m.RunCountBeforeCursor('!'); n != 0 {
+		t.Fatalf("RunCountBeforeCursor('!') at col 1 = %d, want 0", n)
+	}
+}

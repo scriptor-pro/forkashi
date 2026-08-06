@@ -1789,6 +1789,25 @@ func (m Model) CharBeforeCursor() (rune, bool) {
 	return m.value[m.row][m.col-1], true
 }
 
+// ReplaceCharBeforeCursor replaces the rune immediately left of the cursor with r.
+// A no-op at the start of a line (mirrors CharBeforeCursor's own boundary behavior).
+func (m *Model) ReplaceCharBeforeCursor(r rune) {
+	if m.col == 0 {
+		return
+	}
+	m.value[m.row][m.col-1] = r
+}
+
+// RunCountBeforeCursor returns how many consecutive copies of r sit immediately before the
+// cursor. 0 if the cursor is at the start of a line or the preceding rune isn't r.
+func (m Model) RunCountBeforeCursor(r rune) int {
+	n := 0
+	for i := m.col - 1; i >= 0 && m.value[m.row][i] == r; i-- {
+		n++
+	}
+	return n
+}
+
 // ClearLine empties the current line and moves the cursor to its start.
 func (m *Model) ClearLine() {
 	m.value[m.row] = m.value[m.row][:0]

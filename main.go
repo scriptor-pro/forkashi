@@ -238,25 +238,66 @@ func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, wid
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, b.String())
 }
 
-// smartQuote returns the curly form of a straight quote. It's an opening quote
-// at the start of a line or after whitespace / an opening bracket; otherwise
+// smartQuote returns the curly form of a straight quote, as a string (the French
+// double-quote form is multi-character: chevron + non-breaking space). It's an opening
+// quote at the start of a line or after whitespace / an opening bracket; otherwise
 // closing (which also yields the right apostrophe in contractions).
-func smartQuote(prev rune, hasPrev bool, q rune) rune {
+func smartQuote(prev rune, hasPrev bool, q rune) string {
 	opening := !hasPrev || prev == ' ' || prev == '\t' || prev == '\n' ||
 		prev == '(' || prev == '[' || prev == '{'
+	nbsp := string(rune(0x00A0)) // espace insécable normale
 	switch q {
 	case '\'':
 		if opening {
-			return rune(0x2018) // U+2018 left single quote
+			return string(rune(0x2018)) // U+2018 left single quote
 		}
-		return rune(0x2019) // U+2019 right single quote
+		return string(rune(0x2019)) // U+2019 right single quote
 	case '"':
 		if opening {
-			return rune(0x201C) // U+201C left double quote
+			return "«" + nbsp
 		}
-		return rune(0x201D) // U+201D right double quote
+		return nbsp + "»"
 	}
-	return q
+	return string(q)
+}
+
+var fineInsecableSigns = map[rune]bool{'!': true, '?': true, ';': true}
+
+// punctuationSpacing reports whether the space immediately before the cursor should become
+// non-breaking before inserting sign, and which non-breaking space to use. ok=false means no
+// change (the preceding character is not an ordinary space — nothing to convert).
+func punctuationSpacing(prev rune, hasPrev bool, sign rune) (insecable rune, ok bool) {
+	if !hasPrev || prev != ' ' {
+		return 0, false
+	}
+	if fineInsecableSigns[sign] {
+		return rune(0x202F), true // espace fine insécable
+	}
+	if sign == ':' {
+		return rune(0x00A0), true // espace insécable normale
+	}
+	return 0, false
+}
+
+// nupleInsert reports how many copies of sign to actually insert at the cursor, given count —
+// the number of sign already present immediately before the cursor.
+//   - count <= 0 (first of a new run): insert 1.
+//   - count == 1: insert 2 (jump straight to 3 total — 2 is never a valid resting state in a
+//     normal typing flow, since this same function already skipped it going from 0 to 1 to 3).
+//   - count == 2: reachable only if the buffer already holds a non-conforming run (e.g. pasted
+//     text, not produced by this function itself) — top up to 3 by inserting 1.
+//   - count >= 3: insert 0 (the keystroke is swallowed, the sequence is already at its ceiling).
+func nupleInsert(count int) int {
+	switch {
+	case count <= 0:
+		return 1
+	case count == 1:
+		return 2
+	case count == 2:
+		return 1
+	default: // count >= 3
+		return 0
+	}
 }
 
 var listItemRe = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s+(.*)$`)
@@ -1732,7 +1773,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
 			(km.Runes[0] == '\'' || km.Runes[0] == '"') {
 			prev, hasPrev := m.editor.CharBeforeCursor()
-			m.editor.InsertString(string(smartQuote(prev, hasPrev, km.Runes[0])))
+			m.editor.InsertString(smartQuote(prev, hasPrev, km.Runes[0]))
+			m.dirty = true
+			m.lastEditAt = time.Now()
+			m.invalidateAppleFindings()
+			return m, nil
+		}
+		if km, ok := msg.(tea.KeyMsg); ok && m.smartQuotes &&
+			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
+			(km.Runes[0] == '!' || km.Runes[0] == '?' || km.Runes[0] == ';' || km.Runes[0] == ':') {
+			sign := km.Runes[0]
+			prev, hasPrev := m.editor.CharBeforeCursor()
+			if insecable, ok := punctuationSpacing(prev, hasPrev, sign); ok {
+				m.editor.ReplaceCharBeforeCursor(insecable)
+			}
+			if sign == '!' || sign == '?' {
+				count := m.editor.RunCountBeforeCursor(sign)
+				for i := 0; i < nupleInsert(count); i++ {
+					m.editor.InsertRune(sign)
+				}
+			} else {
+				m.editor.InsertRune(sign)
+			}
 			m.dirty = true
 			m.lastEditAt = time.Now()
 			m.invalidateAppleFindings()
