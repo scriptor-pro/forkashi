@@ -138,16 +138,23 @@ func (m *model) enterWriting() {
 }
 
 // confirmMigration executes the pending v1→v2 migration and enters the writing
-// screen. Called when the author accepts the migration confirm screen.
+// screen. Called when the author accepts the migration confirm screen. On
+// failure (e.g. the v1 manifest references a missing or typo'd filename), the
+// error surfaces in m.status instead of being silently discarded — otherwise
+// the manuscript stays on v1 and needsMigration re-triggers the same failing
+// migration on every subsequent launch with no indication why (the bug this
+// fixes). The manifest itself is untouched on failure (migrateV1ToV2 validates
+// every source file before moving anything), so the author can fix the
+// offending file or manifest entry and simply relaunch okashi to retry.
 func (m *model) confirmMigration() {
 	if m.migrationPending == nil {
 		return
 	}
 	v1, _, err := readManifestV1(m.migrationDir)
 	if err == nil {
-		_ = migrateV1ToV2(m.migrationDir, v1) // best-effort; errors surface via the
-		// manuscript's warning path on next resolveManuscript, consistent with
-		// every other write path in this codebase (no modal error dialog).
+		if migErr := migrateV1ToV2(m.migrationDir, v1); migErr != nil {
+			m.status = "migration échouée : " + migErr.Error()
+		}
 	}
 	m.migrationPending = nil
 	m.files.SetDir(m.files.dir) // re-reads entries against the migrated v2 manifest

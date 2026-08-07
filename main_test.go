@@ -77,6 +77,9 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 	if m.screen != screenWriting {
 		t.Fatal("confirmMigration must enter the writing screen")
 	}
+	if m.status != "" {
+		t.Fatalf("confirmMigration must not set m.status on a successful migration, got: %q", m.status)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "un", "un.md")); err != nil {
 		t.Fatalf("migrated file must exist: %v", err)
 	}
@@ -100,6 +103,49 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 	}
 	if !foundNewChapterFolder {
 		t.Fatalf("m.files.entries must list the new v2 chapter folder after migration, got: %+v", m.files.entries)
+	}
+}
+
+// TestConfirmMigrationShowsErrorStatusOnFailure reproduces the real bug: before
+// this fix, confirmMigration discarded migrateV1ToV2's error with `_ =`, so a v1
+// manifest referencing a missing/typo'd filename failed silently — the user saw
+// no indication anything went wrong, and the migration prompt would return on
+// every subsequent launch with no clue why. After the fix, the error surfaces in
+// m.status, naming the offending file.
+func TestConfirmMigrationShowsErrorStatusOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-un.md"), []byte("x"), 0o644)
+	// "missing.md" is declared but never created on disk — migration will fail.
+	os.WriteFile(filepath.Join(dir, manifestName),
+		[]byte(`{"schemaVersion":1,"title":"N","items":[
+			{"file":"01-un.md","title":"Un"},{"file":"missing.md","title":"Deux"}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.enterWriting()
+	if m.migrationPending == nil {
+		t.Fatal("setup: expected migrationPending")
+	}
+
+	m.confirmMigration()
+
+	if m.migrationPending != nil {
+		t.Fatal("confirmMigration must clear migrationPending even on failure")
+	}
+	if m.screen != screenWriting {
+		t.Fatal("confirmMigration must enter the writing screen even on failure")
+	}
+	if !strings.Contains(m.status, "missing.md") {
+		t.Fatalf("m.status must name the missing file after a failed migration, got: %q", m.status)
+	}
+
+	// The manifest must remain v1 — migration must not have partially succeeded.
+	data, err := os.ReadFile(filepath.Join(dir, manifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(string(data), `"schemaVersion":1`) {
+		t.Fatalf("manifest must still be v1 after a failed migration, got: %s", data)
 	}
 }
 
