@@ -2171,3 +2171,69 @@ type availableFakeChecker struct{}
 func (availableFakeChecker) Name() string                           { return "Fake" }
 func (availableFakeChecker) Available() bool                        { return true }
 func (availableFakeChecker) Check(string) ([]grammarFinding, error) { return nil, nil }
+
+// unavailableFakeChecker is a grammarChecker whose Available() always reports false, for testing
+// pollGrammalecteCmd's retry/give-up paths. Note: fakeChecker (used elsewhere in this file)
+// always reports Available() == true, so it cannot stand in for "server never comes up" — this
+// type exists specifically to exercise that case.
+type unavailableFakeChecker struct{}
+
+func (unavailableFakeChecker) Name() string                           { return "Fake" }
+func (unavailableFakeChecker) Available() bool                        { return false }
+func (unavailableFakeChecker) Check(string) ([]grammarFinding, error) { return nil, nil }
+
+func TestPollGrammalecteCmdSucceedsWhenAvailable(t *testing.T) {
+	cmd := pollGrammalecteCmd(availableFakeChecker{}, 0)
+	msg := cmd()
+	if _, ok := msg.(grammalecteReadyMsg); !ok {
+		t.Fatalf("expected grammalecteReadyMsg when checker is available, got %#v", msg)
+	}
+}
+
+func TestPollGrammalecteCmdGivesUpAtCeiling(t *testing.T) {
+	cmd := pollGrammalecteCmd(unavailableFakeChecker{}, grammalectePollMaxAttempts)
+	msg := cmd()
+	if msg != nil {
+		t.Fatalf("expected nil msg once the attempt ceiling is reached, got %#v", msg)
+	}
+}
+
+func TestPollGrammalecteCmdReschedulesBelowCeiling(t *testing.T) {
+	// unavailableFakeChecker.Available() is always false, so this call will sleep 500ms and
+	// recurse — verify it eventually gives up rather than looping forever, using a checker that
+	// never becomes available and a small attempt budget to keep the test fast.
+	start := time.Now()
+	cmd := pollGrammalecteCmd(unavailableFakeChecker{}, grammalectePollMaxAttempts-1) // one retry left
+	msg := cmd()
+	elapsed := time.Since(start)
+	if elapsed < grammalectePollInterval {
+		t.Fatalf("expected at least one %v sleep before giving up, elapsed only %v", grammalectePollInterval, elapsed)
+	}
+	if msg != nil {
+		t.Fatalf("expected nil msg after the final retry still fails, got %#v", msg)
+	}
+}
+
+func TestInitStartsGrammalectePollWhenAutoLaunched(t *testing.T) {
+	m := initialModel()
+	m.grammalecteProc = &exec.Cmd{} // simulate "okashi launched a process" without really spawning one
+	m.grammarChecker = nil
+	cmd := m.Init()
+	if cmd == nil {
+		t.Fatal("Init() should return a non-nil command when grammalecteProc is set")
+	}
+}
+
+func TestEditorGetsGrammarCheckerAfterPollSucceeds(t *testing.T) {
+	m := initialModel()
+	m.grammarChecker = nil
+	fake := availableFakeChecker{}
+	nm, _ := m.Update(grammalecteReadyMsg{checker: fake})
+	m = nm.(model)
+	if m.grammarChecker == nil {
+		t.Fatal("grammarChecker should be set after receiving grammalecteReadyMsg")
+	}
+	if m.grammarChecker.Name() != fake.Name() {
+		t.Fatalf("grammarChecker.Name() = %q, want %q", m.grammarChecker.Name(), fake.Name())
+	}
+}
