@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -32,6 +33,40 @@ func grammalectePort() string {
 	}
 	return "8080"
 }
+
+// grammalecteAutoLaunchCmd reports the command line to auto-launch a Grammalecte server, read
+// from OKASHI_GRAMMALECTE_CMD. ok=false means the variable is unset or empty — auto-launch is
+// off, preserving today's behavior (manual server management only).
+func grammalecteAutoLaunchCmd() (string, bool) {
+	cmdline := os.Getenv("OKASHI_GRAMMALECTE_CMD")
+	if cmdline == "" {
+		return "", false
+	}
+	return cmdline, true
+}
+
+// launchGrammalecteServer starts cmdline as a detached subprocess. cmdline is split on
+// whitespace into a program and its arguments — this is NOT a shell: no &&, |, redirections, or
+// variable substitution are supported, only a plain command with positional arguments. Stdin,
+// stdout, and stderr are left at their zero value (not inherited, not captured) so the launched
+// process never writes to the TUI's terminal. The returned *exec.Cmd is the caller's handle for
+// later cleanup (see main()); the process itself keeps running after this function returns.
+func launchGrammalecteServer(cmdline string) (*exec.Cmd, error) {
+	fields := strings.Fields(cmdline)
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("grammalecte: empty command line")
+	}
+	cmd := exec.Command(fields[0], fields[1:]...)
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("grammalecte: failed to start %q: %w", cmdline, err)
+	}
+	return cmd, nil
+}
+
+// launchGrammalecte is the package var the model calls to auto-launch a server. Tests can
+// replace it with a fake to avoid spawning real processes (mirrors newGrammarChecker,
+// grammar_backend.go:48).
+var launchGrammalecte = launchGrammalecteServer
 
 // grammalecteChecker is the constructor wired into newGrammarChecker.
 func grammalecteChecker() grammarChecker {

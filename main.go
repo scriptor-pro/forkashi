@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -481,6 +483,11 @@ type model struct {
 	checkingGrammar  bool
 	autoRecheck      bool      // re-run the Apple pass after edits settle (opt-in)
 	lastGrammarCheck time.Time // when the last Apple pass was dispatched
+	// grammalecteProc is non-nil only when THIS okashi process launched the Grammalecte
+	// server itself (OKASHI_GRAMMALECTE_CMD configured, no server was already reachable).
+	// It is the ownership marker main() uses to decide whether to kill the subprocess on
+	// exit — a server that was already running before okashi started is never touched.
+	grammalecteProc *exec.Cmd
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -550,37 +557,57 @@ func initialModel() model {
 	// render. If unavailable (no Grammalecte server running), fall back to nil so
 	// m.grammarChecker != nil keeps meaning "backend is actually usable" everywhere it's
 	// checked (the analysis action row, the click handlers, the inspector label).
-	gc := newGrammarChecker()
-	if gc != nil && !gc.Available() {
+	gcForProbe := newGrammarChecker()
+	available := gcForProbe != nil && gcForProbe.Available()
+	gc := gcForProbe
+	if !available {
 		gc = nil
 	}
 
+	// Auto-launch: only when nothing answered above AND the user opted in via
+	// OKASHI_GRAMMALECTE_CMD. A server that was already reachable is never a candidate
+	// for launching — it isn't okashi's to own or later kill (see main()'s cleanup).
+	var grammalecteProc *exec.Cmd
+	var startupStatus string
+	if !available {
+		if cmdline, ok := grammalecteAutoLaunchCmd(); ok {
+			if proc, err := launchGrammalecte(cmdline); err == nil {
+				grammalecteProc = proc
+			}
+			// err != nil: silent, best-effort — grammarChecker and grammalecteProc both
+			// stay nil, identical to today's "no server available" behavior.
+		} else {
+			startupStatus = "Grammalecte indisponible — configurez OKASHI_GRAMMALECTE_CMD pour un lancement automatique"
+		}
+	}
+
 	m := model{
-		files:          fl,
-		editor:         ta,
-		nameInput:      ti,
-		preview:        vp,
-		mdStyle:        previewStyle(),
-		colWidth:       startupSettings.Width,
-		smartQuotes:    startupSettings.Smartquotes,
-		screen:         screenHome,
-		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
-		sources:        loadSources(sourcesPath()),
-		pinned:         loadPins(pinsPath()),
-		activeSource:   0,
-		sidebarVisible: true,
-		focus:          focusSidebar,
-		typewriter:     true,
-		dimEnabled:     true,
-		status:         "",
-		icons:          resolveIcons(),
-		goalsAll:       loadGoals(goalsPath()),
-		grammarChecker: gc,
-		appleFindings:  map[string][]grammarFinding{},
-		snippets:       newSnippetCache(),
-		searchInput:    newSearchInput(),
-		replaceInput:   newSearchInput(),
-		now:            time.Now(),
+		files:           fl,
+		editor:          ta,
+		nameInput:       ti,
+		preview:         vp,
+		mdStyle:         previewStyle(),
+		colWidth:        startupSettings.Width,
+		smartQuotes:     startupSettings.Smartquotes,
+		screen:          screenHome,
+		homeItems:       buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
+		sources:         loadSources(sourcesPath()),
+		pinned:          loadPins(pinsPath()),
+		activeSource:    0,
+		sidebarVisible:  true,
+		focus:           focusSidebar,
+		typewriter:      true,
+		dimEnabled:      true,
+		status:          startupStatus,
+		icons:           resolveIcons(),
+		goalsAll:        loadGoals(goalsPath()),
+		grammarChecker:  gc,
+		grammalecteProc: grammalecteProc,
+		appleFindings:   map[string][]grammarFinding{},
+		snippets:        newSnippetCache(),
+		searchInput:     newSearchInput(),
+		replaceInput:    newSearchInput(),
+		now:             time.Now(),
 	}
 	m.resetHomeSelection()
 	return m
@@ -685,6 +712,40 @@ func checkGrammarCmd(c grammarChecker, file, text string) tea.Cmd {
 	return func() tea.Msg {
 		f, err := c.Check(text)
 		return grammarResultMsg{file, f, err}
+	}
+}
+
+// grammalecteReadyMsg signals that an auto-launched Grammalecte server has become reachable.
+// It carries the checker so Update() can activate it without needing outside context.
+type grammalecteReadyMsg struct{ checker grammarChecker }
+
+// grammalectePollInterval is the delay between successive availability checks while waiting
+// for an auto-launched Grammalecte server to finish starting up (typically ~5-6s in practice).
+const grammalectePollInterval = 500 * time.Millisecond
+
+// grammalectePollMaxAttempts caps how long pollGrammalecteCmd keeps retrying (60 × 500ms = 30s)
+// before giving up silently — the launched process may have crashed or never bind its port;
+// best-effort means okashi keeps running without French grammar checking rather than polling
+// forever.
+const grammalectePollMaxAttempts = 60
+
+// pollGrammalecteCmd checks whether an auto-launched Grammalecte server has become reachable
+// yet. On success it returns grammalecteReadyMsg carrying gc. On failure it sleeps
+// grammalectePollInterval and retries, up to grammalectePollMaxAttempts total attempts, after
+// which it gives up silently (returns nil — Update() treats a nil tea.Msg as a no-op, so this
+// simply stops the polling loop without any user-visible error).
+func pollGrammalecteCmd(gc grammarChecker, attempt int) tea.Cmd {
+	return func() tea.Msg {
+		for {
+			if gc.Available() {
+				return grammalecteReadyMsg{checker: gc}
+			}
+			if attempt >= grammalectePollMaxAttempts {
+				return nil
+			}
+			time.Sleep(grammalectePollInterval)
+			attempt++
+		}
 	}
 }
 
@@ -973,6 +1034,9 @@ func (m *model) openSpellMenuAndApply(i int, sugg []string) {
 }
 
 func (m model) Init() tea.Cmd {
+	if m.grammalecteProc != nil && m.grammarChecker == nil {
+		return tea.Batch(autosaveTick(), pollGrammalecteCmd(newGrammarChecker(), 0))
+	}
 	return autosaveTick()
 }
 
@@ -1048,6 +1112,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.status = "échec de la vérification grammaticale"
 		}
+		return m, nil
+	}
+
+	if msg, ok := msg.(grammalecteReadyMsg); ok {
+		m.grammarChecker = msg.checker
 		return m, nil
 	}
 
@@ -3015,6 +3084,28 @@ func resolveDirArg(args []string) (string, bool, error) {
 	return abs, true, nil
 }
 
+// killGrammalecteProc terminates a Grammalecte server subprocess that okashi itself launched.
+// A nil proc (no auto-launch happened, or a pre-existing server was reused instead) is a no-op —
+// okashi never touches a server it didn't start. SIGTERM is tried first; if the process hasn't
+// exited within a second, Kill() (SIGKILL) forces it, so okashi never hangs on exit waiting for
+// a misbehaving child.
+func killGrammalecteProc(proc *exec.Cmd) {
+	if proc == nil || proc.Process == nil {
+		return
+	}
+	proc.Process.Signal(syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		proc.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		proc.Process.Kill()
+	}
+}
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -3036,7 +3127,11 @@ func main() {
 	}
 
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if fm, ok := finalModel.(model); ok {
+		killGrammalecteProc(fm.grammalecteProc)
+	}
+	if err != nil {
 		os.Exit(1)
 	}
 }

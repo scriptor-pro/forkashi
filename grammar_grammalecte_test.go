@@ -79,3 +79,41 @@ func TestRelocate(t *testing.T) {
 		t.Fatalf("expected start=0 end=5, got start=%d end=%d", start, end)
 	}
 }
+
+func TestGrammalecteAutoLaunchCmd(t *testing.T) {
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "")
+	if _, ok := grammalecteAutoLaunchCmd(); ok {
+		t.Fatal("empty OKASHI_GRAMMALECTE_CMD should report not configured")
+	}
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "python3 /path/to/grammalecte-server.py")
+	cmdline, ok := grammalecteAutoLaunchCmd()
+	if !ok {
+		t.Fatal("non-empty OKASHI_GRAMMALECTE_CMD should report configured")
+	}
+	if cmdline != "python3 /path/to/grammalecte-server.py" {
+		t.Fatalf("unexpected cmdline: %q", cmdline)
+	}
+}
+
+func TestLaunchGrammalecteServer(t *testing.T) {
+	// "true" is a real, near-instant, dependency-free binary on any Unix system —
+	// enough to prove Start() succeeds and returns a live *exec.Cmd without
+	// depending on Python or Grammalecte being installed in the test environment.
+	cmd, err := launchGrammalecteServer("true")
+	if err != nil {
+		t.Fatalf("launchGrammalecteServer(\"true\") returned error: %v", err)
+	}
+	if cmd == nil {
+		t.Fatal("expected a non-nil *exec.Cmd")
+	}
+	cmd.Wait() // reap the child so the test doesn't leak a zombie process
+
+	if _, err := launchGrammalecteServer(""); err == nil {
+		t.Fatal("launchGrammalecteServer(\"\") should return an error, not silently no-op")
+	}
+
+	if _, err := launchGrammalecteServer("this-binary-does-not-exist-anywhere"); err == nil {
+		t.Fatal("launchGrammalecteServer with a nonexistent program should return an error")
+	}
+}
