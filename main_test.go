@@ -69,6 +69,8 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 		t.Fatal("setup: expected migrationPending")
 	}
 
+	statusBeforeConfirm := m.status
+
 	m.confirmMigration()
 
 	if m.migrationPending != nil {
@@ -77,8 +79,8 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 	if m.screen != screenWriting {
 		t.Fatal("confirmMigration must enter the writing screen")
 	}
-	if m.status != "" {
-		t.Fatalf("confirmMigration must not set m.status on a successful migration, got: %q", m.status)
+	if m.status != statusBeforeConfirm {
+		t.Fatalf("confirmMigration must not touch m.status on a successful migration, got: %q, want unchanged from: %q", m.status, statusBeforeConfirm)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "un", "un.md")); err != nil {
 		t.Fatalf("migrated file must exist: %v", err)
