@@ -143,27 +143,45 @@ func uniqueSlugAgainst(base string, taken map[string]bool) string {
 
 // migrateV1ToV2 executes the migration for dir: moves each v1 chapter file into
 // its own new folder, then writes the v2 manifest ONCE at the end — only if
-// every move succeeded. If any move fails partway through, migration stops and
-// returns the error without writing the manifest, so the original v1 manifest
-// (and whatever files were already moved) is the only state change on disk; the
-// caller is expected to surface the error rather than retry automatically.
+// every move succeeded. Before touching disk at all, every source file is
+// validated to exist (validateSourcesExist) — this makes the migration "all or
+// nothing" at the file-move level too, not just at the manifest-write level: a
+// manifest referencing a missing/typo'd filename fails immediately, with NO
+// folder created and NO file moved, so the manuscript is left exactly as it was
+// (still v1, still readable next time via needsMigration). Without this
+// up-front check, an item late in items[] failing after earlier items already
+// moved would leave a hybrid disk state (some files moved, manifest still v1) —
+// the exact bug that made migration silently retry forever on every launch.
 func migrateV1ToV2(dir string, v1 manifestV1) error {
 	plan, err := migratePlan(dir, v1)
 	if err != nil {
 		return err
 	}
+	if err := validateSourcesExist(dir, plan.moves); err != nil {
+		return err
+	}
 	for _, mv := range plan.moves {
-		fromPath := filepath.Join(dir, mv.fromFile)
-		if _, err := os.Stat(fromPath); err != nil {
-			return fmt.Errorf("migration: %s: %w", mv.fromFile, err)
-		}
 		toDir := filepath.Join(dir, mv.toFolder)
 		if err := os.MkdirAll(toDir, 0o755); err != nil {
 			return fmt.Errorf("migration: mkdir %s: %w", mv.toFolder, err)
 		}
-		if err := os.Rename(fromPath, filepath.Join(toDir, mv.toFile)); err != nil {
+		if err := os.Rename(filepath.Join(dir, mv.fromFile), filepath.Join(toDir, mv.toFile)); err != nil {
 			return fmt.Errorf("migration: move %s: %w", mv.fromFile, err)
 		}
 	}
 	return writeManifest(dir, plan.out)
+}
+
+// validateSourcesExist checks that every move's source file exists in dir,
+// before migrateV1ToV2 moves anything. Returns the first missing file's error,
+// wrapped with its filename — the caller surfaces this to the user (see
+// confirmMigration, main.go) so a typo'd or renamed v1 manifest entry is
+// reported instead of silently corrupting the manuscript's on-disk state.
+func validateSourcesExist(dir string, moves []migrationMove) error {
+	for _, mv := range moves {
+		if _, err := os.Stat(filepath.Join(dir, mv.fromFile)); err != nil {
+			return fmt.Errorf("migration: %s: %w", mv.fromFile, err)
+		}
+	}
+	return nil
 }

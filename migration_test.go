@@ -167,7 +167,7 @@ func TestMigrateV1ToV2DedupesCollidingSlugs(t *testing.T) {
 func TestMigrateV1ToV2FailsAtomicallyIfAMoveFails(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-un.md"), []byte("x"), 0o644)
-	// "deux.md" is declared but never created on disk — its rename will fail.
+	// "missing.md" is declared but never created on disk — its rename will fail.
 	os.WriteFile(filepath.Join(dir, manifestName),
 		[]byte(`{"schemaVersion":1,"title":"N","items":[
 			{"file":"01-un.md","title":"Un"},{"file":"missing.md","title":"Deux"}]}`), 0o644)
@@ -177,7 +177,67 @@ func TestMigrateV1ToV2FailsAtomicallyIfAMoveFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("migration must fail when a listed file is missing")
 	}
+
 	// The manifest must remain the ORIGINAL v1 file — never partially rewritten.
+	data, readErr := os.ReadFile(filepath.Join(dir, manifestName))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !contains(string(data), `"schemaVersion":1`) {
+		t.Fatalf("manifest must still be the original v1 content after a failed migration, got: %s", data)
+	}
+
+	// "01-un.md" must NOT have been moved — its rename would have succeeded (it
+	// exists on disk and comes before the missing item in items[]), but validating
+	// ALL sources up front before moving anything means nothing touches disk when
+	// any one item is missing. This reproduces the real bug: a v1 manifest whose
+	// later item references a typo'd/renamed filename left earlier items already
+	// moved while the manifest stayed v1 — migration then silently retried forever.
+	if _, err := os.Stat(filepath.Join(dir, "01-un.md")); err != nil {
+		t.Fatalf("01-un.md must still exist at the manuscript root (no partial move), got: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "un")); !os.IsNotExist(err) {
+		t.Fatal("un/ folder must not have been created — nothing should move when validation fails")
+	}
+}
+
+// TestMigrateV1ToV2ValidatesAllSourcesBeforeMovingAny reproduces the exact
+// real-world failure mode: a v1 manifest with 4 items where the 4th references
+// a typo'd filename ("Bureau-ONU.mk" vs the real "Bureau-ONU.md" on disk). Before
+// the fix, items 1-3 would already be moved to their new folders by the time item
+// 4's os.Stat failed, leaving a hybrid disk state and a manifest stuck on v1
+// forever (needsMigration keeps re-triggering, migration keeps re-failing at the
+// same spot, silently). After the fix, validation happens before any move, so
+// nothing on disk changes when item 4 is missing.
+func TestMigrateV1ToV2ValidatesAllSourcesBeforeMovingAny(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "Annonce.md"), []byte("annonce"), 0o644)
+	os.WriteFile(filepath.Join(dir, "Attribution.md"), []byte("attribution"), 0o644)
+	os.WriteFile(filepath.Join(dir, "Bureau-ONU.md"), []byte("bureau"), 0o644)
+	// Manifest references "Bureau-ONU.mk" (typo) — the real file is "Bureau-ONU.md".
+	os.WriteFile(filepath.Join(dir, manifestName),
+		[]byte(`{"schemaVersion":1,"title":"N","items":[
+			{"file":"Annonce.md","title":"Annonce"},
+			{"file":"Attribution.md","title":"Attribution"},
+			{"file":"Bureau-ONU.mk","title":"Bureau ONU"}]}`), 0o644)
+
+	v1, _, _ := readManifestV1(dir)
+	err := migrateV1ToV2(dir, v1)
+	if err == nil {
+		t.Fatal("migration must fail when any listed file is missing")
+	}
+
+	for _, want := range []string{"Annonce.md", "Attribution.md", "Bureau-ONU.md"} {
+		if _, statErr := os.Stat(filepath.Join(dir, want)); statErr != nil {
+			t.Fatalf("%s must still exist at the manuscript root (no partial move), got: %v", want, statErr)
+		}
+	}
+	for _, unwanted := range []string{"annonce", "attribution", "bureau-onu"} {
+		if _, statErr := os.Stat(filepath.Join(dir, unwanted)); !os.IsNotExist(statErr) {
+			t.Fatalf("%s/ folder must not have been created — validation must run before any move", unwanted)
+		}
+	}
+
 	data, readErr := os.ReadFile(filepath.Join(dir, manifestName))
 	if readErr != nil {
 		t.Fatal(readErr)
