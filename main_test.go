@@ -75,6 +75,9 @@ func TestConfirmMigrationExecutesAndEntersWriting(t *testing.T) {
 	if m.screen != screenWriting {
 		t.Fatal("confirmMigration must enter the writing screen")
 	}
+	if m.status != "" {
+		t.Fatalf("confirmMigration must not set m.status on a successful migration, got: %q", m.status)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "un", "un.md")); err != nil {
 		t.Fatalf("migrated file must exist: %v", err)
 	}
