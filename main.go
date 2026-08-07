@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -446,6 +447,7 @@ func initialModel() model {
 	// OKASHI_GRAMMALECTE_CMD. A server that was already reachable is never a candidate
 	// for launching — it isn't okashi's to own or later kill (see main()'s cleanup).
 	var grammalecteProc *exec.Cmd
+	var startupStatus string
 	if !available {
 		if cmdline, ok := grammalecteAutoLaunchCmd(); ok {
 			if proc, err := launchGrammalecte(cmdline); err == nil {
@@ -453,6 +455,8 @@ func initialModel() model {
 			}
 			// err != nil: silent, best-effort — grammarChecker and grammalecteProc both
 			// stay nil, identical to today's "no server available" behavior.
+		} else {
+			startupStatus = "Grammalecte indisponible — configurez OKASHI_GRAMMALECTE_CMD pour un lancement automatique"
 		}
 	}
 
@@ -473,7 +477,7 @@ func initialModel() model {
 		focus:           focusSidebar,
 		typewriter:      true,
 		dimEnabled:      true,
-		status:          "",
+		status:          startupStatus,
 		icons:           resolveIcons(),
 		goalsAll:        loadGoals(goalsPath()),
 		grammarChecker:  gc,
@@ -2936,6 +2940,28 @@ func resolveDirArg(args []string) (string, bool, error) {
 	return abs, true, nil
 }
 
+// killGrammalecteProc terminates a Grammalecte server subprocess that okashi itself launched.
+// A nil proc (no auto-launch happened, or a pre-existing server was reused instead) is a no-op —
+// okashi never touches a server it didn't start. SIGTERM is tried first; if the process hasn't
+// exited within a second, Kill() (SIGKILL) forces it, so okashi never hangs on exit waiting for
+// a misbehaving child.
+func killGrammalecteProc(proc *exec.Cmd) {
+	if proc == nil || proc.Process == nil {
+		return
+	}
+	proc.Process.Signal(syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		proc.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		proc.Process.Kill()
+	}
+}
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -2957,7 +2983,11 @@ func main() {
 	}
 
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if fm, ok := finalModel.(model); ok {
+		killGrammalecteProc(fm.grammalecteProc)
+	}
+	if err != nil {
 		os.Exit(1)
 	}
 }

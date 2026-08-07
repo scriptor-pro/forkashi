@@ -2237,3 +2237,59 @@ func TestEditorGetsGrammarCheckerAfterPollSucceeds(t *testing.T) {
 		t.Fatalf("grammarChecker.Name() = %q, want %q", m.grammarChecker.Name(), fake.Name())
 	}
 }
+
+func TestInitialModelShowsHelpStatusWhenNotConfiguredAndUnavailable(t *testing.T) {
+	origChecker := newGrammarChecker
+	defer func() { newGrammarChecker = origChecker }()
+	// Note: fakeChecker.Available() is hardcoded true in this file (see the comment on
+	// unavailableFakeChecker above), so it cannot represent "no backend" — unavailableFakeChecker
+	// is the fake that actually reports Available() == false.
+	newGrammarChecker = func() grammarChecker { return unavailableFakeChecker{} }
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "")
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+
+	m := initialModel()
+
+	if !strings.Contains(m.status, "OKASHI_GRAMMALECTE_CMD") {
+		t.Fatalf("status should hint at OKASHI_GRAMMALECTE_CMD when no backend is available and auto-launch isn't configured, got %q", m.status)
+	}
+}
+
+func TestInitialModelNoHelpStatusWhenBackendAvailable(t *testing.T) {
+	origChecker := newGrammarChecker
+	defer func() { newGrammarChecker = origChecker }()
+	newGrammarChecker = func() grammarChecker { return availableFakeChecker{} }
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "")
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+
+	m := initialModel()
+
+	if strings.Contains(m.status, "OKASHI_GRAMMALECTE_CMD") {
+		t.Fatalf("status should not mention auto-launch when a backend is already available, got %q", m.status)
+	}
+}
+
+func TestKillGrammalecteProcNilIsNoop(t *testing.T) {
+	killGrammalecteProc(nil) // must not panic
+}
+
+func TestKillGrammalecteProcTerminatesProcess(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start test process: %v", err)
+	}
+	killGrammalecteProc(cmd)
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+		// process exited — success, regardless of the exact exit code/signal reported
+	case <-time.After(3 * time.Second):
+		t.Fatal("killGrammalecteProc did not terminate the process within 3s")
+	}
+}
