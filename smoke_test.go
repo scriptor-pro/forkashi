@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -2062,3 +2063,111 @@ func TestResolveDirArg(t *testing.T) {
 		t.Fatalf("a file → dir arg with error (single-file deferred): isDir=%v err=%v", isDir, err)
 	}
 }
+
+func TestInitialModelLaunchesGrammalecteWhenConfiguredAndUnavailable(t *testing.T) {
+	origChecker := newGrammarChecker
+	origLaunch := launchGrammalecte
+	defer func() {
+		newGrammarChecker = origChecker
+		launchGrammalecte = origLaunch
+	}()
+
+	// No backend at all — mirrors TestActionRowHiddenWithoutBackend's convention for
+	// simulating "no grammar checker available" (fakeChecker.Available() is hardcoded
+	// true elsewhere in this file, so nil is what stands in for "unavailable" here).
+	newGrammarChecker = func() grammarChecker { return nil }
+	launched := false
+	launchGrammalecte = func(cmdline string) (*exec.Cmd, error) {
+		launched = true
+		if cmdline != "fake-server --flag" {
+			t.Fatalf("unexpected cmdline passed to launchGrammalecte: %q", cmdline)
+		}
+		return exec.Command("true"), nil
+	}
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "fake-server --flag")
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+
+	m := initialModel()
+
+	if !launched {
+		t.Fatal("initialModel should have called launchGrammalecte when no server was available and OKASHI_GRAMMALECTE_CMD was set")
+	}
+	if m.grammalecteProc == nil {
+		t.Fatal("model.grammalecteProc should be set after a successful auto-launch")
+	}
+	if m.grammarChecker != nil {
+		t.Fatal("grammarChecker should still be nil right after launch — availability isn't confirmed yet")
+	}
+	m.grammalecteProc.Wait() // reap the child
+}
+
+func TestInitialModelDoesNotLaunchWhenNotConfigured(t *testing.T) {
+	origChecker := newGrammarChecker
+	origLaunch := launchGrammalecte
+	defer func() {
+		newGrammarChecker = origChecker
+		launchGrammalecte = origLaunch
+	}()
+
+	newGrammarChecker = func() grammarChecker { return nil }
+	launched := false
+	launchGrammalecte = func(cmdline string) (*exec.Cmd, error) {
+		launched = true
+		return nil, nil
+	}
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "")
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+
+	m := initialModel()
+
+	if launched {
+		t.Fatal("initialModel should not launch anything when OKASHI_GRAMMALECTE_CMD is unset")
+	}
+	if m.grammalecteProc != nil {
+		t.Fatal("model.grammalecteProc should be nil when nothing was launched")
+	}
+}
+
+func TestInitialModelDoesNotLaunchWhenServerAlreadyAvailable(t *testing.T) {
+	origChecker := newGrammarChecker
+	origLaunch := launchGrammalecte
+	defer func() {
+		newGrammarChecker = origChecker
+		launchGrammalecte = origLaunch
+	}()
+
+	newGrammarChecker = func() grammarChecker { return availableFakeChecker{} }
+	launched := false
+	launchGrammalecte = func(cmdline string) (*exec.Cmd, error) {
+		launched = true
+		return nil, nil
+	}
+
+	t.Setenv("OKASHI_GRAMMALECTE_CMD", "fake-server")
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+
+	m := initialModel()
+
+	if launched {
+		t.Fatal("initialModel should not launch a server that is already available")
+	}
+	if m.grammalecteProc != nil {
+		t.Fatal("model.grammalecteProc should be nil — okashi never owns a server it didn't launch")
+	}
+	if m.grammarChecker == nil {
+		t.Fatal("grammarChecker should be set immediately when the server was already available")
+	}
+}
+
+// availableFakeChecker is a grammarChecker whose Available() always reports true, for testing
+// the "server already running" path distinctly from the "no backend" nil case above.
+type availableFakeChecker struct{}
+
+func (availableFakeChecker) Name() string                           { return "Fake" }
+func (availableFakeChecker) Available() bool                        { return true }
+func (availableFakeChecker) Check(string) ([]grammarFinding, error) { return nil, nil }

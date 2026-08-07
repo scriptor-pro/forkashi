@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -360,6 +361,11 @@ type model struct {
 	checkingGrammar  bool
 	autoRecheck      bool      // re-run the Apple pass after edits settle (opt-in)
 	lastGrammarCheck time.Time // when the last Apple pass was dispatched
+	// grammalecteProc is non-nil only when THIS okashi process launched the Grammalecte
+	// server itself (OKASHI_GRAMMALECTE_CMD configured, no server was already reachable).
+	// It is the ownership marker main() uses to decide whether to kill the subprocess on
+	// exit — a server that was already running before okashi started is never touched.
+	grammalecteProc *exec.Cmd
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -429,37 +435,54 @@ func initialModel() model {
 	// render. If unavailable (no Grammalecte server running), fall back to nil so
 	// m.grammarChecker != nil keeps meaning "backend is actually usable" everywhere it's
 	// checked (the analysis action row, the click handlers, the inspector label).
-	gc := newGrammarChecker()
-	if gc != nil && !gc.Available() {
+	gcForProbe := newGrammarChecker()
+	available := gcForProbe != nil && gcForProbe.Available()
+	gc := gcForProbe
+	if !available {
 		gc = nil
 	}
 
+	// Auto-launch: only when nothing answered above AND the user opted in via
+	// OKASHI_GRAMMALECTE_CMD. A server that was already reachable is never a candidate
+	// for launching — it isn't okashi's to own or later kill (see main()'s cleanup).
+	var grammalecteProc *exec.Cmd
+	if !available {
+		if cmdline, ok := grammalecteAutoLaunchCmd(); ok {
+			if proc, err := launchGrammalecte(cmdline); err == nil {
+				grammalecteProc = proc
+			}
+			// err != nil: silent, best-effort — grammarChecker and grammalecteProc both
+			// stay nil, identical to today's "no server available" behavior.
+		}
+	}
+
 	m := model{
-		files:          fl,
-		editor:         ta,
-		nameInput:      ti,
-		preview:        vp,
-		mdStyle:        previewStyle(),
-		colWidth:       startupSettings.Width,
-		smartQuotes:    startupSettings.Smartquotes,
-		screen:         screenHome,
-		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
-		sources:        loadSources(sourcesPath()),
-		pinned:         loadPins(pinsPath()),
-		activeSource:   0,
-		sidebarVisible: true,
-		focus:          focusSidebar,
-		typewriter:     true,
-		dimEnabled:     true,
-		status:         "",
-		icons:          resolveIcons(),
-		goalsAll:       loadGoals(goalsPath()),
-		grammarChecker: gc,
-		appleFindings:  map[string][]grammarFinding{},
-		snippets:       newSnippetCache(),
-		searchInput:    newSearchInput(),
-		replaceInput:   newSearchInput(),
-		now:            time.Now(),
+		files:           fl,
+		editor:          ta,
+		nameInput:       ti,
+		preview:         vp,
+		mdStyle:         previewStyle(),
+		colWidth:        startupSettings.Width,
+		smartQuotes:     startupSettings.Smartquotes,
+		screen:          screenHome,
+		homeItems:       buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
+		sources:         loadSources(sourcesPath()),
+		pinned:          loadPins(pinsPath()),
+		activeSource:    0,
+		sidebarVisible:  true,
+		focus:           focusSidebar,
+		typewriter:      true,
+		dimEnabled:      true,
+		status:          "",
+		icons:           resolveIcons(),
+		goalsAll:        loadGoals(goalsPath()),
+		grammarChecker:  gc,
+		grammalecteProc: grammalecteProc,
+		appleFindings:   map[string][]grammarFinding{},
+		snippets:        newSnippetCache(),
+		searchInput:     newSearchInput(),
+		replaceInput:    newSearchInput(),
+		now:             time.Now(),
 	}
 	m.resetHomeSelection()
 	return m
