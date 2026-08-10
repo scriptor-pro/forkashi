@@ -15,7 +15,7 @@ func TestLoadQuotesFirstAndLast(t *testing.T) {
 		t.Fatalf("first quote mismatch: %+v", qs[0])
 	}
 	last := qs[len(qs)-1]
-	if last.Author != "Jim Ryun" {
+	if last.Author != "Voltaire" || last.Text != "L'écriture est la peinture de la voix." {
 		t.Fatalf("last quote mismatch: %+v", last)
 	}
 }

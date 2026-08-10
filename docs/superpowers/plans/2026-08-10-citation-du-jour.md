@@ -52,43 +52,43 @@ thème/longueur validé, pas un choix libre) :
 ```json
 [
   { "text": "Écrire, c'est une façon de parler sans être interrompu.", "author": "Jules Renard" },
-  { "text": "Il n'y a pas de vent favorable pour celui qui ne sait où il va.", "author": "Sénèque" },
-  { "text": "Il n'y a pas de grande œuvre qui ne soit le fruit d'une obstination.", "author": "Colette" },
-  { "text": "Le succès, c'est se déplacer d'échec en échec sans perdre son enthousiasme.", "author": "Winston Churchill" },
   { "text": "L'inspiration existe, mais il faut qu'elle vous trouve en train de travailler.", "author": "Pablo Picasso" },
-  { "text": "La persévérance est un talent tout comme les autres, et peut-être plus rare.", "author": "Louis Pergaud" },
-  { "text": "The first draft of anything is shit.", "author": "Ernest Hemingway" },
-  { "text": "Tomber sept fois, se relever huit.", "author": "proverbe" },
+  { "text": "Il n'y a pas de grande œuvre qui ne soit le fruit d'une obstination.", "author": "Colette" },
   { "text": "Un écrivain, c'est quelqu'un pour qui écrire est plus difficile que pour les autres.", "author": "Thomas Mann" },
-  { "text": "Ce n'est pas la charge qui vous casse, c'est la façon dont vous la portez.", "author": "Lou Holtz" },
   { "text": "J'écris pour me délivrer, pour ordonner un chaos qui, autrement, resterait obscur.", "author": "Marguerite Yourcenar" },
-  { "text": "Il faut beaucoup de patience et un peu d'audace pour aller jusqu'au bout de ce qu'on a commencé.", "author": "" },
-  { "text": "Écrire, c'est une façon de vivre deux fois.", "author": "Anaïs Nin" },
-  { "text": "On ne subit pas l'avenir, on le fait.", "author": "Georges Bernanos" },
-  { "text": "Écris ce que tu ne dois pas oublier.", "author": "Isabel Allende" },
-  { "text": "La différence entre l'ordinaire et l'extraordinaire, c'est ce petit extra.", "author": "Jimmy Johnson" },
   { "text": "La page blanche n'existe pas ; il n'y a que des débuts qu'on n'a pas encore osé écrire.", "author": "inspirée d'Anne Hébert" },
-  { "text": "Il n'est jamais trop tard pour être ce que tu aurais pu être.", "author": "George Eliot" },
-  { "text": "Un livre doit être la hache pour la mer gelée en nous.", "author": "Franz Kafka" },
-  { "text": "Continue d'avancer. Ne t'arrête jamais.", "author": "Walt Disney" },
-  { "text": "N'attends pas d'être inspiré. Assieds-toi et mets-toi au travail.", "author": "Stephen King" },
-  { "text": "Ce n'est pas parce que les choses sont difficiles que nous n'osons pas, c'est parce que nous n'osons pas qu'elles sont difficiles.", "author": "Sénèque" },
+  { "text": "Écris ce que tu ne dois pas oublier.", "author": "Isabel Allende" },
   { "text": "Vous pouvez toujours corriger une mauvaise page. Vous ne pouvez rien tirer d'une page blanche.", "author": "Jodi Picoult" },
-  { "text": "Beaucoup d'échecs dans la vie sont dus à des gens qui ne réalisaient pas à quel point ils étaient proches du succès quand ils ont abandonné.", "author": "Thomas Edison" },
-  { "text": "Le talent, c'est 1% d'inspiration et 99% de transpiration.", "author": "Thomas Edison" },
-  { "text": "Notre plus grande gloire n'est pas de ne jamais tomber, mais de nous relever à chaque chute.", "author": "Confucius" },
+  { "text": "The first draft of anything is shit.", "author": "Ernest Hemingway" },
+  { "text": "N'attends pas d'être inspiré. Assieds-toi et mets-toi au travail.", "author": "Stephen King" },
   { "text": "Un écrivain n'est jamais aussi bon que ses meilleures pages, ni aussi mauvais que ses pires.", "author": "Ernest Hemingway" },
-  { "text": "La qualité n'est jamais un accident ; elle est toujours le résultat d'un effort intelligent.", "author": "John Ruskin" },
-  { "text": "Un roman, c'est un miroir qu'on promène le long d'un chemin.", "author": "Stendhal" },
+  { "text": "Le talent, c'est 1% d'inspiration et 99% de transpiration.", "author": "Thomas Edison" },
+  { "text": "Ce n'est pas parce que les choses sont difficiles que nous n'osons pas, c'est parce que nous n'osons pas qu'elles sont difficiles.", "author": "Sénèque" },
+  { "text": "Il n'y a pas de vent favorable pour celui qui ne sait où il va.", "author": "Sénèque" },
+  { "text": "Tomber sept fois, se relever huit.", "author": "proverbe" },
+  { "text": "La persévérance est un talent tout comme les autres, et peut-être plus rare.", "author": "Louis Pergaud" },
+  { "text": "On ne subit pas l'avenir, on le fait.", "author": "Georges Bernanos" },
+  { "text": "Il faut beaucoup de patience et un peu d'audace pour aller jusqu'au bout de ce qu'on a commencé.", "author": "source incertaine, non attribuée" },
+  { "text": "Notre plus grande gloire n'est pas de ne jamais tomber, mais de nous relever à chaque chute.", "author": "Confucius" },
+  { "text": "Le succès, c'est se déplacer d'échec en échec sans perdre son enthousiasme.", "author": "Winston Churchill" },
+  { "text": "Ce n'est pas la charge qui vous casse, c'est la façon dont vous la portez.", "author": "Lou Holtz" },
+  { "text": "La différence entre l'ordinaire et l'extraordinaire, c'est ce petit extra.", "author": "Jimmy Johnson" },
+  { "text": "Il n'est jamais trop tard pour être ce que tu aurais pu être.", "author": "George Eliot" },
+  { "text": "Beaucoup d'échecs dans la vie sont dus à des gens qui ne réalisaient pas à quel point ils étaient proches du succès quand ils ont abandonné.", "author": "Thomas Edison" },
+  { "text": "Continue d'avancer. Ne t'arrête jamais.", "author": "Walt Disney" },
+  { "text": "Écrire, c'est une façon de vivre deux fois.", "author": "Anaïs Nin" },
   { "text": "Il n'y a pas d'ascenseur pour la réussite, il faut prendre l'escalier.", "author": "Zig Ziglar" },
-  { "text": "Écrire, c'est tenter de savoir ce qu'on écrirait si on écrivait — on ne le sait qu'après.", "author": "Marguerite Duras" },
+  { "text": "La qualité n'est jamais un accident ; elle est toujours le résultat d'un effort intelligent.", "author": "John Ruskin" },
   { "text": "Le voyage de mille lieues commence toujours par un premier pas.", "author": "Lao Tseu" },
-  { "text": "L'écriture est la peinture de la voix.", "author": "Voltaire" },
   { "text": "Fais de ton mieux jusqu'à ce que tu saches faire mieux. Alors, quand tu sais mieux, fais mieux.", "author": "Maya Angelou" },
-  { "text": "Un livre est un miroir. Si un singe s'y regarde, ce n'est pas l'image d'un apôtre qui apparaît.", "author": "Georg Christoph Lichtenberg" },
   { "text": "Le succès n'est pas final, l'échec n'est pas fatal : c'est le courage de continuer qui compte.", "author": "Winston Churchill" },
   { "text": "Il faut toujours viser la lune, car même en cas d'échec, on atterrit dans les étoiles.", "author": "Oscar Wilde" },
-  { "text": "La motivation, c'est ce qui vous permet de commencer. L'habitude, c'est ce qui vous permet de continuer.", "author": "Jim Ryun" }
+  { "text": "La motivation, c'est ce qui vous permet de commencer. L'habitude, c'est ce qui vous permet de continuer.", "author": "Jim Ryun" },
+  { "text": "Un roman, c'est un miroir qu'on promène le long d'un chemin.", "author": "Stendhal" },
+  { "text": "Écrire, c'est tenter de savoir ce qu'on écrirait si on écrivait — on ne le sait qu'après.", "author": "Marguerite Duras" },
+  { "text": "Un livre doit être la hache pour la mer gelée en nous.", "author": "Franz Kafka" },
+  { "text": "Un livre est un miroir. Si un singe s'y regarde, ce n'est pas l'image d'un apôtre qui apparaît.", "author": "Georg Christoph Lichtenberg" },
+  { "text": "L'écriture est la peinture de la voix.", "author": "Voltaire" }
 ]
 ```
 
@@ -114,7 +114,7 @@ func TestLoadQuotesFirstAndLast(t *testing.T) {
 		t.Fatalf("first quote mismatch: %+v", qs[0])
 	}
 	last := qs[len(qs)-1]
-	if last.Author != "Jim Ryun" {
+	if last.Author != "Voltaire" || last.Text != "L'écriture est la peinture de la voix." {
 		t.Fatalf("last quote mismatch: %+v", last)
 	}
 }
