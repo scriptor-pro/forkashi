@@ -94,3 +94,10 @@ func TestQuoteIndexForTodayFirstLaunchInFuture(t *testing.T) {
 		t.Fatal("a parseable (if skewed) FirstLaunch must never request a re-save")
 	}
 }
+
+func TestInitialModelPopulatesTodayQuote(t *testing.T) {
+	m := initialModel()
+	if m.todayQuote.Text == "" {
+		t.Fatal("initialModel() must populate todayQuote from the embedded quote set")
+	}
+}

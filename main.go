@@ -451,6 +451,7 @@ type model struct {
 	outlineReturnFile string // chapter to return to after editing outline.md (ctrl+l)
 	status            string
 	icons             iconSet
+	todayQuote        quote // resolved once at startup; never recomputed in View()
 
 	pager pagerModel
 
@@ -537,6 +538,19 @@ func initialModel() model {
 	fl.SetDir(writingDir())
 	startupSettings := resolveSettings(writingDir())
 
+	quotes := loadQuotes()
+	var todayQuote quote
+	if len(quotes) > 0 {
+		cfgPath := userConfigPath()
+		uc := loadUserConfig(cfgPath)
+		idx, needsSave := quoteIndexForToday(uc, time.Now(), cfgPath != "", len(quotes))
+		todayQuote = quotes[idx]
+		if needsSave {
+			uc.FirstLaunch = time.Now().Format(quoteDateLayout)
+			_ = saveUserConfig(cfgPath, uc) // best-effort: a write failure just re-seeds day 1 next launch
+		}
+	}
+
 	ta := textarea.New()
 	ta.Placeholder = "Commencez à écrire…"
 	ta.Prompt = "" // no gutter pipe — read like paper, not code
@@ -607,6 +621,7 @@ func initialModel() model {
 		dimEnabled:      true,
 		status:          startupStatus,
 		icons:           resolveIcons(),
+		todayQuote:      todayQuote,
 		goalsAll:        loadGoals(goalsPath()),
 		grammarChecker:  gc,
 		grammalecteProc: grammalecteProc,
