@@ -11,8 +11,9 @@ import (
 // okashi/config.json — macOS: ~/Library/Application Support/okashi; Linux: ~/.config/okashi —
 // alongside recent.json) used on the export title page. Applies to every project.
 type userConfig struct {
-	Author  string `json:"author,omitempty"`
-	Contact string `json:"contact,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Contact     string `json:"contact,omitempty"`
+	FirstLaunch string `json:"firstLaunch,omitempty"` // "2006-01-02"; seeds the quote-of-the-day cycle
 }
 
 // projectSettings are per-project editor preferences in <dir>/.okashi.json. Pointer fields
