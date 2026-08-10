@@ -363,6 +363,42 @@ func TestHomeContentAndHitTest(t *testing.T) {
 	}
 }
 
+func TestHomeContentShowsTodayQuote(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.todayQuote = quote{Text: "Une phrase de test bien identifiable.", Author: "Auteur Test"}
+
+	lines, _, _ := m.homeContent()
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(ansi.Strip(joined), "Une phrase de test bien identifiable.") {
+		t.Fatal("homeContent() should render todayQuote.Text under the logo")
+	}
+	if !strings.Contains(ansi.Strip(joined), "Auteur Test") {
+		t.Fatal("homeContent() should render todayQuote.Author under the quote")
+	}
+}
+
+func TestHomeContentHitTestUnaffectedByQuote(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	m = nm.(model)
+	m.todayQuote = quote{Text: "Citation de test.", Author: "Test"}
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeRecentFile, label: "ch.md", path: "/r/ch.md"},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	m.resetHomeSelection()
+
+	_, cells, _ := m.homeContent()
+	// Same 5 cells as without a quote — the quote line adds no clickable cell.
+	if len(cells) != 5 {
+		t.Fatalf("want 5 cells (quote must not add hit-test cells), got %d", len(cells))
+	}
+}
+
 func TestHomeInlineCreate(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)

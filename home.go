@@ -1107,6 +1107,14 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 	for _, l := range strings.Split(bannerArt, "\n") {
 		lines = append(lines, pad(bannerStyle.Render(l)))
 	}
+	if m.todayQuote.Text != "" {
+		q := quoteStyle.Width(blockW).Align(lipgloss.Center).Render("« " + m.todayQuote.Text + " »")
+		lines = append(lines, strings.Split(q, "\n")...)
+		if m.todayQuote.Author != "" {
+			a := quoteAuthorStyle.Width(blockW).Align(lipgloss.Center).Render("— " + m.todayQuote.Author)
+			lines = append(lines, a)
+		}
+	}
 	lines = append(lines, "")
 
 	// PINNED strip — rendered only when there are live pins, above the RECENT strip.

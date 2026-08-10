@@ -44,6 +44,13 @@ var breadcrumbStyle = lipgloss.NewStyle().
 	Foreground(accent).
 	Bold(true)
 
+var quoteStyle = lipgloss.NewStyle().
+	Foreground(subtle).
+	Italic(true)
+
+var quoteAuthorStyle = lipgloss.NewStyle().
+	Foreground(subtle)
+
 // bannerArt is a hand-set wordmark: the letters spaced out with a rule beneath
 // (derived from figlet's "digital" font, with the box dropped). For a rename,
 // space the new name's letters and match the rule width.
