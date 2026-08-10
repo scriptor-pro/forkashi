@@ -735,3 +735,50 @@ func TestHomeFilesForOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
 		}
 	}
 }
+
+func TestHomeContentShowsVersionOnLogoLine(t *testing.T) {
+	oldVersion := version
+	version = "0.1.126"
+	defer func() { version = oldVersion }()
+
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+
+	lines, _, _ := m.homeContent()
+	if len(lines) == 0 {
+		t.Fatal("homeContent() returned no lines")
+	}
+	logoLine := ansi.Strip(lines[0])
+	if !strings.Contains(logoLine, "o k a s h i") {
+		t.Fatalf("first line should contain the logo, got %q", logoLine)
+	}
+	if !strings.Contains(logoLine, "v0.1.126") {
+		t.Fatalf("first line should contain the version with a 'v' prefix, got %q", logoLine)
+	}
+
+	// The rule line (line 1, 0-indexed) must stay unmodified — no version text bleeding into it.
+	ruleLine := ansi.Strip(lines[1])
+	if strings.Contains(ruleLine, "0.1.126") {
+		t.Fatalf("rule line should not contain the version, got %q", ruleLine)
+	}
+}
+
+func TestHomeContentShowsDevVersionWithoutPrefix(t *testing.T) {
+	oldVersion := version
+	version = "dev"
+	defer func() { version = oldVersion }()
+
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+
+	lines, _, _ := m.homeContent()
+	logoLine := ansi.Strip(lines[0])
+	if !strings.Contains(logoLine, "dev") {
+		t.Fatalf("first line should contain 'dev', got %q", logoLine)
+	}
+	if strings.Contains(logoLine, "vdev") {
+		t.Fatalf("dev version must not get a 'v' prefix, got %q", logoLine)
+	}
+}

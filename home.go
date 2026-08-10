@@ -1104,7 +1104,14 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 		}
 		return strings.Repeat(" ", left) + s
 	}
-	for _, l := range strings.Split(bannerArt, "\n") {
+	bannerLines := strings.Split(bannerArt, "\n")
+	versionLabel := version
+	if version != "dev" {
+		versionLabel = "v" + version
+	}
+	first := bannerStyle.Render(bannerLines[0]) + "  " + versionStyle.Render(versionLabel)
+	lines = append(lines, pad(first))
+	for _, l := range bannerLines[1:] {
 		lines = append(lines, pad(bannerStyle.Render(l)))
 	}
 	if m.todayQuote.Text != "" {

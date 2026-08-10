@@ -27,6 +27,9 @@ var bannerStyle = lipgloss.NewStyle().
 	Foreground(accent).
 	Bold(true)
 
+var versionStyle = lipgloss.NewStyle().
+	Foreground(subtle)
+
 var inspectorStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder(), false, false, false, true).
 	BorderForeground(subtle).
