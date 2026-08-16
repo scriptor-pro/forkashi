@@ -98,8 +98,10 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   between the chapter list and corkboard cards (title + word count + synopsis, first-line
   fallback); sidebar `⏎` open · `e` synopsis · `J/K` staged reorder (confirm on exit) · `c`
   full-screen spread (`a` add/promote · `x` demote · `r` retitle · `⏎` open · `ctrl+e` whole-
-  manuscript export) · `m` pager; `ctrl+n` in a manuscript → chapter|resource picker (resource
-  loose or into a subfolder). Synopses in an okashi-owned `.okashi-synopsis.json` sidecar, NOT
+  manuscript export) · `m` pager; `ctrl+n` in a manuscript → chapter|resource|scene picker (resource loose or into a
+  subfolder); scene only offered when the sidebar selection is a chapter, appends to that
+  chapter's ordered texts; the text-picker screen (opened on a multi-scene or empty chapter)
+  also creates a scene via `ctrl+n`. Synopses in an okashi-owned `.okashi-synopsis.json` sidecar, NOT
   the manifest; the pop-down binder + standalone structure modal are retired); **revision notes** (`n` from the sidebar: per-file chapter notes —
   add/edit/delete; okashi-owned `.okashi-notes/<base>.json` sidecar, follows rename/delete;
   **v1 = chapter-scoped**, line/sentence anchoring + editor-gutter floating is planned v2).
