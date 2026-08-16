@@ -219,6 +219,14 @@ func (m model) updateTextPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		m.textPickerChapter = nil
 		m.screen = screenWriting
+	case tea.KeyCtrlN:
+		folder := m.textPickerChapter.folder
+		m.textPickerChapter = nil
+		m.createChapterFolder = folder
+		m.createKind = 3
+		m.screen = screenWriting
+		m.startInPaneCreate()
+		return m, textinput.Blink
 	}
 	return m, nil
 }

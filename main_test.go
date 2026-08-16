@@ -295,3 +295,54 @@ func TestTextPickerShowsEmptyStateForZeroTextChapter(t *testing.T) {
 		t.Fatalf("an empty chapter's picker must show an empty-state message, got:\n%s", view)
 	}
 }
+
+func TestTextPickerCtrlNOpensSceneNamingPrompt(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	mm := updated.(model)
+
+	if !mm.creatingFile {
+		t.Fatal("ctrl+n from the text picker should open the naming prompt")
+	}
+	if mm.createKind != 3 || mm.createChapterFolder != "chapitre-un" {
+		t.Fatalf("naming prompt should target chapitre-un as a scene, got kind=%d folder=%q",
+			mm.createKind, mm.createChapterFolder)
+	}
+}
+
+func TestTextPickerCtrlNThenConfirmAddsScene(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	mm := updated.(model)
+	mm = typeName(mm, "troisième scène")
+
+	mani, _, _ := readManifest(dir)
+	texts := mani.Items[0].Chapter.Texts
+	if len(texts) != 2 || texts[1].Title != "troisième scène" {
+		t.Fatalf("scene should be appended to chapitre-un, got %+v", texts)
+	}
+}
