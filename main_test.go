@@ -291,7 +291,7 @@ func TestTextPickerShowsEmptyStateForZeroTextChapter(t *testing.T) {
 	m.width, m.height = 60, 20
 	view := m.View()
 
-	if !strings.Contains(view, "aucun texte") {
+	if !strings.Contains(view, "aucune scène") {
 		t.Fatalf("an empty chapter's picker must show an empty-state message, got:\n%s", view)
 	}
 }

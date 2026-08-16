@@ -334,7 +334,7 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.structureSel < len(m.structureItems) {
 			ch := m.structureItems[m.structureSel]
 			if len(ch.texts) == 0 {
-				m.status = "ce chapitre n'a pas encore de texte"
+				m.status = "ce chapitre n'a pas encore de scène"
 				return m, nil
 			}
 			file := filepath.Join(m.structureDir, ch.folder, ch.texts[0].file)

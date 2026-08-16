@@ -240,7 +240,7 @@ func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, wid
 	var b strings.Builder
 	fmt.Fprintf(&b, "── %s ──\n\n", ch.title)
 	if len(ch.texts) == 0 {
-		b.WriteString("  (aucun texte dans ce chapitre)")
+		b.WriteString("  (aucune scène dans ce chapitre)")
 		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, b.String())
 	}
 	for i, t := range ch.texts {
