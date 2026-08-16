@@ -2356,6 +2356,49 @@ func (m *model) createResource(name string) {
 	m.status = "nouvelle ressource " + name
 }
 
+// createScene adds a new blank scene to an existing chapter — appends a manifestText to its
+// Texts and opens the new file. folder identifies the target chapter (birth-stable, resolved
+// by the caller at the ctrl+n picker or from the open text-picker screen); name is the
+// scene's display title, slugified into its birth-stable filename.
+func (m *model) createScene(folder, name string) {
+	if strings.Contains(name, "/") {
+		m.status = "un nom de scène ne peut pas contenir de séparateur de chemin"
+		return
+	}
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "le manifeste est introuvable ou illisible"
+		return
+	}
+	ch := findChapterByFolder(&mani, folder)
+	if ch == nil {
+		m.status = "le chapitre est introuvable dans le manifeste"
+		return
+	}
+	title := name
+	file := slugify(title) + ".md"
+	chDir := filepath.Join(m.files.dir, folder)
+	dst := filepath.Join(chDir, file)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "une scène nommée " + file + " existe déjà dans ce chapitre"
+		return
+	}
+	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
+		m.status = "impossible de créer la scène : " + err.Error()
+		return
+	}
+	ch.Texts = append(ch.Texts, manifestText{File: file, Title: title})
+	if werr := writeManifest(m.files.dir, mani); werr != nil {
+		m.status = "scène créée mais échec de la mise à jour du manifeste : " + werr.Error()
+		return
+	}
+	m.files.SetDir(m.files.dir)
+	m.loadFile(dst)
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.status = "nouvelle scène " + title
+}
+
 func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
 	explicitFolder := m.creatingFolder
