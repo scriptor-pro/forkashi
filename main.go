@@ -49,7 +49,7 @@ const helpText = `NAVIGUER
   ctrl+k tableau   ctrl+l plan   esc retour/focus
 
 FICHIERS  (focus panneau)
-  ctrl+n nouveau · chapitre|ressource   r renommer (F2)
+  ctrl+n nouveau · chapitre|ressource|scène   r renommer (F2)
   d dupliquer   M déplacer   suppr supprimer
 
 MANUSCRIT  (tableau : ctrl+k ou c)
@@ -427,10 +427,11 @@ type model struct {
 	focus               focus
 	creatingFile        bool
 	creatingFolder      bool
-	createPicker        bool // manuscript ctrl+n: choosing chapter vs resource
-	createKind          int  // 0 normal, 1 chapter, 2 resource (set by the picker)
-	addingSource        bool // home screen: typing a folder path into nameInput to add a source
-	confirmRemoveSource bool // home screen: y-confirm before detaching the active library source
+	createPicker        bool   // manuscript ctrl+n: choosing chapter vs resource vs scene
+	createKind          int    // 0 normal, 1 chapter, 2 resource, 3 scene (set by the picker)
+	createChapterFolder string // target chapter's folder when createKind == 3 (set by the picker or the text-picker screen)
+	addingSource        bool   // home screen: typing a folder path into nameInput to add a source
+	confirmRemoveSource bool   // home screen: y-confirm before detaching the active library source
 	previewing          bool
 	previewTufte        bool
 	previewAvail        int
@@ -1228,6 +1229,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.createPicker, m.createKind = false, 2
 				m.startInPaneCreate()
 				return m, textinput.Blink
+			case "s":
+				if m.createChapterFolder == "" {
+					return m, nil // defensive: option wasn't offered, ignore stray keypress
+				}
+				m.createPicker, m.createKind = false, 3
+				m.startInPaneCreate()
+				return m, textinput.Blink
 			case "esc":
 				m.createPicker = false
 				m.status = "création annulée"
@@ -1247,6 +1255,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.creatingInPane = false
 				m.creatingFolder = false
 				m.createKind = 0 // don't let a cancelled chapter|resource pick bleed into the next create
+				m.createChapterFolder = ""
 				m.nameInput.Blur()
 				m.status = "création annulée"
 				return m, nil
@@ -1651,9 +1660,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "ctrl+n":
 			if hasManifest(m.files.dir) {
-				// In a manuscript, ask: chapter or resource.
+				// In a manuscript, ask: chapter, resource, or (if a chapter is selected) scene.
 				m.createPicker = true
-				m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · esc annuler"
+				m.createChapterFolder = ""
+				if name, ok := m.files.selectedEntryName(); ok && isChapterOf(m.files.view, name) {
+					m.createChapterFolder = name
+				}
+				if m.createChapterFolder != "" {
+					m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · s scène · esc annuler"
+				} else {
+					m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · esc annuler"
+				}
 				return m, nil
 			}
 			m.createKind = 0
@@ -2422,6 +2439,12 @@ func (m *model) confirmCreate() {
 		m.createResource(name)
 		return
 	}
+	if kind == 3 {
+		folder := m.createChapterFolder
+		m.createChapterFolder = ""
+		m.createScene(folder, name)
+		return
+	}
 
 	folder := explicitFolder || strings.HasSuffix(name, "/")
 	name = strings.TrimSuffix(name, "/")
@@ -2956,6 +2979,9 @@ func (m model) statusBar() string {
 		return "échéance AAAA-MM-JJ (vide efface) ▸ " + m.nameInput.View()
 	}
 	if m.createPicker {
+		if m.createChapterFolder != "" {
+			return "nouveau : c chapitre · r ressource · s scène · esc annuler"
+		}
 		return "nouveau : c chapitre · r ressource · esc annuler"
 	}
 	mark := "✓"

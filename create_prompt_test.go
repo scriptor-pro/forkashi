@@ -152,3 +152,48 @@ func TestCreateSceneUnknownChapterFolder(t *testing.T) {
 		t.Fatalf("status should report the missing chapter, got %q", m.status)
 	}
 }
+
+func TestCtrlNSceneOptionAppearsOnChapterSelection(t *testing.T) {
+	m, _ := createFlowModel(t)
+	m.files.selectName("a") // "a" is the chapter folder created by createFlowModel
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = nm.(model)
+
+	if !strings.Contains(m.statusBar(), "s scène") {
+		t.Fatalf("picker prompt should offer the scene option when a chapter is selected, got %q", m.statusBar())
+	}
+}
+
+func TestCtrlNSceneOptionAbsentOutsideChapterSelection(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "loose.md"), []byte("x"), 0o644)
+	writeManifest(dir, manifest{SchemaVersion: manifestSchemaVersion, Title: "W"})
+	fl := newFilelist()
+	fl.root, fl.width, fl.height = dir, 30, 30
+	fl.SetDir(dir)
+	m := model{width: 100, height: 30, files: fl, screen: screenWriting, focus: focusSidebar,
+		sidebarVisible: true, editor: textarea.New(), nameInput: textinput.New()}
+	m.files.selectName("loose.md")
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = nm.(model)
+
+	if strings.Contains(m.statusBar(), "s scène") {
+		t.Fatalf("picker prompt should not offer the scene option outside a chapter selection, got %q", m.statusBar())
+	}
+}
+
+func TestCtrlNSceneAppendsToSelectedChapter(t *testing.T) {
+	m, dir := createFlowModel(t)
+	m.files.selectName("a")
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}) // scene
+	m = nm.(model)
+	m = typeName(m, "deuxième scène")
+
+	mani, _, _ := readManifest(dir)
+	texts := mani.Items[0].Chapter.Texts
+	if len(texts) != 2 || texts[1].Title != "deuxième scène" {
+		t.Fatalf("scene should be appended to chapter %q, got %+v", "a", texts)
+	}
+}
