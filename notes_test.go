@@ -125,6 +125,94 @@ func TestNotesScreenAddEditDelete(t *testing.T) {
 	}
 }
 
+func TestEnterAllNotesFlattensAcrossChapters(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "deux"), 0o755)
+	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "deux", "deux.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}},`+
+			`{"chapter":{"folder":"deux","title":"Deux","texts":[{"file":"deux.md","title":"Deux"}]}}]}`), 0o644)
+
+	saveNotes(filepath.Join(dir, "un", "un.md"), []note{{ID: "n1", Text: "Première note."}})
+	saveNotes(filepath.Join(dir, "deux", "deux.md"), []note{
+		{ID: "n2", Text: "Deuxième note."},
+		{ID: "n3", Text: "Troisième note."},
+	})
+
+	m := model{files: filelist{dir: dir}}
+	m.enterAllNotes()
+
+	if m.screen != screenAllNotes {
+		t.Fatal("enterAllNotes should switch to screenAllNotes")
+	}
+	if len(m.allNotes.entries) != 3 {
+		t.Fatalf("expected 3 flattened entries, got %d: %+v", len(m.allNotes.entries), m.allNotes.entries)
+	}
+	if m.allNotes.entries[0].chapterTitle != "Un" || m.allNotes.entries[0].n.Text != "Première note." {
+		t.Fatalf("unexpected first entry: %+v", m.allNotes.entries[0])
+	}
+	if m.allNotes.entries[1].chapterTitle != "Deux" || m.allNotes.entries[1].n.Text != "Deuxième note." {
+		t.Fatalf("unexpected second entry: %+v", m.allNotes.entries[1])
+	}
+	if m.allNotes.entries[2].n.Text != "Troisième note." {
+		t.Fatalf("unexpected third entry: %+v", m.allNotes.entries[2])
+	}
+}
+
+func TestEnterAllNotesSkipsChaptersWithoutNotes(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
+
+	m := model{files: filelist{dir: dir}}
+	m.enterAllNotes()
+
+	if m.screen != screenAllNotes {
+		t.Fatal("enterAllNotes should still switch to screenAllNotes with zero notes")
+	}
+	if len(m.allNotes.entries) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(m.allNotes.entries))
+	}
+}
+
+func TestUpdateAllNotesNavigationAndEsc(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[`+
+			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
+	saveNotes(filepath.Join(dir, "un", "un.md"), []note{
+		{ID: "n1", Text: "Une."},
+		{ID: "n2", Text: "Deux."},
+	})
+
+	m := model{width: 80, height: 24, files: filelist{dir: dir}}
+	m.enterAllNotes()
+
+	mm, _ := m.updateAllNotes(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = mm.(model)
+	if m.allNotes.sel != 1 {
+		t.Fatalf("j should move selection down, got sel=%d", m.allNotes.sel)
+	}
+	mm, _ = m.updateAllNotes(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = mm.(model)
+	if m.allNotes.sel != 0 {
+		t.Fatalf("k should move selection up, got sel=%d", m.allNotes.sel)
+	}
+	mm, _ = m.updateAllNotes(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+	if m.screen != screenWriting || m.focus != focusSidebar {
+		t.Fatal("esc should return to screenWriting with sidebar focus")
+	}
+}
+
 // A loose file and a same-stem folder resolve to ONE sidecar path — so a directory rename that ran
 // moveNotes would steal the file's notes. This pins the collision that makes the rename handler's
 // `if !t.isDir { moveNotes(...) }` gate load-bearing; if this ever stops colliding, revisit the gate.

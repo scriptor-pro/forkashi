@@ -227,6 +227,102 @@ func (m model) updateNotes(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// --- All-notes screen (project-wide, read-only) ------------------------------------------------
+
+// allNotesEntry is one flattened row: a note plus the chapter/file it belongs to.
+type allNotesEntry struct {
+	file         string // path relative to the manuscript dir, for display grouping
+	chapterTitle string
+	n            note
+}
+
+type allNotesModel struct {
+	entries []allNotesEntry
+	sel     int
+}
+
+// enterAllNotes loads every chapter's notes across the current manuscript into one flat,
+// read-only list. All I/O happens here, once, before m.screen flips — allNotesView stays I/O-free.
+func (m *model) enterAllNotes() {
+	dir := m.files.dir
+	v := resolveManuscript(dir, readEntries(dir))
+	var entries []allNotesEntry
+	for _, part := range v.parts {
+		for _, ch := range part.chapters {
+			for _, t := range ch.texts {
+				file := filepath.Join(ch.folder, t.file)
+				for _, n := range loadNotes(filepath.Join(dir, file)) {
+					entries = append(entries, allNotesEntry{file: file, chapterTitle: ch.title, n: n})
+				}
+			}
+		}
+	}
+	m.allNotes = allNotesModel{entries: entries}
+	m.screen = screenAllNotes
+}
+
+func (m model) updateAllNotes(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = sz.Width, sz.Height
+		return m, nil
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.screen = screenWriting
+		m.focus = focusSidebar
+	case "up", "k":
+		if m.allNotes.sel > 0 {
+			m.allNotes.sel--
+		}
+	case "down", "j":
+		if m.allNotes.sel < len(m.allNotes.entries)-1 {
+			m.allNotes.sel++
+		}
+	}
+	return m, nil
+}
+
+func allNotesView(m model) string {
+	a := m.allNotes
+	header := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("── toutes les notes ")
+
+	var rows []string
+	if len(a.entries) == 0 {
+		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (aucune note dans ce projet)"))
+	} else {
+		width := max(10, min(m.width-8, 72))
+		lastChapter := ""
+		for i, e := range a.entries {
+			if e.chapterTitle != lastChapter {
+				rows = append(rows, lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(e.chapterTitle, width, "…")))
+				lastChapter = e.chapterTitle
+			}
+			first := e.n.Text
+			if idx := strings.IndexByte(first, '\n'); idx >= 0 {
+				first = first[:idx] + " …"
+			}
+			row := "  " + ansi.Truncate(first, width, "…")
+			if i == a.sel {
+				row = selectedStyle.Render("▸ " + ansi.Truncate(first, width, "…"))
+			}
+			rows = append(rows, row)
+		}
+	}
+	body := header + "\n\n" + strings.Join(rows, "\n")
+
+	var b strings.Builder
+	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body))
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ sélectionner · esc retour · F1 aide")
+	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
+	return b.String()
+}
+
 func (m model) notesView() string {
 	n := m.notes
 	header := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("── notes · " + filepath.Base(n.file) + " ")

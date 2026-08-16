@@ -359,6 +359,7 @@ const (
 	screenHeatmap
 	screenCorkboard
 	screenNotes
+	screenAllNotes
 	screenOutline
 	screenTextPicker
 )
@@ -537,7 +538,8 @@ type model struct {
 	synEditing     bool
 	synArea        textarea.Model
 
-	notes notesModel
+	notes    notesModel
+	allNotes allNotesModel
 }
 
 func initialModel() model {
@@ -1215,6 +1217,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNotes(msg)
 	}
 
+	if m.screen == screenAllNotes {
+		return m.updateAllNotes(msg)
+	}
+
 	if m.screen == screenOutline {
 		return m.updateOutline(msg)
 	}
@@ -1864,6 +1870,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterHeatmap()
 				case "n":
 					m.enterNotes()
+				case "N":
+					m.enterAllNotes()
 				case "c":
 					m.enterCorkboard() // full-screen corkboard (the spread)
 				case "m":
@@ -1987,6 +1995,10 @@ func (m model) View() string {
 
 	if m.screen == screenNotes {
 		return m.notesView()
+	}
+
+	if m.screen == screenAllNotes {
+		return allNotesView(m)
 	}
 
 	if m.screen == screenOutline {

@@ -594,13 +594,30 @@ func TestRenderNotesSectionSingleLineNote(t *testing.T) {
 	}
 }
 
-func TestRenderNotesSectionMultiLineNoteShowsFirstLineOnly(t *testing.T) {
+func TestRenderNotesSectionMultiLineNoteShowsFullText(t *testing.T) {
 	out := renderNotesSection([]note{{ID: "n1", Text: "Rythme à retravailler\nvoir chapitre 3"}}, 40)
-	if !strings.Contains(out, "Rythme à retravailler …") {
-		t.Fatalf("multi-line note should show first line + ellipsis marker:\n%s", out)
+	if !strings.Contains(out, "Rythme à retravailler") {
+		t.Fatalf("multi-line note should show its first line:\n%s", out)
 	}
-	if strings.Contains(out, "voir chapitre 3") {
-		t.Fatalf("multi-line note should NOT show the second line:\n%s", out)
+	if !strings.Contains(out, "voir chapitre 3") {
+		t.Fatalf("multi-line note should show its full text, not just the first line:\n%s", out)
+	}
+}
+
+func TestRenderNotesSectionClampsVeryLongNote(t *testing.T) {
+	// A single very long unbroken word forces wrapClamp's per-line wrap to leave slack before
+	// width on every line (a whole word never fits past the limit), so the trailing
+	// ansi.Truncate on the clamped line always has room to place "…" — see wrapClamp
+	// (corkboard.go): that truncate is a no-op, and adds no "…", when the clamped line already
+	// exactly fills width, which a greedy word-wrap of same-length short words can hit exactly.
+	long := strings.Repeat(strings.Repeat("x", 55)+" ", 60)
+	out := renderNotesSection([]note{{ID: "n1", Text: long}}, 40)
+	if !strings.Contains(out, "…") {
+		t.Fatalf("a note exceeding noteMaxLines should be clamped with an ellipsis marker:\n%s", out)
+	}
+	lines := strings.Split(out, "\n")
+	if len(lines) > noteMaxLines+4 { // header + blank separators + clamped note body
+		t.Fatalf("clamped note produced too many lines (%d): section should stay bounded:\n%s", len(lines), out)
 	}
 }
 

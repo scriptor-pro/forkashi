@@ -138,9 +138,14 @@ func renderOutline(text string, width int) string {
 	return b.String()
 }
 
+// noteMaxLines caps the word-wrapped height of a single note in renderNotesSection, so one
+// long note can't push the rest of the inspector tab off the bottom of the (unscrolled) panel.
+const noteMaxLines = 6
+
 // renderNotesSection shows the revision notes attached to the current file, read-only: a
-// "NOTES" header, then either a subtle empty-state hint or one line per note (first line of
-// its text, "…" appended if the note continues beyond that line), each truncated to width.
+// "NOTES" header, then either a subtle empty-state hint or each note's full text, word-wrapped
+// to width and clamped to noteMaxLines (with a trailing "…" if a note runs longer), separated
+// by a blank line.
 func renderNotesSection(notes []note, width int) string {
 	var b strings.Builder
 	b.WriteString(sectionHeader("Notes", width))
@@ -148,12 +153,11 @@ func renderNotesSection(notes []note, width int) string {
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(subtle).Render("(aucune note — n pour en ajouter)"))
 		return b.String()
 	}
-	for _, nt := range notes {
-		first := nt.Text
-		if idx := strings.IndexByte(first, '\n'); idx >= 0 {
-			first = first[:idx] + " …"
+	for i, nt := range notes {
+		if i > 0 {
+			b.WriteString("\n")
 		}
-		b.WriteString("\n  " + ansi.Truncate(first, width-2, "…"))
+		b.WriteString("\n  " + strings.ReplaceAll(wrapClamp(nt.Text, width-2, noteMaxLines), "\n", "\n  "))
 	}
 	return b.String()
 }
