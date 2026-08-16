@@ -2420,7 +2420,9 @@ func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
 	explicitFolder := m.creatingFolder
 	kind := m.createKind
+	chapterFolder := m.createChapterFolder
 	m.createKind = 0
+	m.createChapterFolder = ""
 	m.creatingFile = false
 	m.creatingInPane = false
 	m.creatingFolder = false
@@ -2440,9 +2442,7 @@ func (m *model) confirmCreate() {
 		return
 	}
 	if kind == 3 {
-		folder := m.createChapterFolder
-		m.createChapterFolder = ""
-		m.createScene(folder, name)
+		m.createScene(chapterFolder, name)
 		return
 	}
 
