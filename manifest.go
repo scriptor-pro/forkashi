@@ -176,3 +176,20 @@ func renameChapterTitle(dir, folder, newTitle string) error {
 	}
 	return writeManifest(dir, m)
 }
+
+// findChapterByFolder returns a pointer to the manifestChapter matching folder — across the
+// root and every Part's Chapters — so the caller can mutate it (e.g. append a Texts entry)
+// before a single writeManifest. Returns nil if no chapter with that folder exists.
+func findChapterByFolder(m *manifest, folder string) *manifestChapter {
+	for i := range m.Items {
+		if m.Items[i].Chapter != nil && m.Items[i].Chapter.Folder == folder {
+			return m.Items[i].Chapter
+		}
+		for j := range m.Items[i].Chapters {
+			if m.Items[i].Chapters[j].Folder == folder {
+				return &m.Items[i].Chapters[j]
+			}
+		}
+	}
+	return nil
+}

@@ -125,3 +125,45 @@ func TestWriteManifestEmptyItemsSerializesAsEmptyArray(t *testing.T) {
 		t.Fatalf("empty items must serialize as [], got: %s", data)
 	}
 }
+
+func TestFindChapterByFolderRootChapter(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "un", Title: "Un", Texts: []manifestText{{File: "un.md", Title: "Un"}}}},
+	}}
+	ch := findChapterByFolder(&m, "un")
+	if ch == nil || ch.Folder != "un" {
+		t.Fatalf("expected to find root chapter %q, got %+v", "un", ch)
+	}
+}
+
+func TestFindChapterByFolderInsidePart(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Part: "Acte I", Chapters: []manifestChapter{
+			{Folder: "deux", Title: "Deux", Texts: []manifestText{{File: "deux.md", Title: "Deux"}}},
+		}},
+	}}
+	ch := findChapterByFolder(&m, "deux")
+	if ch == nil || ch.Folder != "deux" {
+		t.Fatalf("expected to find chapter %q inside a Part, got %+v", "deux", ch)
+	}
+}
+
+func TestFindChapterByFolderMutatesThroughPointer(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "un", Title: "Un", Texts: []manifestText{{File: "un.md", Title: "Un"}}}},
+	}}
+	ch := findChapterByFolder(&m, "un")
+	ch.Texts = append(ch.Texts, manifestText{File: "deux.md", Title: "Deux"})
+	if len(m.Items[0].Chapter.Texts) != 2 {
+		t.Fatalf("mutating through the returned pointer must mutate m, got %d texts", len(m.Items[0].Chapter.Texts))
+	}
+}
+
+func TestFindChapterByFolderNotFound(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "un", Title: "Un"}},
+	}}
+	if ch := findChapterByFolder(&m, "inexistant"); ch != nil {
+		t.Fatalf("expected nil for a folder not in the manifest, got %+v", ch)
+	}
+}
