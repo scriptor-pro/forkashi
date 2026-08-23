@@ -383,3 +383,83 @@ func TestCorkboardViewShowsRealPartHeaderReadOnly(t *testing.T) {
 		t.Fatalf("structureItems must still only stage the bare chapter, got %+v", m.structureItems)
 	}
 }
+
+func seedCorkManuscriptWithMultiSceneChapter(t *testing.T) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
+	mkChapterDir(t, dir, "a", map[string]string{
+		"a-1.md": "body of a-1",
+		"a-2.md": "body of a-2",
+	})
+	if err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         "The Work",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{
+				{File: "a-1.md", Title: "First"},
+				{File: "a-2.md", Title: "Second"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestCorkboardEnterOnMultiSceneChapterOpensTextPicker(t *testing.T) {
+	dir := seedCorkManuscriptWithMultiSceneChapter(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(model)
+	if m.screen != screenTextPicker {
+		t.Fatalf("enter on a 2-text chapter card must open the text picker, got screen=%v", m.screen)
+	}
+	if m.textPickerChapter == nil || m.textPickerChapter.folder != "a" || len(m.textPickerChapter.texts) != 2 {
+		t.Fatalf("textPickerChapter = %+v", m.textPickerChapter)
+	}
+	if m.textPickerDir != dir {
+		t.Fatalf("textPickerDir = %q, want %q", m.textPickerDir, dir)
+	}
+}
+
+func TestCorkboardEnterOnSingleSceneChapterOpensDirectly(t *testing.T) {
+	dir := seedCorkManuscript(t) // a, b, c — each single-text
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.enterCorkboard()
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(model)
+	if m.screen != screenWriting {
+		t.Fatalf("enter on a 1-text chapter card must open it directly, got screen=%v", m.screen)
+	}
+	if m.currentFile != filepath.Join(dir, "a", "a.md") {
+		t.Fatalf("currentFile = %q", m.currentFile)
+	}
+}
+
+func TestCorkboardEnterOnEmptyChapterShowsStatus(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "empty"), 0o755)
+	if err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "empty", Title: "Vide", Texts: []manifestText{}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(model)
+	if m.status != "ce chapitre n'a pas encore de scène" {
+		t.Fatalf("status = %q", m.status)
+	}
+	if m.screen != screenCorkboard {
+		t.Fatal("empty chapter must not leave the corkboard")
+	}
+}

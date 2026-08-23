@@ -337,6 +337,17 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = "ce chapitre n'a pas encore de scène"
 				return m, nil
 			}
+			if len(ch.texts) >= 2 {
+				// Multi-scene chapter: let the reader pick which scene, instead of always
+				// silently opening the first one.
+				chCopy := ch
+				m.textPickerChapter = &chCopy
+				m.textPickerSel = 0
+				m.textPickerDir = m.structureDir
+				m.exitCorkboard()
+				m.screen = screenTextPicker
+				return m, nil
+			}
 			file := filepath.Join(m.structureDir, ch.folder, ch.texts[0].file)
 			m.exitCorkboard()
 			m.loadFile(file)
