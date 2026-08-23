@@ -72,7 +72,7 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
   Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it **and
   writes it** — create + chapter-title retitle, and **structure mode** (reorder / insert / remove
-  chapters, confirm-on-commit); cross-container **move** via the file mover is planned (see Shared
+  chapters, confirm-on-commit); cross-container **move** via the general **file mover** (`M`) is planned (see Shared
   Contracts §1).
   - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
     treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
@@ -86,7 +86,7 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   **beats + notes** in `outline.md`; `shift/alt+↑↓` move a beat, `ctrl+p`/`alt+↵` **promote** a beat
   → chapter [seeds the synopsis from its notes, marks it `[x]`], one-way; the `outline.md` format is
   a shared contract with the companion app — see Shared Contracts §4); the **pager** (`m`: read-through with jump-to-edit); **export**
-  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **all-texts export-selection screen** (`v` from the sidebar/corkboard:
+  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **all-texts export-selection screen** (`v` from the sidebar:
   full-screen list of every chapter, scene, standalone scene, and Resource with an export-inclusion checkbox, word/character
   totals, and a 111-character preview per entry; `space` toggles inclusion, `shift+↑↓` moves an entry within its container
   or across container boundaries, converting independent resources ↔ standalone scenes as needed; the selection state
@@ -148,7 +148,7 @@ with the companion app's copy.
     okashi reads this **and writes it** — it creates manuscripts and retitles `items[].title`
     (no-confirm; filename birth-stable), and **structure mode** reorders / inserts / removes
     chapters (`s` from the binder; staged, committed on exit behind one confirm). Cross-container
-    **move** (into/out of a manuscript) via the file mover is still planned. If the manifest is
+    **move** (into/out of a manuscript) via the general **file mover** (`M`) is still planned. If the manifest is
     unreadable or its `schemaVersion` is unsupported,
     okashi refuses to infer structure — it shows files flat as loose documents with a status
     note; it does **not** fall back to prefix ordering.
@@ -157,13 +157,13 @@ with the companion app's copy.
     de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
     structural writes offered here either.
   - **Category** (neither manifest nor numbered files): plain folder of documents.
-- **Authority (revised 2026-07-01; cross-container moves shipped 2026-08-23):** **both apps write the shared manifest.** okashi creates
+- **Authority (revised 2026-07-01; export-selection cross-container moves shipped 2026-08-23):** **both apps write the shared manifest.** okashi creates
   manuscripts (New Project) and retitles chapter display titles (`r` on a manifest chapter →
   `items[].title`, no-confirm); **structure mode** (SHIPPED) reorders / inserts / removes chapters
   behind a commit **confirmation** (`s` from the binder), mirroring the companion app's own confirm sheet.
-  Cross-container **move** (into/out of a manuscript, via the export-selection screen `v` → `shift+↑↓`)
-  rewrites `manifest.json` using the existing v3 shape (retrofit `Texts[]`/`items[]` entries per the v3 schema,
-  no new field, no schema-shape change). The companion app owns
+  Cross-container **move** via the **export-selection screen** (`v` → `space`/`shift+↑↓` to move texts across chapters or
+  convert between Resources and standalone scenes) rewrites `manifest.json` using the existing v3 shape (retrofit `Texts[]`/`items[]`
+  entries per the v3 schema, no new field, no schema-shape change). The general **file mover** (`M`, a separate cross-container mechanism) is still planned. The companion app owns
   the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
   Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
   `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
