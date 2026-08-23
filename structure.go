@@ -94,7 +94,10 @@ func (m model) structureTitle() string {
 	return projectTitle(filepath.Base(m.structureDir))
 }
 
-// toManifestChapters converts the staged bare-chapter buffer to manifest wire shape.
+// toManifestChapters converts the staged bare-chapter buffer to manifest wire shape. A
+// staged standalone scene (ch.scene) must round-trip Scene:true — otherwise committing a
+// reorder that merely passes a scene through the buffer would silently demote it back to an
+// ordinary (legacy-shaped) chapter on the next manifest read.
 func (m model) toManifestChapters() []manifestChapter {
 	out := make([]manifestChapter, 0, len(m.structureItems))
 	for _, ch := range m.structureItems {
@@ -102,7 +105,7 @@ func (m model) toManifestChapters() []manifestChapter {
 		for _, t := range ch.texts {
 			texts = append(texts, manifestText{File: t.file, Title: t.title})
 		}
-		out = append(out, manifestChapter{Folder: ch.folder, Title: ch.title, Texts: texts})
+		out = append(out, manifestChapter{Folder: ch.folder, Title: ch.title, Texts: texts, Scene: ch.scene})
 	}
 	return out
 }
