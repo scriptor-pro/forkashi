@@ -99,8 +99,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   fallback); sidebar `⏎` open · `e` synopsis · `J/K` staged reorder (confirm on exit) · `c`
   full-screen spread (`a` add/promote · `x` demote · `r` retitle · `⏎` open · `ctrl+e` whole-
   manuscript export) · `m` pager; `ctrl+n` in a manuscript → chapter|resource|scene picker (resource loose or into a
-  subfolder); scene only offered when the sidebar selection is a chapter, appends to that
-  chapter's ordered texts; the text-picker screen (opened on a multi-scene or empty chapter)
+  subfolder); **scene is always offered**: when the sidebar selection is a chapter, it appends a scene to that
+  chapter's ordered texts; when no chapter is selected, it creates a **standalone scene** (a top-level ordered item
+  at the manuscript root, no containing folder); the text-picker screen (opened on a multi-scene or empty chapter)
   also creates a scene via `ctrl+n`. Synopses in an okashi-owned `.okashi-synopsis.json` sidecar, NOT
   the manifest; the pop-down binder + standalone structure modal are retired); **revision notes** (`n` from the sidebar: per-file chapter notes —
   add/edit/delete; okashi-owned `.okashi-notes/<base>.json` sidecar, follows rename/delete;
@@ -163,6 +164,13 @@ with the companion app's copy.
   serialization) must STOP, confirm with the user, and implement in **both** repos together.
   okashi **writes v1-shaped manifests** (allowed); the gate is about changing the shared schema
   *shape*, not about writing data.
+- **forkashi note (2026-08-23):** this fork has no known companion macOS app consuming
+  `manifest.json` (only `origin`/scriptor-pro/forkashi and `upstream`/snackztime/okashi
+  remotes exist), so the HARD GATE requiring cross-repo manifest-shape coordination does not
+  apply here. `manifestSchemaVersion` was advanced from 2 to 3 on 2026-08-23 with the addition
+  of `manifestChapter.Scene` (a boolean flag marking a scene as **standalone**: a top-level
+  ordered item with no containing chapter folder). This is a **deliberate divergence** from the
+  upstream okashi schema.
 
 ### 2. Markdown flavor — HARD GATE (ADOPTED)
 - Flavor = **CommonMark + GFM (tables, task lists, strikethrough, autolinks) + footnotes**,
