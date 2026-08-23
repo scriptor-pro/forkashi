@@ -6,7 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"okashi/internal/textarea"
 )
 
 // These tests set OKASHI_DIR before calling initialModel(), rather than calling
@@ -344,5 +347,145 @@ func TestTextPickerCtrlNThenConfirmAddsScene(t *testing.T) {
 	texts := mani.Items[0].Chapter.Texts
 	if len(texts) != 2 || texts[1].Title != "troisième scène" {
 		t.Fatalf("scene should be appended to chapitre-un, got %+v", texts)
+	}
+}
+
+func TestCreateStandaloneSceneCreatesFileAndManifestEntry(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "opening", Title: "Opening",
+				Texts: []manifestText{{File: "opening.md", Title: "Opening"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "x"})
+
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.files.SetDir(dir)
+	m.createStandaloneScene("Un aparté")
+
+	if _, err := os.Stat(filepath.Join(dir, "un-aparte.md")); err != nil {
+		t.Fatalf("expected un-aparte.md at manuscript root, got err=%v", err)
+	}
+	got, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("present=%v err=%v", present, err)
+	}
+	if len(got.Items) != 2 {
+		t.Fatalf("want 2 items (existing chapter + new scene), got %d: %+v", len(got.Items), got.Items)
+	}
+	last := got.Items[1].Chapter
+	if last == nil || !last.Scene || last.Title != "Un aparté" || last.Texts[0].File != "un-aparte.md" {
+		t.Fatalf("new item = %+v", got.Items[1])
+	}
+	if m.status != "nouvelle scène Un aparté" {
+		t.Fatalf("status = %q", m.status)
+	}
+}
+
+func TestCreateStandaloneSceneRejectsPathSeparator(t *testing.T) {
+	dir := t.TempDir()
+	m := model{}
+	m.files.dir = dir
+	m.createStandaloneScene("sous/dossier")
+	if m.status != "un nom de scène ne peut pas contenir de séparateur de chemin" {
+		t.Fatalf("status = %q", m.status)
+	}
+	if _, err := os.ReadDir(dir); err == nil {
+		entries, _ := os.ReadDir(dir)
+		if len(entries) != 0 {
+			t.Fatalf("no file should have been created, got %+v", entries)
+		}
+	}
+}
+
+func TestCreateStandaloneSceneRejectsNameCollision(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "N"}); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("existing"), 0o644)
+	m := model{}
+	m.files.dir = dir
+	m.createStandaloneScene("Notes")
+	if m.status != "un fichier nommé notes.md existe déjà dans ce manuscrit" {
+		t.Fatalf("status = %q", m.status)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "notes.md"))
+	if string(data) != "existing" {
+		t.Fatal("existing file must not be overwritten")
+	}
+}
+
+func TestConfirmCreateRoutesKind3ByChapterFolder(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "un", Title: "Un",
+				Texts: []manifestText{{File: "un.md", Title: "Un"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mkChapterDir(t, dir, "un", map[string]string{"un.md": "x"})
+
+	// With chapterFolder set: routes to createScene (adds to that chapter's Texts).
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.files.SetDir(dir)
+	m.createKind = 3
+	m.createChapterFolder = "un"
+	m.nameInput.SetValue("Deuxième scène")
+	m.confirmCreate()
+	got, _, _ := readManifest(dir)
+	if len(got.Items[0].Chapter.Texts) != 2 {
+		t.Fatalf("scene should have been added to chapter 'un', got %+v", got.Items[0].Chapter.Texts)
+	}
+
+	// With chapterFolder empty: routes to createStandaloneScene (new top-level item).
+	m2 := model{editor: textarea.New()}
+	m2.files.dir = dir
+	m2.files.SetDir(dir)
+	m2.createKind = 3
+	m2.createChapterFolder = ""
+	m2.nameInput.SetValue("Scène libre")
+	m2.confirmCreate()
+	got2, _, _ := readManifest(dir)
+	if len(got2.Items) != 2 || !got2.Items[1].Chapter.Scene {
+		t.Fatalf("want a new standalone scene item, got %+v", got2.Items)
+	}
+}
+
+func TestCtrlNPickerAlwaysOffersSceneOption(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "N"}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{screen: screenWriting, focus: focusSidebar, sidebarVisible: true,
+		editor: textarea.New(), nameInput: textinput.New()}
+	m.files.dir = dir
+	m.files.SetDir(dir)
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = mm.(model)
+	if !m.createPicker {
+		t.Fatal("ctrl+n in a manifest manuscript must open the picker")
+	}
+	if m.createChapterFolder != "" {
+		t.Fatalf("no chapter selected -> createChapterFolder must be empty, got %q", m.createChapterFolder)
+	}
+	if !strings.Contains(m.status, "s scène") {
+		t.Fatalf("status must always offer 's scène' even with no chapter selected, got %q", m.status)
+	}
+
+	// 's' must now be accepted (not a defensive no-op) when no chapter is selected.
+	mm2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m2 := mm2.(model)
+	if m2.createKind != 3 || m2.createPicker {
+		t.Fatalf("'s' with no chapter selected must proceed to naming a standalone scene, got createKind=%d createPicker=%v", m2.createKind, m2.createPicker)
 	}
 }

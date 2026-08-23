@@ -1244,9 +1244,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.startInPaneCreate()
 				return m, textinput.Blink
 			case "s":
-				if m.createChapterFolder == "" {
-					return m, nil // defensive: option wasn't offered, ignore stray keypress
-				}
 				m.createPicker, m.createKind = false, 3
 				m.startInPaneCreate()
 				return m, textinput.Blink
@@ -1674,17 +1671,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "ctrl+n":
 			if hasManifest(m.files.dir) {
-				// In a manuscript, ask: chapter, resource, or (if a chapter is selected) scene.
+				// In a manuscript, ask: chapter, resource, or scene — scene targets the
+				// selected chapter's Texts when one is selected, else it's a standalone scene.
 				m.createPicker = true
 				m.createChapterFolder = ""
 				if name, ok := m.files.selectedEntryName(); ok && isChapterOf(m.files.view, name) {
 					m.createChapterFolder = name
 				}
-				if m.createChapterFolder != "" {
-					m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · s scène · esc annuler"
-				} else {
-					m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · esc annuler"
-				}
+				m.status = "nouveau : c chapitre (ordonné) · r ressource (doc libre) · s scène · esc annuler"
 				return m, nil
 			}
 			m.createKind = 0
@@ -2436,6 +2430,46 @@ func (m *model) createScene(folder, name string) {
 	m.status = "nouvelle scène " + title
 }
 
+// createStandaloneScene creates a new blank scene at the manuscript root — not inside any
+// chapter — and appends it as a new manifestItem (Scene: true) at the end of items[]. name is
+// the scene's display title, slugified into its birth-stable root-level filename.
+func (m *model) createStandaloneScene(name string) {
+	if strings.Contains(name, "/") {
+		m.status = "un nom de scène ne peut pas contenir de séparateur de chemin"
+		return
+	}
+	title := name
+	file := slugify(title) + ".md"
+	dst := filepath.Join(m.files.dir, file)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "un fichier nommé " + file + " existe déjà dans ce manuscrit"
+		return
+	}
+	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
+		m.status = "impossible de créer la scène : " + err.Error()
+		return
+	}
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "scène créée mais le manifeste est introuvable ou illisible"
+		return
+	}
+	mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+		Title: title,
+		Scene: true,
+		Texts: []manifestText{{File: file, Title: title}},
+	}})
+	if werr := writeManifest(m.files.dir, mani); werr != nil {
+		m.status = "scène créée mais échec de la mise à jour du manifeste : " + werr.Error()
+		return
+	}
+	m.files.SetDir(m.files.dir)
+	m.loadFile(dst)
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.status = "nouvelle scène " + title
+}
+
 func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
 	explicitFolder := m.creatingFolder
@@ -2462,7 +2496,11 @@ func (m *model) confirmCreate() {
 		return
 	}
 	if kind == 3 {
-		m.createScene(chapterFolder, name)
+		if chapterFolder != "" {
+			m.createScene(chapterFolder, name) // scene added to an existing chapter's Texts
+		} else {
+			m.createStandaloneScene(name) // standalone scene: new top-level item
+		}
 		return
 	}
 
@@ -2999,10 +3037,7 @@ func (m model) statusBar() string {
 		return "échéance AAAA-MM-JJ (vide efface) ▸ " + m.nameInput.View()
 	}
 	if m.createPicker {
-		if m.createChapterFolder != "" {
-			return "nouveau : c chapitre · r ressource · s scène · esc annuler"
-		}
-		return "nouveau : c chapitre · r ressource · esc annuler"
+		return "nouveau : c chapitre · r ressource · s scène · esc annuler"
 	}
 	mark := "✓"
 	if m.dirty {

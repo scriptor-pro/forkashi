@@ -164,7 +164,14 @@ func TestCtrlNSceneOptionAppearsOnChapterSelection(t *testing.T) {
 	}
 }
 
-func TestCtrlNSceneOptionAbsentOutsideChapterSelection(t *testing.T) {
+// TestCtrlNSceneOptionAlwaysOffered used to be
+// TestCtrlNSceneOptionAbsentOutsideChapterSelection and asserted the OLD behavior: the picker
+// hid "s scène" when no chapter was selected. Standalone scenes (task 5 of the
+// 2026-08-23-standalone-scene plan) change this — "s scène" is now offered unconditionally,
+// and "s" with no chapter selected routes to createStandaloneScene instead of being ignored.
+// createChapterFolder staying empty (rather than the status string) is now what distinguishes
+// "scene into the selected chapter" from "standalone scene at the manuscript root".
+func TestCtrlNSceneOptionAlwaysOffered(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "loose.md"), []byte("x"), 0o644)
 	writeManifest(dir, manifest{SchemaVersion: manifestSchemaVersion, Title: "W"})
@@ -177,8 +184,11 @@ func TestCtrlNSceneOptionAbsentOutsideChapterSelection(t *testing.T) {
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
 	m = nm.(model)
 
-	if strings.Contains(m.statusBar(), "s scène") {
-		t.Fatalf("picker prompt should not offer the scene option outside a chapter selection, got %q", m.statusBar())
+	if !strings.Contains(m.statusBar(), "s scène") {
+		t.Fatalf("picker prompt should always offer the scene option, even outside a chapter selection, got %q", m.statusBar())
+	}
+	if m.createChapterFolder != "" {
+		t.Fatalf("no chapter selected -> createChapterFolder must stay empty, got %q", m.createChapterFolder)
 	}
 }
 
