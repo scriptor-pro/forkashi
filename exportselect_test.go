@@ -1,0 +1,217 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func downKey() tea.Msg { return tea.KeyMsg{Type: tea.KeyDown} }
+func escKey() tea.Msg  { return tea.KeyMsg{Type: tea.KeyEsc} }
+
+func seedExportSelectManuscript(t *testing.T) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-1.md"), []byte(strings.Repeat("word ", 30)), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-2.md"), []byte("short scene two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("A standalone scene's text."), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("Research notes, a Resource."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+				{File: "scene-2.md", Title: "Confrontation"},
+			}}},
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true,
+				Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestEnterExportSelectBuildsOrderedList(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	if m.screen != screenExportSelect {
+		t.Fatalf("screen = %v, want screenExportSelect", m.screen)
+	}
+	entries := m.exportSelect.entries
+	// Order: chapter header, its 2 scenes (indented), the standalone scene, then the Resource.
+	if len(entries) != 5 {
+		t.Fatalf("want 5 entries (1 header + 2 scenes + 1 standalone scene + 1 resource), got %d: %+v", len(entries), entries)
+	}
+	if !entries[0].isHeader || entries[0].title != "Chapter One" {
+		t.Fatalf("entry 0 = %+v, want chapter header 'Chapter One'", entries[0])
+	}
+	if entries[1].isHeader || !entries[1].indent || entries[1].title != "Opening" {
+		t.Fatalf("entry 1 = %+v, want indented scene 'Opening'", entries[1])
+	}
+	if entries[2].isHeader || !entries[2].indent || entries[2].title != "Confrontation" {
+		t.Fatalf("entry 2 = %+v, want indented scene 'Confrontation'", entries[2])
+	}
+	if entries[3].isHeader || entries[3].indent || entries[3].title != "Aparté" {
+		t.Fatalf("entry 3 = %+v, want non-indented standalone scene 'Aparté'", entries[3])
+	}
+	if entries[4].isHeader || entries[4].indent || entries[4].title != "notes" {
+		t.Fatalf("entry 4 = %+v, want Resource 'notes' (de-slugged filename)", entries[4])
+	}
+}
+
+func TestEnterExportSelectComputesWordsAndCharsAndPreview(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("one two three"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	var sceneEntry *exportSelectEntry
+	for i := range m.exportSelect.entries {
+		if m.exportSelect.entries[i].title == "A" {
+			sceneEntry = &m.exportSelect.entries[i]
+		}
+	}
+	if sceneEntry == nil {
+		t.Fatal("scene entry 'A' not found")
+	}
+	if sceneEntry.words != 3 {
+		t.Fatalf("words = %d, want 3", sceneEntry.words)
+	}
+	if sceneEntry.chars != charCount("one two three") {
+		t.Fatalf("chars = %d, want %d", sceneEntry.chars, charCount("one two three"))
+	}
+	if sceneEntry.preview != "one two three" {
+		t.Fatalf("preview = %q, want %q (shorter than 111 chars, shown whole)", sceneEntry.preview, "one two three")
+	}
+}
+
+func TestEnterExportSelectPreviewTruncatesAt111CharsAndNormalizesWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	long := strings.Repeat("a", 150)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("line one\nline two "+long), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	var sceneEntry *exportSelectEntry
+	for i := range m.exportSelect.entries {
+		if m.exportSelect.entries[i].title == "A" {
+			sceneEntry = &m.exportSelect.entries[i]
+		}
+	}
+	if sceneEntry == nil {
+		t.Fatal("scene entry 'A' not found")
+	}
+	if strings.Contains(sceneEntry.preview, "\n") {
+		t.Fatalf("preview must have internal newlines collapsed to spaces, got %q", sceneEntry.preview)
+	}
+	runes := []rune(sceneEntry.preview)
+	if len(runes) > 112 { // 111 chars + possible "…" = 112 runes max
+		t.Fatalf("preview too long: %d runes, want <= 112 (111 + ellipsis)", len(runes))
+	}
+	if !strings.HasSuffix(sceneEntry.preview, "…") {
+		t.Fatalf("preview of a text longer than 111 chars must end with an ellipsis, got %q", sceneEntry.preview)
+	}
+}
+
+func TestEnterExportSelectLoadsExistingExclusions(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("x"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveExportSelection(dir, map[string]bool{filepath.Join("ch1", "a.md"): true},
+		map[string]bool{filepath.Join("ch1", "a.md"): true}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	var sceneEntry *exportSelectEntry
+	for i := range m.exportSelect.entries {
+		if m.exportSelect.entries[i].title == "A" {
+			sceneEntry = &m.exportSelect.entries[i]
+		}
+	}
+	if sceneEntry == nil || !sceneEntry.excluded {
+		t.Fatalf("entry = %+v, want excluded=true (loaded from sidecar)", sceneEntry)
+	}
+}
+
+func TestExportSelectViewShowsFooterTotals(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("one two three"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{width: 80, height: 24}
+	m.files.dir = dir
+	m.enterExportSelect()
+	view := exportSelectView(m)
+	if !strings.Contains(view, "3") { // word count
+		t.Fatalf("view must show the word total, got:\n%s", view)
+	}
+}
+
+func TestUpdateExportSelectMovesSelection(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	if m.exportSelect.sel != 0 {
+		t.Fatalf("initial sel = %d, want 0", m.exportSelect.sel)
+	}
+	mm, _ := m.updateExportSelect(downKey())
+	m2 := mm.(model)
+	if m2.exportSelect.sel != 1 {
+		t.Fatalf("sel after down = %d, want 1", m2.exportSelect.sel)
+	}
+}
+
+func TestUpdateExportSelectEscReturnsToWriting(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	mm, _ := m.updateExportSelect(escKey())
+	m2 := mm.(model)
+	if m2.screen != screenWriting {
+		t.Fatalf("screen after esc = %v, want screenWriting", m2.screen)
+	}
+}

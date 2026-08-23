@@ -362,6 +362,7 @@ const (
 	screenAllNotes
 	screenOutline
 	screenTextPicker
+	screenExportSelect
 )
 
 const (
@@ -541,6 +542,8 @@ type model struct {
 
 	notes    notesModel
 	allNotes allNotesModel
+
+	exportSelect exportSelectModel
 }
 
 func initialModel() model {
@@ -1230,6 +1233,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateTextPicker(msg)
 	}
 
+	if m.screen == screenExportSelect {
+		return m.updateExportSelect(msg)
+	}
+
 	// Manuscript ctrl+n: pick chapter or resource before naming.
 	if m.createPicker {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -1871,6 +1878,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterCorkboard() // full-screen corkboard (the spread)
 				case "m":
 					m.enterManuscript() // read-through pager
+				case "v":
+					m.enterExportSelect()
 				}
 			}
 		}
@@ -2002,6 +2011,10 @@ func (m model) View() string {
 
 	if m.screen == screenTextPicker {
 		return textPickerView(m.textPickerChapter, m.textPickerSel, m.textPickerDir, m.files.wc, m.width, m.height)
+	}
+
+	if m.screen == screenExportSelect {
+		return exportSelectView(m)
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone
