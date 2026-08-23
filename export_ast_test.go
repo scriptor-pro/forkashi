@@ -198,3 +198,21 @@ func TestParseSectionAutolinkSurvives(t *testing.T) {
 		}
 	}
 }
+
+func TestManuscriptDocFromChaptersIncludesStandaloneScene(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("Some aside text."), 0o644)
+	parts := []partRef{{title: "", chapters: []chapterRef{
+		{title: "Aparté", scene: true, texts: []textRef{{file: "aparte.md", title: "Aparté"}}},
+	}}}
+	doc := manuscriptDocFromChapters(dir, parts)
+	if len(doc) != 1 {
+		t.Fatalf("want 1 section, got %d: %+v", len(doc), doc)
+	}
+	if doc[0].Title != "Aparté" {
+		t.Fatalf("section title = %q, want %q", doc[0].Title, "Aparté")
+	}
+	if len(doc[0].Blocks) == 0 {
+		t.Fatal("standalone scene's content must have been read and parsed, got zero blocks")
+	}
+}
