@@ -122,8 +122,71 @@ func (m model) updateExportSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.exportSelect.sel < len(m.exportSelect.entries)-1 {
 			m.exportSelect.sel++
 		}
+	case " ":
+		m.toggleExportSelectAtCursor()
+		m.saveExportSelectState()
 	}
 	return m, nil
+}
+
+// toggleExportSelectAtCursor flips the selected entry's excluded state. Toggling a chapter
+// header cascades to all of its child scenes (the rows immediately following it whose indent
+// is true, up to the next header or the end of the list). Toggling a scene, standalone scene,
+// or Resource only affects that one row; afterward every header's OWN excluded state is
+// recomputed as derived (a header reads excluded only when ALL its children are excluded).
+func (m *model) toggleExportSelectAtCursor() {
+	entries := m.exportSelect.entries
+	i := m.exportSelect.sel
+	if i >= len(entries) {
+		return
+	}
+	if entries[i].isHeader {
+		newState := !entries[i].excluded
+		for j := i + 1; j < len(entries) && entries[j].indent; j++ {
+			entries[j].excluded = newState
+		}
+	} else {
+		entries[i].excluded = !entries[i].excluded
+	}
+	recomputeExportSelectHeaders(entries)
+}
+
+// recomputeExportSelectHeaders sets each header's excluded field to true only when every one
+// of its child (indented) rows is excluded — false (included) as soon as at least one child is
+// included, including a header with zero children (nothing to exclude).
+func recomputeExportSelectHeaders(entries []exportSelectEntry) {
+	for i := range entries {
+		if !entries[i].isHeader {
+			continue
+		}
+		anyIncluded := false
+		anyChild := false
+		for j := i + 1; j < len(entries) && entries[j].indent; j++ {
+			anyChild = true
+			if !entries[j].excluded {
+				anyIncluded = true
+			}
+		}
+		entries[i].excluded = anyChild && !anyIncluded
+	}
+}
+
+// saveExportSelectState persists every non-header entry's excluded state to the sidecar.
+func (m *model) saveExportSelectState() {
+	excluded := map[string]bool{}
+	known := map[string]bool{}
+	for _, e := range m.exportSelect.entries {
+		if e.isHeader {
+			continue
+		}
+		known[e.file] = true
+		if e.excluded {
+			excluded[e.file] = true
+		}
+	}
+	if err := saveExportSelection(m.files.dir, excluded, known); err != nil {
+		m.status = "échec de l'enregistrement de la sélection d'export : " + err.Error()
+	}
 }
 
 // exportSelectTotals sums words/chars across every non-header, non-excluded entry.
@@ -148,11 +211,9 @@ func exportSelectView(m model) string {
 	} else {
 		width := max(10, min(m.width-8, 72))
 		for i, e := range a.entries {
-			box := "[ ]"
+			box := "[x]"
 			if e.excluded {
 				box = "[ ]"
-			} else if !e.isHeader {
-				box = "[x]"
 			}
 			indent := ""
 			if e.indent {

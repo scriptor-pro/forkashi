@@ -215,3 +215,85 @@ func TestUpdateExportSelectEscReturnsToWriting(t *testing.T) {
 		t.Fatalf("screen after esc = %v, want screenWriting", m2.screen)
 	}
 }
+
+func TestUpdateExportSelectToggleExcludesSceneAndPersists(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entry[1] is the first scene ("Opening") in seedExportSelectManuscript.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown}) // move to entry 1
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	m3 := mm2.(model)
+	if !m3.exportSelect.entries[1].excluded {
+		t.Fatal("entry 1 must be excluded after toggling space")
+	}
+	// Persisted: a fresh enterExportSelect reload must show the same exclusion.
+	m4 := model{}
+	m4.files.dir = dir
+	m4.enterExportSelect()
+	if !m4.exportSelect.entries[1].excluded {
+		t.Fatal("exclusion must survive a reload (persisted to the sidecar)")
+	}
+}
+
+func TestUpdateExportSelectToggleTwiceReincludes(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(space)
+	m3 := mm2.(model)
+	mm3, _ := m3.updateExportSelect(space)
+	m4 := mm3.(model)
+	if m4.exportSelect.entries[1].excluded {
+		t.Fatal("toggling twice must re-include the entry")
+	}
+}
+
+func TestUpdateExportSelectToggleOnHeaderExcludesAllChildren(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entry[0] is the chapter header "Chapter One".
+	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	mm, _ := m.updateExportSelect(space)
+	m2 := mm.(model)
+	if !m2.exportSelect.entries[1].excluded || !m2.exportSelect.entries[2].excluded {
+		t.Fatalf("toggling the header must exclude both child scenes, got entries=%+v", m2.exportSelect.entries[:3])
+	}
+}
+
+func TestUpdateExportSelectHeaderStateIsDerivedIncludedIfAnyChildIncluded(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	// Exclude only the FIRST child scene (entry 1), leave the second (entry 2) included.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(space)
+	m3 := mm2.(model)
+	// The header (entry 0) must read as included, since at least one child (entry 2) still is.
+	if m3.exportSelect.entries[0].excluded {
+		t.Fatal("header must show included when at least one child scene is included")
+	}
+}
+
+func TestExportSelectTotalsExcludeExcludedEntries(t *testing.T) {
+	entries := []exportSelectEntry{
+		{isHeader: true, title: "C1"},
+		{words: 10, chars: 50},
+		{words: 5, chars: 25, excluded: true},
+	}
+	w, c := exportSelectTotals(entries)
+	if w != 10 || c != 50 {
+		t.Fatalf("totals = (%d, %d), want (10, 50) — excluded entry and header must not count", w, c)
+	}
+}
