@@ -489,3 +489,16 @@ func TestCtrlNPickerAlwaysOffersSceneOption(t *testing.T) {
 		t.Fatalf("'s' with no chapter selected must proceed to naming a standalone scene, got createKind=%d createPicker=%v", m2.createKind, m2.createPicker)
 	}
 }
+
+func TestCharCountCountsRunesNotBytes(t *testing.T) {
+	// "café" is 4 runes but 5 bytes (é is 2 bytes in UTF-8) — len() would return 5.
+	if got := charCount("café"); got != 4 {
+		t.Fatalf("charCount(\"café\") = %d, want 4 (rune count, not byte length)", got)
+	}
+	if got := charCount("a b c"); got != 5 {
+		t.Fatalf("charCount(\"a b c\") = %d, want 5 (spaces counted)", got)
+	}
+	if got := charCount(""); got != 0 {
+		t.Fatalf("charCount(\"\") = %d, want 0", got)
+	}
+}

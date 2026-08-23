@@ -2913,6 +2913,13 @@ func wordCount(s string) int {
 	return len(strings.Fields(s))
 }
 
+// charCount returns the rune count of s, spaces included — used by the export-selection
+// screen's character total. utf8.RuneCountInString, not len(s): len would count bytes, wrong
+// for accented French text.
+func charCount(s string) int {
+	return utf8.RuneCountInString(s)
+}
+
 // commafy formats an integer with thousands separators: 1240 -> "1,240".
 func commafy(n int) string {
 	s := strconv.Itoa(n)
