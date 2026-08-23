@@ -120,7 +120,18 @@ func (m *model) runExport() {
 	if m.exportWholeManuscript() {
 		entries := readEntries(dir)
 		v := resolveManuscript(dir, entries)
-		doc = manuscriptDocFromChapters(dir, v.parts, nil)
+		excluded := loadExportSelection(dir)
+		doc = manuscriptDocFromChapters(dir, v.parts, excluded)
+		for _, e := range v.loose {
+			if excluded[e.name] {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(dir, e.name))
+			if err != nil {
+				continue
+			}
+			doc = append(doc, Section{Title: sectionTitle(e.name), Blocks: parseSection(data)})
+		}
 		title = v.title
 	} else {
 		if m.currentFile == "" {

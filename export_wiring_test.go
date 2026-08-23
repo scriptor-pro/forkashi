@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -273,6 +274,117 @@ func TestExportEnterWithNothingCheckedShowsError(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "export")); !os.IsNotExist(err) {
 		t.Fatal("nothing should have been exported")
+	}
+}
+
+func TestRunExportWholeManuscriptExcludesSelectedText(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(filepath.Join(proj, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(proj, "ch1", "a.md"), []byte("Kept prose."), 0o644)
+	os.WriteFile(filepath.Join(proj, "ch1", "b.md"), []byte("Excluded prose."), 0o644)
+	if err := writeManifest(proj, manifest{
+		Title: "Novel",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{
+				{File: "a.md", Title: "Kept"},
+				{File: "b.md", Title: "Excluded"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveExportSelection(proj, map[string]bool{filepath.Join("ch1", "b.md"): true},
+		map[string]bool{filepath.Join("ch1", "a.md"): true, filepath.Join("ch1", "b.md"): true}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := model{}
+	m.files.dir = proj
+	m.screen = screenCorkboard // exportWholeManuscript() gates on this
+	m.currentFile = filepath.Join(proj, "ch1", "a.md")
+	m.exportChooser = &exportChooserModel{checked: map[exportFormat]bool{formatRTF: true}, style: StyleManuscript}
+	m.runExport()
+
+	out, err := os.ReadFile(filepath.Join(proj, "export", "novel.rtf"))
+	if err != nil {
+		t.Fatalf("export file not written: %v", err)
+	}
+	body := string(out)
+	if !strings.Contains(body, "Kept") {
+		t.Fatal("exported RTF must contain the non-excluded scene's content")
+	}
+	if strings.Contains(body, "Excluded prose") {
+		t.Fatal("exported RTF must NOT contain the excluded scene's content")
+	}
+}
+
+func TestRunExportWholeManuscriptIncludesCheckedResource(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(filepath.Join(proj, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(proj, "ch1", "a.md"), []byte("Chapter prose."), 0o644)
+	os.WriteFile(filepath.Join(proj, "sidenote.md"), []byte("A resource, opted into export."), 0o644)
+	if err := writeManifest(proj, manifest{
+		Title: "Novel",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// sidenote.md is NOT excluded — default-included, so it must appear.
+
+	m := model{}
+	m.files.dir = proj
+	m.screen = screenCorkboard
+	m.exportChooser = &exportChooserModel{checked: map[exportFormat]bool{formatRTF: true}, style: StyleManuscript}
+	m.runExport()
+
+	out, err := os.ReadFile(filepath.Join(proj, "export", "novel.rtf"))
+	if err != nil {
+		t.Fatalf("export file not written: %v", err)
+	}
+	if !strings.Contains(string(out), "resource") {
+		t.Fatal("exported RTF must include the Resource's content (default-included)")
+	}
+}
+
+func TestRunExportCurrentDocumentUnaffectedBySelection(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(filepath.Join(proj, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(proj, "ch1", "a.md"), []byte("Solo document text."), 0o644)
+	if err := writeManifest(proj, manifest{
+		Title: "Novel",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "C1", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Exclude a.md in the sidecar — must have NO effect on a single-document export.
+	if err := saveExportSelection(proj, map[string]bool{filepath.Join("ch1", "a.md"): true},
+		map[string]bool{filepath.Join("ch1", "a.md"): true}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := model{}
+	m.files.dir = proj
+	m.screen = screenWriting // NOT corkboard — single-document export path
+	m.currentFile = filepath.Join(proj, "ch1", "a.md")
+	m.exportChooser = &exportChooserModel{checked: map[exportFormat]bool{formatRTF: true}, style: StyleManuscript}
+	m.runExport()
+
+	out, err := os.ReadFile(filepath.Join(proj, "ch1", "export", "a.rtf"))
+	if err != nil {
+		t.Fatalf("export file not written: %v", err)
+	}
+	if !strings.Contains(string(out), "Solo document") {
+		t.Fatal("single-document export must be unaffected by the manuscript-wide exclusion sidecar")
 	}
 }
 
