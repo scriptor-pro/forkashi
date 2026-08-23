@@ -57,7 +57,7 @@ func TestIconForGlyphAndColor(t *testing.T) {
 func TestNerdIconsAreRealGlyphs(t *testing.T) {
 	t.Setenv("OKASHI_ICONS", "nerd") // force nerd (empty now auto-detects)
 	s := resolveIcons()
-	all := []glyph{s.folder, s.parent, s.file, s.action}
+	all := []glyph{s.folder, s.parent, s.file, s.action, s.scene}
 	for _, g := range s.byExt {
 		all = append(all, g)
 	}
@@ -99,5 +99,13 @@ func TestIconAutoDetect(t *testing.T) {
 	t.Setenv("OKASHI_ICONS", "plain")
 	if !isPlain() {
 		t.Error("OKASHI_ICONS=plain must force plain")
+	}
+}
+
+func TestIconForSceneEntry(t *testing.T) {
+	s := resolveIcons()
+	g := s.iconFor(fileEntry{name: "aparte.md", isScene: true})
+	if g.ch != s.scene.ch {
+		t.Fatalf("a scene entry must render the scene glyph, got %+v want %+v", g, s.scene)
 	}
 }

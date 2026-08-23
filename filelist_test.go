@@ -739,3 +739,56 @@ func TestActivateEmptyChapterSignalsPickerWithNoTexts(t *testing.T) {
 		t.Fatalf("an empty chapter must also route to the picker (which shows an empty state), not crash or navigate, got %v", result)
 	}
 }
+
+func TestSetDirMarksStandaloneSceneEntry(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	var found bool
+	for _, e := range f.entries {
+		if e.name == "aparte.md" {
+			found = true
+			if !e.isScene {
+				t.Fatalf("standalone scene entry must have isScene=true, got %+v", e)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("aparte.md must appear in f.entries")
+	}
+}
+
+func TestSetDirLegacyFlatChapterIsNotMarkedScene(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	f := newFilelist()
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.name == "01-a.md" && e.isScene {
+			t.Fatalf("a legacy flat-file chapter must NOT be marked isScene, got %+v", e)
+		}
+	}
+}
+
+func TestIsChapterEntryFalseForStandaloneScene(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	var entry fileEntry
+	for _, e := range f.entries {
+		if e.name == "aparte.md" {
+			entry = e
+		}
+	}
+	if f.isChapterEntry(entry) {
+		t.Fatal("a standalone scene must not be reported as a chapter entry (it has its own icon/behavior, not the legacy-chapter path)")
+	}
+}

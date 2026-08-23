@@ -19,8 +19,8 @@ type glyph struct {
 
 // iconSet is the glyph set for the file pane and launch lists.
 type iconSet struct {
-	folder, parent, file, action glyph
-	byExt                        map[string]glyph
+	folder, parent, file, action, scene glyph
+	byExt                               map[string]glyph
 }
 
 // autoIconMode guesses whether the terminal likely has a Nerd Font. We cannot detect
@@ -49,6 +49,7 @@ func resolveIcons() iconSet {
 			parent: glyph{ch: "↑ "},
 			file:   glyph{ch: "  "},
 			action: glyph{ch: "+ "},
+			scene:  glyph{ch: "· "},
 			byExt:  map[string]glyph{},
 		}
 	}
@@ -60,6 +61,7 @@ func resolveIcons() iconSet {
 		parent: glyph{ch: " ", color: iconParentColor},  // nf-fa-arrow_up
 		file:   glyph{ch: " ", color: iconGenericColor}, // nf-fa-file
 		action: glyph{ch: " ", color: accent},           // nf-fa-plus
+		scene:  glyph{ch: " ", color: iconTextColor},    // nf-fa-align_left — a single ordered text, no folder
 		byExt: map[string]glyph{
 			".md":       text,
 			".markdown": text,
@@ -85,6 +87,8 @@ func (s iconSet) iconFor(e fileEntry) glyph {
 	switch {
 	case e.name == "..":
 		return s.parent
+	case e.isScene:
+		return s.scene
 	case e.isDir:
 		return s.folder
 	}

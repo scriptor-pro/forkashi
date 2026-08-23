@@ -25,6 +25,7 @@ type fileEntry struct {
 	name         string
 	isDir        bool
 	isPartHeader bool // a non-selectable Part title row; cursor movement skips it
+	isScene      bool // a standalone scene (manifest v3, chapterRef.scene) — distinct glyph
 }
 
 // filelist is a minimal, mouse-friendly file browser we fully own.
@@ -149,7 +150,7 @@ func (f *filelist) SetDir(dir string) {
 		for _, ch := range p.chapters {
 			if ch.folder == "" {
 				if len(ch.texts) > 0 {
-					f.entries = append(f.entries, fileEntry{name: ch.texts[0].file})
+					f.entries = append(f.entries, fileEntry{name: ch.texts[0].file, isScene: ch.scene})
 				}
 				continue
 			}
@@ -225,14 +226,19 @@ func (f filelist) View(editRow int, editField string) string {
 // isChapterEntry reports whether e (an entry from f.entries, as built by SetDir) represents a
 // manuscript chapter — either a v2 chapter folder (matched by isChapterOf on e.name as a
 // folder) or a legacy single-file chapter (matched by its flat filename against texts[0].file,
-// since a legacy chapterRef always has folder == ""; isChapterOf can't see those by name).
+// since a legacy chapterRef always has folder == ""; isChapterOf can't see those by name). A
+// standalone scene (e.isScene) shares the same folder=="" shape as a legacy flat-file chapter
+// but is NOT a chapter — excluded explicitly so it gets its own render path.
 func (f filelist) isChapterEntry(e fileEntry) bool {
+	if e.isScene {
+		return false
+	}
 	if e.isDir {
 		return isChapterOf(f.view, e.name)
 	}
 	for _, p := range f.view.parts {
 		for _, ch := range p.chapters {
-			if ch.folder == "" && len(ch.texts) > 0 && ch.texts[0].file == e.name {
+			if ch.folder == "" && !ch.scene && len(ch.texts) > 0 && ch.texts[0].file == e.name {
 				return true
 			}
 		}
