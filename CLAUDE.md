@@ -86,7 +86,12 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   **beats + notes** in `outline.md`; `shift/alt+↑↓` move a beat, `ctrl+p`/`alt+↵` **promote** a beat
   → chapter [seeds the synopsis from its notes, marks it `[x]`], one-way; the `outline.md` format is
   a shared contract with the companion app — see Shared Contracts §4); the **pager** (`m`: read-through with jump-to-edit); **export**
-  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: manifest chapters
+  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **all-texts export-selection screen** (`v` from the sidebar/corkboard:
+  full-screen list of every chapter, scene, standalone scene, and Resource with an export-inclusion checkbox, word/character
+  totals, and a 111-character preview per entry; `space` toggles inclusion, `shift+↑↓` moves an entry within its container
+  or across container boundaries, converting independent resources ↔ standalone scenes as needed; the selection state
+  persists in a per-project `.okashi-export.json` sidecar; **Resources can now appear in an export when checked on this screen**
+  — previously impossible); **rename** (`r`: manifest chapters
   **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
   loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
   glamour); **Properties** (`i` from the hub: edit title / author / contact / width /
@@ -136,7 +141,7 @@ with the companion app's copy.
   titles live in the shared per-manuscript `manifest.json` (see the companion app's storage-spine
   design doc, §2.1 and §6). okashi
   **reads and writes** it (create + chapter-title retitle, and **structure mode** reorder / insert /
-  remove with a commit confirm; cross-container move via the file mover is planned):
+  remove with a commit confirm; cross-container move via the export-selection screen is shipped, 2026-08-23):
   - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
     `items[].title` is the chapter display title; `manifest.title` is the manuscript title;
     a file is a chapter **iff** it is listed in `items`; any unlisted `.md` is a Resource.
@@ -152,11 +157,13 @@ with the companion app's copy.
     de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
     structural writes offered here either.
   - **Category** (neither manifest nor numbered files): plain folder of documents.
-- **Authority (revised 2026-07-01):** **both apps write the shared manifest.** okashi creates
+- **Authority (revised 2026-07-01; cross-container moves shipped 2026-08-23):** **both apps write the shared manifest.** okashi creates
   manuscripts (New Project) and retitles chapter display titles (`r` on a manifest chapter →
   `items[].title`, no-confirm); **structure mode** (SHIPPED) reorders / inserts / removes chapters
   behind a commit **confirmation** (`s` from the binder), mirroring the companion app's own confirm sheet.
-  Cross-container **move** (into/out of a manuscript) via the file mover is planned. The companion app owns
+  Cross-container **move** (into/out of a manuscript, via the export-selection screen `v` → `shift+↑↓`)
+  rewrites `manifest.json` using the existing v3 shape (retrofit `Texts[]`/`items[]` entries per the v3 schema,
+  no new field, no schema-shape change). The companion app owns
   the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
   Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
   `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
