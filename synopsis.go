@@ -12,7 +12,8 @@ const synopsisName = ".okashi-synopsis.json"
 const synopsisSchemaVersion = 1
 
 // synopsisFile is the per-manuscript synopsis sidecar (okashi-owned, NOT the manifest — the shared
-// contract HARD GATE stays untriggered). Keyed by bare chapter filename → synopsis text.
+// contract HARD GATE stays untriggered). Keyed by corkKey(chapterRef) (corkboard.go) →
+// synopsis text: a chapter's bare folder, or a standalone scene's "scene:"-prefixed filename.
 type synopsisFile struct {
 	SchemaVersion int               `json:"schemaVersion"`
 	Synopses      map[string]string `json:"synopses"`

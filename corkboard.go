@@ -13,6 +13,30 @@ import (
 	"okashi/internal/textarea"
 )
 
+// corkKey returns the stable, collision-free identity of a card's chapterRef for the corkboard's
+// per-card maps (m.synopses, m.corkFirstLines, and corkChapterSet's prune set). An ordinary
+// chapter (or a Part's chapter) keys off its folder, exactly as before this helper existed — that
+// key is ALSO the sidecar's on-disk key (synopsis.go's saveSynopses/loadSynopses), so it must stay
+// bare, unprefixed, for backward-compatible persistence. A standalone scene has folder == "" BY
+// CONSTRUCTION (the whole point of the feature — it lives at the manuscript root, no folder of its
+// own), so two-or-more standalone scenes in the same manuscript would all collide on the same ""
+// key. A scene is instead keyed by its birth-stable filename (ch.texts[0].file — the same identity
+// findSceneByFile uses), namespaced with a "scene:" prefix so it can never collide with a real
+// chapter folder (folders are slugs; "scene:" is not a valid slug prefix in practice, and even a
+// pathological folder literally named "scene:foo" would only collide with a same-named scene file,
+// not with an ordinary chapter). A scene with no texts (should not happen — the invariant is
+// Folder=="" && len(Texts)==1 — but defend anyway) falls back to "scene:"+ch.title so it still gets
+// a key distinct from "" instead of silently colliding.
+func corkKey(ch chapterRef) string {
+	if !ch.scene {
+		return ch.folder
+	}
+	if len(ch.texts) > 0 {
+		return "scene:" + ch.texts[0].file
+	}
+	return "scene:" + ch.title
+}
+
 // enterCorkboard opens the corkboard for the current manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 //
@@ -55,8 +79,9 @@ func (m *model) enterCorkboard() {
 		if len(ch.texts) == 0 {
 			continue
 		}
-		if m.synopses[ch.folder] == "" {
-			m.corkFirstLines[ch.folder] = firstProseLine(filepath.Join(dir, ch.folder, ch.texts[0].file))
+		key := corkKey(ch)
+		if m.synopses[key] == "" {
+			m.corkFirstLines[key] = firstProseLine(filepath.Join(dir, ch.folder, ch.texts[0].file))
 		}
 	}
 	m.synEditing = false
@@ -83,14 +108,14 @@ func corkboardCardMeta(isCurrent bool, syn, firstLine string) (openMark, rawBody
 // synopsis write. It must NOT come from the staged m.structureItems: a staged x/a change
 // (uncommitted, and possibly discarded) would otherwise prune a still-live chapter's synopsis
 // off disk. Synopsis writes are committed independently of the structure commit, so they prune
-// against committed reality. Keyed by folder (birth-stable chapter identity in v2), across all
+// against committed reality. Keyed by corkKey (birth-stable chapter/scene identity), across all
 // parts — a synopsis for a chapter inside a real Part must not be pruned either.
 func (m model) corkChapterSet() map[string]bool {
 	s := map[string]bool{}
 	v := resolveManuscript(m.structureDir, readEntries(m.structureDir))
 	for _, p := range v.parts {
 		for _, ch := range p.chapters {
-			s[ch.folder] = true
+			s[corkKey(ch)] = true
 		}
 	}
 	return s
@@ -112,8 +137,8 @@ func (m *model) startSynopsisEdit() {
 	if m.structureSel < 0 || m.structureSel >= len(m.structureItems) {
 		return
 	}
-	folder := m.structureItems[m.structureSel].folder
-	m.synArea = newSynopsisArea(m.synopses[folder])
+	key := corkKey(m.structureItems[m.structureSel])
+	m.synArea = newSynopsisArea(m.synopses[key])
 	m.synArea.Focus()
 	m.synEditing = true
 }
@@ -127,23 +152,23 @@ func (m *model) commitSynopsis() {
 		return
 	}
 	ch := m.structureItems[m.structureSel]
-	folder := ch.folder
+	key := corkKey(ch)
 	text := strings.TrimRight(m.synArea.Value(), "\n")
 	if m.synopses == nil {
 		m.synopses = map[string]string{}
 	}
 	if text == "" {
-		delete(m.synopses, folder)
+		delete(m.synopses, key)
 		// Clearing a synopsis reveals the first-line fallback — populate it now (once, off the
 		// render path) so the card updates in-session, not only on corkboard re-entry.
 		if m.corkFirstLines == nil {
 			m.corkFirstLines = map[string]string{}
 		}
-		if _, ok := m.corkFirstLines[folder]; !ok && len(ch.texts) > 0 {
-			m.corkFirstLines[folder] = firstProseLine(filepath.Join(m.structureDir, folder, ch.texts[0].file))
+		if _, ok := m.corkFirstLines[key]; !ok && len(ch.texts) > 0 {
+			m.corkFirstLines[key] = firstProseLine(filepath.Join(m.structureDir, ch.folder, ch.texts[0].file))
 		}
 	} else {
-		m.synopses[folder] = text
+		m.synopses[key] = text
 	}
 	if err := saveSynopses(m.structureDir, m.synopses, m.corkChapterSet()); err != nil {
 		m.status = "échec de l'enregistrement du synopsis : " + err.Error()
@@ -460,7 +485,8 @@ func (m model) corkboardView() string {
 			}
 		}
 		isCurrent := m.currentFile != "" && chPath != "" && chPath == m.currentFile
-		openMark, rawBody, dim := corkboardCardMeta(isCurrent, m.synopses[it.folder], m.corkFirstLines[it.folder])
+		itKey := corkKey(it)
+		openMark, rawBody, dim := corkboardCardMeta(isCurrent, m.synopses[itKey], m.corkFirstLines[itKey])
 		var body string
 		if rawBody == "" {
 			body = lipgloss.NewStyle().Foreground(subtle).Render("(pas de synopsis — e pour éditer)")
@@ -493,7 +519,7 @@ func (m model) corkboardView() string {
 			if len(ch.texts) > 0 {
 				wc = commafy(m.files.wc.count(filepath.Join(m.structureDir, ch.folder, ch.texts[0].file))) + " m"
 			}
-			_, rawBody, dim := corkboardCardMeta(false, m.synopses[ch.folder], m.corkFirstLines[ch.folder])
+			_, rawBody, dim := corkboardCardMeta(false, m.synopses[corkKey(ch)], m.corkFirstLines[corkKey(ch)])
 			var body string
 			if rawBody == "" {
 				body = lipgloss.NewStyle().Foreground(subtle).Render("(pas de synopsis)")

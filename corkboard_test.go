@@ -463,3 +463,191 @@ func TestCorkboardEnterOnEmptyChapterShowsStatus(t *testing.T) {
 		t.Fatal("empty chapter must not leave the corkboard")
 	}
 }
+
+// seedCorkManuscriptWithTwoScenes builds a manuscript with ONE ordinary chapter and TWO
+// standalone scenes at the manuscript root. Every standalone scene has folder == "" by
+// construction (the whole point of the feature), so before corkKey existed, m.synopses and
+// m.corkFirstLines — both keyed directly by ch.folder — would collide on the shared "" key for
+// any manuscript with 2+ scenes.
+func seedCorkManuscriptWithTwoScenes(t *testing.T) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
+	mkChapterDir(t, dir, "a", map[string]string{"a.md": "body of a.md"})
+	os.WriteFile(filepath.Join(dir, "interlude-1.md"), []byte("first interlude body"), 0o644)
+	os.WriteFile(filepath.Join(dir, "interlude-2.md"), []byte("second interlude body"), 0o644)
+	if err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         "The Work",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}},
+			{Chapter: &manifestChapter{Title: "Interlude One", Scene: true,
+				Texts: []manifestText{{File: "interlude-1.md", Title: "Interlude One"}}}},
+			{Chapter: &manifestChapter{Title: "Interlude Two", Scene: true,
+				Texts: []manifestText{{File: "interlude-2.md", Title: "Interlude Two"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestCorkKeyDistinguishesScenesFromEachOtherAndFromEmptyFolder is the unit-level proof: corkKey
+// must never collapse two different standalone scenes (or a scene and a legacy/no-folder
+// chapter) onto the same string.
+func TestCorkKeyDistinguishesScenesFromEachOtherAndFromEmptyFolder(t *testing.T) {
+	normal := chapterRef{folder: "a", texts: []textRef{{file: "a.md"}}}
+	scene1 := chapterRef{folder: "", scene: true, texts: []textRef{{file: "interlude-1.md"}}}
+	scene2 := chapterRef{folder: "", scene: true, texts: []textRef{{file: "interlude-2.md"}}}
+	legacyOrEmpty := chapterRef{folder: "", texts: []textRef{{file: "01-legacy.md"}}} // scene == false
+
+	if corkKey(normal) != "a" {
+		t.Fatalf("corkKey(normal chapter) = %q, want unprefixed folder %q (sidecar backward compat)", corkKey(normal), "a")
+	}
+	keys := map[string]string{
+		"scene1":        corkKey(scene1),
+		"scene2":        corkKey(scene2),
+		"legacyOrEmpty": corkKey(legacyOrEmpty),
+	}
+	seen := map[string]string{}
+	for name, k := range keys {
+		if other, dup := seen[k]; dup {
+			t.Fatalf("corkKey collision: %s and %s both produced %q", name, other, k)
+		}
+		seen[k] = name
+	}
+	if corkKey(scene1) == "" || corkKey(scene2) == "" {
+		t.Fatalf("a standalone scene's corkKey must never be empty, got scene1=%q scene2=%q", corkKey(scene1), corkKey(scene2))
+	}
+}
+
+// TestCorkboardTwoStandaloneScenesKeepSeparateSynopses reproduces the real user-facing bug end to
+// end through the normal e/esc edit flow: editing one standalone scene's synopsis must not
+// clobber another standalone scene's synopsis in the same manuscript.
+func TestCorkboardTwoStandaloneScenesKeepSeparateSynopses(t *testing.T) {
+	dir := seedCorkManuscriptWithTwoScenes(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+	if len(m.structureItems) != 3 {
+		t.Fatalf("structureItems = %+v, want 3 (1 chapter + 2 scenes)", m.structureItems)
+	}
+
+	// Edit the first scene's synopsis (index 1: chapter a, interlude 1, interlude 2).
+	m.structureSel = 1
+	if !m.structureItems[1].scene {
+		t.Fatalf("structureItems[1] = %+v, want a standalone scene", m.structureItems[1])
+	}
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = mm.(model)
+	m.synArea.SetValue("The first interlude's synopsis.")
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+
+	// Now edit the second scene's synopsis.
+	m.structureSel = 2
+	if !m.structureItems[2].scene {
+		t.Fatalf("structureItems[2] = %+v, want a standalone scene", m.structureItems[2])
+	}
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = mm.(model)
+	if got := m.synArea.Value(); got != "" {
+		t.Fatalf("opening the SECOND scene's editor showed %q — it picked up the FIRST scene's synopsis (folder collision)", got)
+	}
+	m.synArea.SetValue("The second interlude's synopsis.")
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+
+	// In-memory: each scene keeps its own text, neither clobbered the other.
+	key1 := corkKey(m.structureItems[1])
+	key2 := corkKey(m.structureItems[2])
+	if key1 == key2 {
+		t.Fatalf("the two scenes produced the same corkKey %q", key1)
+	}
+	if m.synopses[key1] != "The first interlude's synopsis." {
+		t.Fatalf("m.synopses[%q] = %q, want the first interlude's text", key1, m.synopses[key1])
+	}
+	if m.synopses[key2] != "The second interlude's synopsis." {
+		t.Fatalf("m.synopses[%q] = %q, want the second interlude's text", key2, m.synopses[key2])
+	}
+
+	// On disk: the sidecar round-trips both entries distinctly, with no collision or loss.
+	reloaded := loadSynopses(dir)
+	if reloaded[key1] != "The first interlude's synopsis." {
+		t.Fatalf("sidecar[%q] = %q after reload, want the first interlude's text (got %+v)", key1, reloaded[key1], reloaded)
+	}
+	if reloaded[key2] != "The second interlude's synopsis." {
+		t.Fatalf("sidecar[%q] = %q after reload, want the second interlude's text (got %+v)", key2, reloaded[key2], reloaded)
+	}
+	if len(reloaded) != 2 {
+		t.Fatalf("sidecar has %d entries after reload, want exactly 2 (no stray \"\" collision entry): %+v", len(reloaded), reloaded)
+	}
+	if _, collided := reloaded[""]; collided {
+		t.Fatalf("sidecar still has a bare \"\" key — the collision was not fixed: %+v", reloaded)
+	}
+}
+
+// TestCorkboardTwoStandaloneScenesDistinctCardMeta confirms the rendering-level symptom is fixed
+// too: the card metadata (synopsis body used for each card) must differ between the two scenes
+// once both have distinct synopses — this is the exact map lookup corkboardView performs per
+// card.
+func TestCorkboardTwoStandaloneScenesDistinctCardMeta(t *testing.T) {
+	dir := seedCorkManuscriptWithTwoScenes(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+	m.synopses[corkKey(m.structureItems[1])] = "Synopsis A"
+	m.synopses[corkKey(m.structureItems[2])] = "Synopsis B"
+
+	_, bodyA, _ := corkboardCardMeta(false, m.synopses[corkKey(m.structureItems[1])], m.corkFirstLines[corkKey(m.structureItems[1])])
+	_, bodyB, _ := corkboardCardMeta(false, m.synopses[corkKey(m.structureItems[2])], m.corkFirstLines[corkKey(m.structureItems[2])])
+	if bodyA != "Synopsis A" || bodyB != "Synopsis B" {
+		t.Fatalf("card bodies = (%q, %q), want distinct synopses per scene", bodyA, bodyB)
+	}
+}
+
+// TestCorkboardSingleStandaloneSceneUnaffected is the no-regression check: a manuscript with
+// exactly one standalone scene (no possible collision) must behave exactly as before this fix —
+// synopsis edit/read round-trips normally, and the sidecar key stays a "scene:"-prefixed,
+// filename-based identity (not empty, not the bare folder "").
+func TestCorkboardSingleStandaloneSceneUnaffected(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "a", map[string]string{"a.md": "body of a.md"})
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("aparte body"), 0o644)
+	if err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         "The Work",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "a", Title: "One", Texts: []manifestText{{File: "a.md", Title: "One"}}}},
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true,
+				Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+	m.structureSel = 1
+	if !m.structureItems[1].scene {
+		t.Fatalf("structureItems[1] = %+v, want the standalone scene", m.structureItems[1])
+	}
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = mm.(model)
+	m.synArea.SetValue("Only scene's synopsis.")
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+
+	if loadSynopses(dir)["scene:aparte.md"] != "Only scene's synopsis." {
+		t.Fatalf("sidecar = %+v, want scene:aparte.md → the synopsis", loadSynopses(dir))
+	}
+}
+
+// TestCorkKeyOrdinaryChapterUnchanged pins the backward-compat guarantee explicitly: an ordinary
+// chapter's corkKey is still exactly its bare folder, matching the pre-fix sidecar format so
+// existing .okashi-synopsis.json files for normal chapters keep working without migration.
+func TestCorkKeyOrdinaryChapterUnchanged(t *testing.T) {
+	ch := chapterRef{folder: "chapter-one", texts: []textRef{{file: "chapter-one.md"}}}
+	if got := corkKey(ch); got != "chapter-one" {
+		t.Fatalf("corkKey(ordinary chapter) = %q, want bare folder %q", got, "chapter-one")
+	}
+}
