@@ -253,3 +253,40 @@ func TestFindSceneByFileMutatesThroughPointer(t *testing.T) {
 		t.Fatalf("mutating through the returned pointer must mutate m, got %q", m.Items[0].Chapter.Title)
 	}
 }
+
+func TestRenameSceneTitleUpdatesManifestOnly(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true,
+				Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := renameSceneTitle(dir, "aparte.md", "Nouveau titre"); err != nil {
+		t.Fatal(err)
+	}
+	got, _, _ := readManifest(dir)
+	if got.Items[0].Chapter.Title != "Nouveau titre" {
+		t.Fatalf("title = %q, want %q", got.Items[0].Chapter.Title, "Nouveau titre")
+	}
+	if got.Items[0].Chapter.Texts[0].File != "aparte.md" {
+		t.Fatal("file must stay birth-stable — only the title changes")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "aparte.md")); err != nil {
+		t.Fatal("aparte.md must still exist on disk under its original name")
+	}
+}
+
+func TestRenameSceneTitleRefusesUnknownFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "N"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := renameSceneTitle(dir, "nope.md", "X"); err == nil {
+		t.Fatal("expected an error for a file that isn't a standalone scene")
+	}
+}

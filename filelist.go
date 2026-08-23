@@ -294,12 +294,18 @@ func (f filelist) chapterWords(name string) int {
 }
 
 // chapterTitle returns the display title for a chapter folder, looking it up
-// from the resolved view. Falls back to sectionTitle (for zero-view or legacy
-// entries where name is actually a flat filename).
+// from the resolved view. Also matches a standalone scene by filename (ch.scene entries
+// have folder == "", so the folder comparison alone can't reach them — mirrored from
+// isChapterEntry/chapterWords' own name-based fallback for folder-less entries). Falls
+// back to sectionTitle (for zero-view or legacy entries where name is actually a flat
+// filename).
 func (f filelist) chapterTitle(name string) string {
 	for _, p := range f.view.parts {
 		for _, ch := range p.chapters {
 			if ch.folder == name {
+				return ch.title
+			}
+			if ch.scene && len(ch.texts) > 0 && ch.texts[0].file == name {
 				return ch.title
 			}
 		}

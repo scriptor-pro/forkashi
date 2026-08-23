@@ -180,6 +180,26 @@ func renameChapterTitle(dir, folder, newTitle string) error {
 	return writeManifest(dir, m)
 }
 
+// renameSceneTitle edits ONLY the items[].chapter.title of the standalone scene whose
+// Texts[0].File matches file — the scene counterpart of renameChapterTitle, keyed by
+// filename instead of folder (a scene has no folder). The file itself is never renamed
+// (birth-stable, mirroring a chapter's folder). Read-modify-writes like renameChapterTitle.
+func renameSceneTitle(dir, file, newTitle string) error {
+	m, present, err := readManifest(dir)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return fmt.Errorf("no manifest in %s", dir)
+	}
+	sc := findSceneByFile(&m, file)
+	if sc == nil {
+		return fmt.Errorf("%s is not a standalone scene in %s", file, dir)
+	}
+	sc.Title = newTitle
+	return writeManifest(dir, m)
+}
+
 // findChapterByFolder returns a pointer to the manifestChapter matching folder — across the
 // root and every Part's Chapters — so the caller can mutate it (e.g. append a Texts entry)
 // before a single writeManifest. Returns nil if no chapter with that folder exists.

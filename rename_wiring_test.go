@@ -292,6 +292,48 @@ func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
 	}
 }
 
+// TestStartRenameOnStandaloneSceneTargetsManifestTitle: pressing r on a standalone scene
+// (manifest v3, chapter.scene == true) must retitle items[].chapter.title via
+// renameSceneTitle, not fall through to a plain on-disk file rename — the file stays
+// birth-stable, mirroring a manifest chapter.
+func TestStartRenameOnStandaloneSceneTargetsManifestTitle(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "aparte.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":3,"title":"N","items":[{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("aparte.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming || !m.renameTarget.standaloneScene {
+		t.Fatalf("r on a standalone scene must start a standaloneScene retitle; renaming=%v target=%+v", m.renaming, m.renameTarget)
+	}
+	if got := m.nameInput.Value(); got != "Aparté" {
+		t.Fatalf("prefill should be the current scene title 'Aparté', got %q", got)
+	}
+
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "Titre modifié")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	// File must remain on disk, untouched — a scene retitle must never rename the file.
+	if _, err := os.Stat(filepath.Join(proj, "aparte.md")); err != nil {
+		t.Fatalf("scene file must not be renamed on disk: %v", err)
+	}
+	mf, _, _ := readManifest(proj)
+	if mf.Items[0].Chapter.Title != "Titre modifié" {
+		t.Fatalf("manifest title = %q, want 'Titre modifié'", mf.Items[0].Chapter.Title)
+	}
+	if mf.Items[0].Chapter.Texts[0].File != "aparte.md" {
+		t.Fatalf("manifest file changed to %q — must be birth-stable", mf.Items[0].Chapter.Texts[0].File)
+	}
+}
+
 func TestCtrlKOnNonManuscriptStaysPut(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)

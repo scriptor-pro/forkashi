@@ -379,6 +379,7 @@ type renameTarget struct {
 	isDir           bool
 	section         bool // a numbered section -> title-only rename (legacy file rename)
 	manifestChapter bool // a manifest chapter -> edit items[].title, filename birth-stable
+	standaloneScene bool // a manifest v3 standalone scene -> edit items[].chapter.title, filename birth-stable
 }
 
 const inspectorWidth = 34
@@ -2600,6 +2601,15 @@ func (m *model) startRename() {
 		m.status = "manifeste illisible — structure en lecture seule (manifeste externe)"
 		return
 	}
+	if e.isScene {
+		// standalone scene (manifest v3): retitle the manifest entry; filename is
+		// birth-stable, same principle as a chapter but keyed by filename (no folder).
+		m.renamingInPane = true
+		m.nameInput.Width = m.files.width
+		m.beginRename(renameTarget{dir: m.files.dir, name: e.name, standaloneScene: true},
+			m.files.chapterTitle(e.name))
+		return
+	}
 	if m.files.isChapterEntry(e) {
 		if v.source == sourceManifest {
 			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
@@ -2734,6 +2744,16 @@ func (m *model) confirmRename() {
 
 	if t.manifestChapter {
 		if err := renameChapterTitle(t.dir, t.name, typed); err != nil {
+			m.status = "échec du retitrage : " + err.Error()
+		} else {
+			m.status = "retitré en " + typed
+		}
+		m.refreshAfterRename()
+		return
+	}
+
+	if t.standaloneScene {
+		if err := renameSceneTitle(t.dir, t.name, typed); err != nil {
 			m.status = "échec du retitrage : " + err.Error()
 		} else {
 			m.status = "retitré en " + typed
