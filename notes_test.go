@@ -132,7 +132,7 @@ func TestEnterAllNotesFlattensAcrossChapters(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "deux", "deux.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}},`+
 			`{"chapter":{"folder":"deux","title":"Deux","texts":[{"file":"deux.md","title":"Deux"}]}}]}`), 0o644)
 
@@ -167,7 +167,7 @@ func TestEnterAllNotesSkipsChaptersWithoutNotes(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
 	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
 
 	m := model{files: filelist{dir: dir}}
@@ -186,7 +186,7 @@ func TestUpdateAllNotesNavigationAndEsc(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
 	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
 	saveNotes(filepath.Join(dir, "un", "un.md"), []note{
 		{ID: "n1", Text: "Une."},

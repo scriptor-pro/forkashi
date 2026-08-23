@@ -60,7 +60,7 @@ func TestRenameManifestChapterRetitles(t *testing.T) {
 	os.MkdirAll(filepath.Join(proj, "the-letter"), 0o755)
 	os.WriteFile(filepath.Join(proj, "the-letter", "the-letter.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}}]}`), 0o644)
+		`{"schemaVersion":3,"title":"N","items":[{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}}]}`), 0o644)
 	m := sidebarModel(t, proj)
 	m.files.selectName("the-letter")
 
@@ -101,7 +101,7 @@ func TestRenameAllowedForResourceInManuscript(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "a", "a.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(proj, "notes.md"), []byte("y"), 0o644) // unlisted = Resource
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[{"chapter":{"folder":"a","title":"One","texts":[{"file":"a.md","title":"One"}]}}]}`), 0o644)
+		`{"schemaVersion":3,"title":"N","items":[{"chapter":{"folder":"a","title":"One","texts":[{"file":"a.md","title":"One"}]}}]}`), 0o644)
 	m := sidebarModel(t, proj)
 	m.files.selectName("notes.md")
 
@@ -272,9 +272,9 @@ func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
 	proj := filepath.Join(root, "novel")
 	os.MkdirAll(proj, 0o755)
 	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644)
-	// schemaVersion 3 triggers refuse mode (unsupported future version).
+	// schemaVersion 4 triggers refuse mode (unsupported future version).
 	os.WriteFile(filepath.Join(proj, manifestName), []byte(
-		`{"schemaVersion":3,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
+		`{"schemaVersion":4,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
 	m := sidebarModel(t, proj)
 	m.files.selectName("01-opening.md")
 

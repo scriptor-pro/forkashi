@@ -29,7 +29,7 @@ func mkChapterDir(t *testing.T, manuscriptDir, folder string, texts map[string]s
 func TestResolveManifestBareChaptersNoPart(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello world"})
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"Windermere","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"Windermere","items":[
 		{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Opening"}]}}
 	]}`)
 	v := resolveManuscript(dir, readEntries(dir))
@@ -52,7 +52,7 @@ func TestResolveManifestMixedPartsAndBareChapters(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "prologue", map[string]string{"prologue.md": "x"})
 	mkChapterDir(t, dir, "the-letter", map[string]string{"the-letter.md": "y"})
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"Windermere","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"Windermere","items":[
 		{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},
 		{"part":"Part One","chapters":[
 			{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}
@@ -76,7 +76,7 @@ func TestResolveManifestMultiTextChapterOrder(t *testing.T) {
 		"scene-ouverture.md":     "a",
 		"scene-confrontation.md": "b",
 	})
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"chapitre-un","title":"Chapitre un","texts":[
 			{"file":"scene-confrontation.md","title":"Confrontation"},
 			{"file":"scene-ouverture.md","title":"Ouverture"}
@@ -92,7 +92,7 @@ func TestResolveManifestMultiTextChapterOrder(t *testing.T) {
 func TestResolveManifestChapterWithZeroTexts(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "empty-chapter", nil)
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"empty-chapter","title":"Vide","texts":[]}}
 	]}`)
 	v := resolveManuscript(dir, readEntries(dir))
@@ -107,7 +107,7 @@ func TestResolveManifestChapterWithZeroTexts(t *testing.T) {
 func TestResolveManifestAbsentTextOmitted(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "x"}) // "gone.md" never written
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"opening","title":"One","texts":[
 			{"file":"opening.md","title":"Opening"},{"file":"gone.md","title":"Lost"}
 		]}}
@@ -122,7 +122,7 @@ func TestResolveManifestAbsentTextOmitted(t *testing.T) {
 func TestResolveManifestAbsentChapterFolderOmitted(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "x"}) // "gone" folder never created
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"opening","title":"One","texts":[{"file":"opening.md","title":"Opening"}]}},
 		{"chapter":{"folder":"gone","title":"Lost","texts":[{"file":"gone.md","title":"Lost"}]}}
 	]}`)
@@ -136,7 +136,7 @@ func TestResolveManifestUnlistedIsLoose(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "a", map[string]string{"a.md": "x"})
 	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("y"), 0o644) // loose, at manuscript root
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"a","title":"One","texts":[{"file":"a.md","title":"A"}]}}
 	]}`)
 	v := resolveManuscript(dir, readEntries(dir))
@@ -184,7 +184,7 @@ func TestResolveCategory(t *testing.T) {
 func TestResolveUnreadableManifestRefuses(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644) // numbered, but...
-	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[]}`)
+	writeManifestRaw(t, dir, `{"schemaVersion":4,"title":"N","items":[]}`)
 	v := resolveManuscript(dir, readEntries(dir))
 	// Refuse to guess: NOT legacy, files shown flat as loose, warning set.
 	if v.source != sourceManifest {
@@ -204,7 +204,7 @@ func TestResolveUnreadableManifestRefuses(t *testing.T) {
 func TestIsChapterOf(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "x"})
-	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"opening","title":"One","texts":[{"file":"opening.md","title":"Opening"}]}}
 	]}`)
 	v := resolveManuscript(dir, readEntries(dir))

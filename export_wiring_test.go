@@ -109,7 +109,7 @@ func TestExportManifestManuscriptUsesManifestOrder(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("chapter one text"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("chapter two text"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"Windermere","items":[`+
+		`{"schemaVersion":3,"title":"Windermere","items":[`+
 			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
 			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	entries := readEntries(dir)

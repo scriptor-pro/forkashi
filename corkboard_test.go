@@ -362,7 +362,7 @@ func TestCorkboardViewShowsRealPartHeaderReadOnly(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "prologue", "prologue.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},`+
 			`{"part":"Part One","chapters":[`+
 			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)

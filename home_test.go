@@ -523,7 +523,7 @@ func TestClassifyLibraryAndFiles(t *testing.T) {
 	ws := t.TempDir()
 	os.MkdirAll(filepath.Join(ws, "my-novel", "open"), 0o755)
 	os.WriteFile(filepath.Join(ws, "my-novel", "manifest.json"),
-		[]byte(`{"schemaVersion":2,"title":"My Novel","items":[{"chapter":{"folder":"open","title":"Opening","texts":[{"file":"open.md","title":"Opening"}]}}]}`), 0o644)
+		[]byte(`{"schemaVersion":3,"title":"My Novel","items":[{"chapter":{"folder":"open","title":"Opening","texts":[{"file":"open.md","title":"Opening"}]}}]}`), 0o644)
 	os.WriteFile(filepath.Join(ws, "my-novel", "open", "open.md"), []byte("# Opening\n\nThe fog rolled in off the bay.\n"), 0o644)
 	os.WriteFile(filepath.Join(ws, "my-novel", "notes.md"), []byte("Loose notes.\n"), 0o644)
 	os.MkdirAll(filepath.Join(ws, "research"), 0o755)
@@ -698,7 +698,7 @@ func TestHomeFilesForShowsPartHeaderWithWordTotal(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two three"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"Windermere","items":[`+
+		`{"schemaVersion":3,"title":"Windermere","items":[`+
 			`{"part":"Part One","chapters":[`+
 			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
 
@@ -722,7 +722,7 @@ func TestHomeFilesForOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
 
 	t.Setenv("OKASHI_DIR", dir)

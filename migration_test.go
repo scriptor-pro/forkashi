@@ -18,7 +18,7 @@ func TestNeedsMigrationTrueForV1(t *testing.T) {
 func TestNeedsMigrationFalseForV2(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, manifestName),
-		[]byte(`{"schemaVersion":2,"title":"X","items":[]}`), 0o644)
+		[]byte(`{"schemaVersion":3,"title":"X","items":[]}`), 0o644)
 	if needsMigration(dir) {
 		t.Fatal("a schemaVersion:2 manifest must not need migration")
 	}

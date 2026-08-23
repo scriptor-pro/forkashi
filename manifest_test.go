@@ -20,7 +20,7 @@ func TestReadManifestAbsent(t *testing.T) {
 func TestReadManifestValidV2(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(`{
-		"schemaVersion": 2, "title": "Windermere",
+		"schemaVersion": 3, "title": "Windermere",
 		"items": [
 			{"chapter": {"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Opening"}]}},
 			{"part": "Part One", "chapters": [
@@ -64,13 +64,13 @@ func TestReadManifestRejectsV1(t *testing.T) {
 func TestReadManifestRejectsBadVersion(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, manifestName),
-		[]byte(`{"schemaVersion":3,"title":"X","items":[]}`), 0o644)
+		[]byte(`{"schemaVersion":4,"title":"X","items":[]}`), 0o644)
 	_, present, err := readManifest(dir)
 	if !present {
 		t.Fatal("a present-but-unsupported manifest must report present=true")
 	}
 	if err == nil {
-		t.Fatal("schemaVersion 3 must be refused with an error, not silently read")
+		t.Fatal("schemaVersion 4 must be refused with an error, not silently read")
 	}
 }
 

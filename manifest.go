@@ -9,7 +9,7 @@ import (
 )
 
 const manifestName = "manifest.json"
-const manifestSchemaVersion = 2
+const manifestSchemaVersion = 3
 
 // manifestText is one ordered text (scene) inside a chapter: a bare filename (slug,
 // no numeric prefix — order lives in the manifest, not the filename) plus a display title.

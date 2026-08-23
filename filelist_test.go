@@ -302,7 +302,7 @@ func TestSidebarRendersManifestTitleAndOrder(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("one two three"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("a b"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"Windermere","items":[`+
+		`{"schemaVersion":3,"title":"Windermere","items":[`+
 			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
 			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	f := newFilelist()
@@ -527,7 +527,7 @@ func TestSidebarShowsPartHeaderWithWordTotal(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("one two three four five"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"Windermere","items":[`+
+		`{"schemaVersion":3,"title":"Windermere","items":[`+
 			`{"part":"Part One","chapters":[`+
 			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
 	f := newFilelist()
@@ -548,7 +548,7 @@ func TestSidebarOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
 	f := newFilelist()
 	f.root = ""
@@ -568,7 +568,7 @@ func TestSidebarShowsMixedBareChaptersAndPart(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "prologue", "prologue.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"prologue","title":"Prologue","texts":[{"file":"prologue.md","title":"Prologue"}]}},`+
 			`{"part":"Part One","chapters":[`+
 			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
@@ -607,7 +607,7 @@ func TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement(t *testing.T) {
 	// header still renders (its title is non-empty), but nothing follows it
 	// until the next Part's header.
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"part":"Empty Part","chapters":[`+
 			`{"folder":"missing","title":"Ghost","texts":[{"file":"missing.md","title":"Ghost"}]}]},`+
 			`{"part":"Part Two","chapters":[`+
@@ -669,7 +669,7 @@ func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
 	f := newFilelist()
 	f.root = ""
@@ -692,7 +692,7 @@ func TestActivateMultiTextChapterSignalsPicker(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("y"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 	f := newFilelist()
@@ -727,7 +727,7 @@ func TestActivateEmptyChapterSignalsPickerWithNoTexts(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"vide","title":"Vide","texts":[]}}]}`), 0o644)
 	f := newFilelist()
 	f.root = ""

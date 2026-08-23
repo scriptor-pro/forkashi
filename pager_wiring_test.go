@@ -16,7 +16,7 @@ func TestPagerManifestTitleAndOrder(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("one two"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("a b"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"Windermere","items":[`+
+		`{"schemaVersion":3,"title":"Windermere","items":[`+
 			`{"chapter":{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}},`+
 			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	var p pagerModel
@@ -138,7 +138,7 @@ func TestPagerShowsPartHeaderBeforeItsChapters(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "the-letter"), 0o755)
 	os.WriteFile(filepath.Join(dir, "the-letter", "the-letter.md"), []byte("Contenu."), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"part":"Part One","chapters":[`+
 			`{"folder":"the-letter","title":"The Letter","texts":[{"file":"the-letter.md","title":"The Letter"}]}]}]}`), 0o644)
 
@@ -168,7 +168,7 @@ func TestPagerOmitsHeaderForSyntheticUntitledPart(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}]}`), 0o644)
 
 	var p pagerModel

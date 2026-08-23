@@ -42,7 +42,7 @@ func TestEnterWritingSkipsMigrationForV2Manifest(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
 	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName),
-		[]byte(`{"schemaVersion":2,"title":"N","items":[{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
+		[]byte(`{"schemaVersion":3,"title":"N","items":[{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
 
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
@@ -181,7 +181,7 @@ func TestEnterTextPickerOpensOnMultiTextChapter(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un deux trois"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("quatre cinq"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 
@@ -204,7 +204,7 @@ func TestTextPickerViewShowsEachTextWithWordCount(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un deux trois"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("quatre cinq"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 
@@ -229,7 +229,7 @@ func TestTextPickerEnterOpensSelectedTextInEditor(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 
@@ -257,7 +257,7 @@ func TestTextPickerEscCancelsWithoutOpening(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 
@@ -281,7 +281,7 @@ func TestTextPickerShowsEmptyStateForZeroTextChapter(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"vide","title":"Vide","texts":[]}}]}`), 0o644)
 
 	t.Setenv("OKASHI_DIR", dir)
@@ -302,7 +302,7 @@ func TestTextPickerCtrlNOpensSceneNamingPrompt(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
 
@@ -328,7 +328,7 @@ func TestTextPickerCtrlNThenConfirmAddsScene(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(
-		`{"schemaVersion":2,"title":"N","items":[`+
+		`{"schemaVersion":3,"title":"N","items":[`+
 			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
 			`{"file":"scene-un.md","title":"Scène Un"}]}}]}`), 0o644)
 
