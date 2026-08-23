@@ -126,6 +126,31 @@ Le mode structure (`structure.go`, reorder/insert/remove) traite une entrée sc�
 comme une entrée chapitre dans `structureItems` (même slice, même réordonnancement) — elle ne
 peut simplement pas être « dépliée » pour révéler des sous-textes.
 
+### Correction : `enter` sur une carte corkboard multi-scènes
+
+Bug préexistant découvert en explorant le corkboard pour cette spec, corrigé ici puisqu'il
+touche la même zone de code que la distinction visuelle scène/chapitre ci-dessus :
+`updateCorkboard`'s `enter` (`corkboard.go`, cas `"enter"`) ouvre toujours
+`ch.texts[0].file` — la première scène d'un chapitre — quel que soit le nombre de scènes du
+chapitre. Une carte représentant un chapitre à 2+ scènes n'offre aujourd'hui aucun moyen
+d'atteindre ses scènes suivantes depuis le corkboard.
+
+Corrigé en réutilisant l'écran de sélection de textes déjà livré
+([2026-08-16-scene-creation-design.md](2026-08-16-scene-creation-design.md)) :
+- `len(ch.texts) == 1` (y compris une scène indépendante, qui a toujours exactement un
+  texte) : comportement inchangé, `enter` ouvre directement ce texte.
+- `len(ch.texts) >= 2` : `enter` route vers `screenTextPicker` au lieu d'ouvrir `texts[0]`
+  directement — `m.textPickerChapter` posé sur le `chapterRef` déjà résolu par le corkboard
+  (`m.structureItems[m.structureSel]`), `m.textPickerDir = m.structureDir`, sortie du
+  corkboard (`m.exitCorkboard()`) avant l'entrée sur `screenTextPicker`, symétrique à
+  `enterTextPicker()` (`main.go:178-188`) qui pose les mêmes champs depuis la sélection
+  sidebar. Pas de nouvelle fonction d'entrée nécessaire — `enterTextPicker()` suppose
+  aujourd'hui une résolution via la sidebar (`m.files.selectedEntryName()`) ; le corkboard a
+  déjà son `chapterRef` résolu en main et peut poser directement les mêmes champs sans repasser
+  par cette résolution.
+- `len(ch.texts) == 0` : comportement inchangé (message de statut « ce chapitre n'a pas encore
+  de scène »).
+
 ## Création (`ctrl+n` sans chapitre présélectionné)
 
 Le picker `ctrl+n` dans un manuscrit propose désormais **toujours** l'option scène, plus
@@ -273,3 +298,7 @@ code est déjà exercé et ne devrait pas être un point de rupture.
   présélectionné), message de statut adapté selon le contexte.
 - Export : test qu'un export (RTF ou AST) incluant une scène indépendante produit le contenu
   attendu sans erreur de chemin de fichier.
+- `corkboard_test.go` : `enter` sur une carte à 1 texte ouvre directement ce texte (inchangé) ;
+  `enter` sur une carte à 2+ textes route vers `screenTextPicker` avec `textPickerChapter` posé
+  sur le bon `chapterRef` (au lieu d'ouvrir silencieusement `texts[0]`) ; `enter` sur une carte
+  à 0 texte affiche toujours le message de statut existant (inchangé).
