@@ -212,9 +212,124 @@ func (m *model) moveExportSelectEntry(dir int) {
 		m.moveExportSelectSceneWithinChapter(i, dir)
 		return
 	}
-	// Standalone scene / Resource — Task 8 will replace this branch with full cross-boundary
-	// logic. For this task, only reorder among entries of the SAME kind (a real chapter
-	// boundary crossing is out of scope here).
+	m.moveTopLevelEntry(i, dir)
+}
+
+// moveTopLevelEntry handles a standalone scene or a Resource crossing into the OTHER kind
+// (scene→Resource drops the manifest item, file stays at root; Resource→scene adds a new
+// Scene:true item, file stays at root — neither moves a file, since both live at the
+// manuscript root already) or reordering among entries of the same kind (Resources sort
+// alphabetically today and are not manifest-ordered, so "moving" a Resource past another
+// Resource has no manifest effect; moving a standalone scene past another standalone scene
+// reorders items[]).
+func (m *model) moveTopLevelEntry(i, dir int) {
+	entries := m.exportSelect.entries
+	target := i + dir
+	if target < 0 || target >= len(entries) || entries[target].isHeader || entries[target].indent {
+		return
+	}
+	movingIsScene := !entries[i].isHeader && !entries[i].indent && isStandaloneSceneFile(m.files.dir, entries[i].file)
+	targetIsScene := !entries[target].isHeader && !entries[target].indent && isStandaloneSceneFile(m.files.dir, entries[target].file)
+
+	if movingIsScene && targetIsScene {
+		m.reorderStandaloneScenes(entries[i].file, entries[target].file)
+		return
+	}
+	if movingIsScene && !targetIsScene {
+		m.convertStandaloneSceneToResource(entries[i].file)
+		return
+	}
+	if !movingIsScene && targetIsScene {
+		m.convertResourceToStandaloneScene(entries[i].file)
+		return
+	}
+	// Both Resources: no manifest to touch (Resources aren't ordered by items[]) — nothing to persist.
+}
+
+// isStandaloneSceneFile reports whether file (relative to dir) is currently listed as a
+// Scene:true item's Texts[0].File in dir's manifest.
+func isStandaloneSceneFile(dir, file string) bool {
+	mani, present, err := readManifest(dir)
+	if err != nil || !present {
+		return false
+	}
+	return findSceneByFile(&mani, file) != nil
+}
+
+// reorderStandaloneScenes swaps the items[] positions of the two standalone scenes referencing
+// fileA and fileB — no file moves, both already live at the manuscript root.
+func (m *model) reorderStandaloneScenes(fileA, fileB string) {
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	idxA, idxB := -1, -1
+	for idx, it := range mani.Items {
+		if it.Chapter == nil || !it.Chapter.Scene || len(it.Chapter.Texts) == 0 {
+			continue
+		}
+		switch it.Chapter.Texts[0].File {
+		case fileA:
+			idxA = idx
+		case fileB:
+			idxB = idx
+		}
+	}
+	if idxA < 0 || idxB < 0 {
+		return
+	}
+	mani.Items[idxA], mani.Items[idxB] = mani.Items[idxB], mani.Items[idxA]
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	m.reloadExportSelectAfterMove()
+}
+
+// convertStandaloneSceneToResource drops file's Scene:true item from items[] — the file stays
+// on disk at the manuscript root, unmoved, and becomes a Resource by the existing definition
+// (an unlisted root .md file).
+func (m *model) convertStandaloneSceneToResource(file string) {
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	var kept []manifestItem
+	for _, it := range mani.Items {
+		if it.Chapter != nil && it.Chapter.Scene && len(it.Chapter.Texts) > 0 && it.Chapter.Texts[0].File == file {
+			continue
+		}
+		kept = append(kept, it)
+	}
+	mani.Items = kept
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	m.reloadExportSelectAfterMove()
+}
+
+// convertResourceToStandaloneScene adds file as a new Scene:true item at the end of items[] —
+// the file stays on disk at the manuscript root, unmoved.
+func (m *model) convertResourceToStandaloneScene(file string) {
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	title := sectionTitle(file)
+	mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+		Title: title,
+		Scene: true,
+		Texts: []manifestText{{File: file, Title: title}},
+	}})
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	m.reloadExportSelectAfterMove()
 }
 
 // moveExportSelectChapterBlock moves the chapter header at index i (plus all its indented
@@ -261,9 +376,12 @@ func (m *model) moveExportSelectChapterBlock(i, dir int) {
 	m.reloadExportSelectAfterMove()
 }
 
-// moveExportSelectSceneWithinChapter moves the scene at index i up/down within its own
-// chapter's Texts[], refusing to cross the chapter's own header/footer boundary (that's Task
-// 8's job). i's owning chapter is found by walking backward to the nearest header.
+// moveExportSelectSceneWithinChapter moves the scene at index i up/down. If the target stays
+// inside the same chapter's scene span, it's a simple Texts[] reorder (no disk change). If the
+// target crosses into an ADJACENT chapter, the scene's file is moved on disk (safeMove) and the
+// manifest is rewritten to drop it from the source chapter's Texts[] and append it to the
+// target chapter's Texts[] at the crossed position; the sidecar's exclusion key (if any)
+// migrates to the new path.
 func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
 	entries := m.exportSelect.entries
 	headerIdx := -1
@@ -276,7 +394,6 @@ func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
 	if headerIdx < 0 {
 		return
 	}
-	// This chapter's scene rows span (headerIdx, chapterEnd).
 	chapterEnd := len(entries)
 	for j := headerIdx + 1; j < len(entries); j++ {
 		if entries[j].isHeader || !entries[j].indent {
@@ -285,31 +402,113 @@ func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
 		}
 	}
 	target := i + dir
-	if target <= headerIdx || target >= chapterEnd {
-		return // would leave this chapter — Task 8's job, not this task's
+
+	if target > headerIdx && target < chapterEnd {
+		// Same-chapter reorder — Task 7's logic, unchanged.
+		folder := m.chapterFolderForHeader(headerIdx)
+		if folder == "" {
+			return
+		}
+		mani, present, err := readManifest(m.files.dir)
+		if err != nil || !present {
+			m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+			return
+		}
+		ch := findChapterByFolder(&mani, folder)
+		if ch == nil {
+			return
+		}
+		sceneIdx := i - headerIdx - 1
+		targetIdx := target - headerIdx - 1
+		if sceneIdx < 0 || sceneIdx >= len(ch.Texts) || targetIdx < 0 || targetIdx >= len(ch.Texts) {
+			return
+		}
+		ch.Texts[sceneIdx], ch.Texts[targetIdx] = ch.Texts[targetIdx], ch.Texts[sceneIdx]
+		if err := writeManifest(m.files.dir, mani); err != nil {
+			m.status = "échec du déplacement : " + err.Error()
+			return
+		}
+		m.reloadExportSelectAfterMove()
+		return
 	}
-	folder := m.chapterFolderForHeader(headerIdx)
-	if folder == "" {
+
+	// Crosses this chapter's boundary — find which adjacent chapter header we crossed into.
+	var dstHeaderIdx int
+	if dir < 0 {
+		dstHeaderIdx = headerIdx - 1
+		for dstHeaderIdx >= 0 && !entries[dstHeaderIdx].isHeader {
+			dstHeaderIdx--
+		}
+	} else {
+		dstHeaderIdx = chapterEnd
+	}
+	if dstHeaderIdx < 0 || dstHeaderIdx >= len(entries) || !entries[dstHeaderIdx].isHeader {
+		return // no adjacent chapter in that direction — already at an edge
+	}
+	srcFolder := m.chapterFolderForHeader(headerIdx)
+	dstFolder := m.chapterFolderForHeader(dstHeaderIdx)
+	if srcFolder == "" || dstFolder == "" {
+		return
+	}
+	m.moveSceneBetweenChapters(srcFolder, entries[i].file, dstFolder)
+}
+
+// moveSceneBetweenChapters moves file (currently in srcFolder's Texts[]) into dstFolder: the
+// on-disk file first (safeMove; refused-collision leaves everything untouched), then a single
+// manifest read-modify-write that drops it from srcFolder and appends it to dstFolder, then
+// migrates the sidecar's exclusion key if the file had one.
+func (m *model) moveSceneBetweenChapters(srcFolder, file, dstFolder string) {
+	base := filepath.Base(file)
+	src := filepath.Join(m.files.dir, srcFolder, base)
+	dst := filepath.Join(m.files.dir, dstFolder, base)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "un fichier nommé " + base + " existe déjà dans le chapitre de destination"
+		return
+	}
+	if err := safeMove(src, dst); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
 		return
 	}
 	mani, present, err := readManifest(m.files.dir)
 	if err != nil || !present {
-		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		m.status = "scène déplacée mais le manifeste est introuvable ou illisible"
 		return
 	}
-	ch := findChapterByFolder(&mani, folder)
-	if ch == nil {
+	srcCh := findChapterByFolder(&mani, srcFolder)
+	dstCh := findChapterByFolder(&mani, dstFolder)
+	if srcCh == nil || dstCh == nil {
+		m.status = "scène déplacée mais un chapitre est introuvable dans le manifeste"
 		return
 	}
-	sceneIdx := i - headerIdx - 1
-	targetIdx := target - headerIdx - 1
-	if sceneIdx < 0 || sceneIdx >= len(ch.Texts) || targetIdx < 0 || targetIdx >= len(ch.Texts) {
-		return
+	var moved manifestText
+	kept := srcCh.Texts[:0]
+	for _, t := range srcCh.Texts {
+		if t.File == base {
+			moved = t
+			continue
+		}
+		kept = append(kept, t)
 	}
-	ch.Texts[sceneIdx], ch.Texts[targetIdx] = ch.Texts[targetIdx], ch.Texts[sceneIdx]
+	srcCh.Texts = kept
+	dstCh.Texts = append(dstCh.Texts, moved)
 	if err := writeManifest(m.files.dir, mani); err != nil {
-		m.status = "échec du déplacement : " + err.Error()
+		m.status = "échec de la mise à jour du manifeste après déplacement : " + err.Error()
 		return
+	}
+	oldKey := filepath.Join(srcFolder, base)
+	newKey := filepath.Join(dstFolder, base)
+	excluded := loadExportSelection(m.files.dir)
+	if excluded[oldKey] {
+		delete(excluded, oldKey)
+		excluded[newKey] = true
+		known := map[string]bool{newKey: true}
+		for k := range excluded {
+			known[k] = true
+		}
+		if err := saveExportSelection(m.files.dir, excluded, known); err != nil {
+			m.status = "scène déplacée mais échec de la migration de la sélection d'export : " + err.Error()
+			return
+		}
 	}
 	m.reloadExportSelectAfterMove()
 }

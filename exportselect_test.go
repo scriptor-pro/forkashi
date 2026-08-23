@@ -352,3 +352,151 @@ func TestMoveExportSelectChapterHeaderMovesWholeBlock(t *testing.T) {
 		t.Fatalf("entries[0] = %q, want %q after moving First past Second", m2.exportSelect.entries[0].title, "Second")
 	}
 }
+
+func TestMoveExportSelectSceneCrossesIntoAdjacentChapter(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "only.md"), []byte("The only scene of ch1."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "first.md"), []byte("ch2's first scene."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{{File: "only.md", Title: "Only"}}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{{File: "first.md", Title: "First"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0]=header First, [1]="Only" (indented), [2]=header Second, [3]="First" (indented).
+	// Move "Only" (index 1) down, crossing into ch2.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m3 := mm2.(model)
+
+	if _, err := os.Stat(filepath.Join(dir, "ch2", "only.md")); err != nil {
+		t.Fatalf("only.md must have moved to ch2/, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "only.md")); !os.IsNotExist(err) {
+		t.Fatal("only.md must no longer exist in ch1/")
+	}
+	got, _, _ := readManifest(dir)
+	ch1 := findChapterByFolder(&got, "ch1")
+	ch2 := findChapterByFolder(&got, "ch2")
+	if len(ch1.Texts) != 0 {
+		t.Fatalf("ch1 must now have 0 texts, got %+v", ch1.Texts)
+	}
+	found := false
+	for _, t := range ch2.Texts {
+		if t.File == "only.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ch2 must now list only.md, got %+v", ch2.Texts)
+	}
+	_ = m3
+}
+
+func TestMoveExportSelectMigratesSidecarKeyOnCrossBoundaryMove(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "only.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "first.md"), []byte("y"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{{File: "only.md", Title: "Only"}}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{{File: "first.md", Title: "First"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	oldKey := filepath.Join("ch1", "only.md")
+	if err := saveExportSelection(dir, map[string]bool{oldKey: true}, map[string]bool{oldKey: true}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+
+	newKey := filepath.Join("ch2", "only.md")
+	got := loadExportSelection(dir)
+	if got[oldKey] {
+		t.Fatal("old sidecar key must not survive the move")
+	}
+	if !got[newKey] {
+		t.Fatal("exclusion must migrate to the new path")
+	}
+}
+
+func TestMoveExportSelectRefusesNameCollisionInDestination(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "same.md"), []byte("from ch1"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "same.md"), []byte("already in ch2"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{{File: "same.md", Title: "Same"}}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{{File: "same.md", Title: "Same"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m3 := mm2.(model)
+
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "same.md")); err != nil {
+		t.Fatal("ch1/same.md must NOT have been moved away (collision refused)")
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "ch2", "same.md"))
+	if string(data) != "already in ch2" {
+		t.Fatal("ch2/same.md must be untouched (not overwritten)")
+	}
+	if m3.status == "" {
+		t.Fatal("a status message must explain the refused move")
+	}
+}
+
+func TestMoveExportSelectStandaloneSceneBecomesResourceCrossingBoundary(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("y"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true, Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0] = standalone scene "Aparté", [1] = Resource "notes". Move Aparté past notes.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m2 := mm.(model)
+	got, _, _ := readManifest(dir)
+	if len(got.Items) != 0 {
+		t.Fatalf("Aparté must have been dropped from items[] (now a plain Resource), got %+v", got.Items)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "aparte.md")); err != nil {
+		t.Fatal("aparte.md must still exist on disk (unmoved — root stays root)")
+	}
+	_ = m2
+}
