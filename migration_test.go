@@ -15,10 +15,22 @@ func TestNeedsMigrationTrueForV1(t *testing.T) {
 	}
 }
 
-func TestNeedsMigrationFalseForV2(t *testing.T) {
+func TestNeedsMigrationFalseForV3(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, manifestName),
 		[]byte(`{"schemaVersion":3,"title":"X","items":[]}`), 0o644)
+	if needsMigration(dir) {
+		t.Fatal("a schemaVersion:3 manifest must not need migration")
+	}
+}
+
+// TestNeedsMigrationFalseForV2 covers the schemaVersion:2 case distinctly from the v3 test
+// above — v2 is now silently readable (see readManifest's manifestSchemaVersionMinRead), not a
+// migration source (needsMigration only fires for v1). This must stay false too.
+func TestNeedsMigrationFalseForV2(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, manifestName),
+		[]byte(`{"schemaVersion":2,"title":"X","items":[]}`), 0o644)
 	if needsMigration(dir) {
 		t.Fatal("a schemaVersion:2 manifest must not need migration")
 	}

@@ -17,7 +17,7 @@ func TestReadManifestAbsent(t *testing.T) {
 	}
 }
 
-func TestReadManifestValidV2(t *testing.T) {
+func TestReadManifestValidV3(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, manifestName), []byte(`{
 		"schemaVersion": 3, "title": "Windermere",
@@ -45,6 +45,96 @@ func TestReadManifestValidV2(t *testing.T) {
 	}
 	if !hasManifest(dir) {
 		t.Fatal("hasManifest should be true")
+	}
+}
+
+// TestReadManifestAcceptsSchemaVersion2 reproduces the real-world v2→v3 rollout scenario: a
+// manifest written by an OLDER okashi build (schemaVersion 2, no items[].chapter.scene field
+// at all — the field did not exist yet) must still read cleanly. Before this fix, readManifest
+// rejected anything but exactly manifestSchemaVersion (3), which — because nothing in okashi
+// calls writeManifest without a prior successful readManifest — meant a v2 manuscript could
+// never be written again and was permanently stuck in refuse-to-guess mode.
+func TestReadManifestAcceptsSchemaVersion2(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(`{
+		"schemaVersion": 2, "title": "Windermere",
+		"items": [
+			{"chapter": {"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Opening"}]}}
+		]}`), 0o644)
+	m, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("valid v2 manifest: present=%v err=%v, want true,nil", present, err)
+	}
+	if m.Title != "Windermere" || len(m.Items) != 1 {
+		t.Fatalf("decoded = %+v, want title Windermere with 1 item", m)
+	}
+	ch := m.Items[0].Chapter
+	if ch == nil || ch.Folder != "opening" {
+		t.Fatalf("item 0 chapter = %+v", ch)
+	}
+	// The v2 payload has no "scene" key at all — it must decode to the zero value (false),
+	// which is exactly correct: standalone scenes did not exist under schemaVersion 2.
+	if ch.Scene {
+		t.Fatalf("chapter.Scene = true, want false (field absent from v2 payload)")
+	}
+}
+
+// TestResolveManuscriptNormalForSchemaVersion2 confirms the fix at the level the user
+// actually experiences it: resolveManuscript on a v2 manuscript must produce a normal view
+// (chapters visible, no warning) rather than the refuse-to-guess mode that readManifest's
+// pre-fix rejection forced (source stays sourceManifest, loose+parts both empty, warning
+// non-empty).
+func TestResolveManuscriptNormalForSchemaVersion2(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(`{
+		"schemaVersion": 2, "title": "Windermere",
+		"items": [
+			{"chapter": {"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Opening"}]}}
+		]}`), 0o644)
+	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
+	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("Il était une fois."), 0o644)
+
+	v := resolveManuscript(dir, readEntries(dir))
+	if v.warning != "" {
+		t.Fatalf("warning = %q, want empty (v2 manifest must resolve without a warning)", v.warning)
+	}
+	if len(v.parts) != 1 || len(v.parts[0].chapters) != 1 {
+		t.Fatalf("parts = %+v, want exactly one chapter", v.parts)
+	}
+	if v.parts[0].chapters[0].title != "Chapter One" {
+		t.Fatalf("chapter title = %q, want %q", v.parts[0].chapters[0].title, "Chapter One")
+	}
+}
+
+// TestWriteManifestUpgradesSchemaVersion2To3 covers the other half of the v2→v3 story: once a
+// v2 manuscript goes through any read-modify-write cycle, the manifest on disk is rewritten
+// with schemaVersion 3 — writeManifest already forces this unconditionally (design: "no
+// migration screen — the next successful write just re-stamps the version"), this test just
+// pins that behavior down explicitly in the v2-manuscript context this fix is about.
+func TestWriteManifestUpgradesSchemaVersion2To3(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(`{
+		"schemaVersion": 2, "title": "Windermere",
+		"items": [
+			{"chapter": {"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Opening"}]}}
+		]}`), 0o644)
+	m, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("readManifest: present=%v err=%v", present, err)
+	}
+	if err := writeManifest(dir, m); err != nil {
+		t.Fatalf("writeManifest: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, manifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m2, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("re-readManifest after write: present=%v err=%v", present, err)
+	}
+	if m2.SchemaVersion != manifestSchemaVersion {
+		t.Fatalf("schemaVersion after write = %d, want %d (raw: %s)", m2.SchemaVersion, manifestSchemaVersion, raw)
 	}
 }
 

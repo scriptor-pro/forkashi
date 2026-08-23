@@ -53,10 +53,26 @@ func hasManifest(dir string) bool {
 	return err == nil
 }
 
+// manifestSchemaVersionMinRead is the oldest schemaVersion readManifest accepts silently
+// (in addition to manifestSchemaVersion itself). v2 manifests have no items[].chapter.scene
+// field; that decodes to the Go zero value (Scene: false), which is exactly correct for a v2
+// manuscript (standalone scenes did not exist yet) — so a v2 manifest needs no data
+// transformation to be read as if it were v3, only a version-number bump on next write. See
+// design doc "v2→v3 manifest read compatibility": okashi is a read-modify-write app (nothing
+// calls writeManifest without a prior successful readManifest), so rejecting v2 here would
+// strand every existing v2 manuscript in refuse-to-guess mode forever, since the one write
+// path that would upgrade it on disk (writeManifest, which unconditionally forces
+// SchemaVersion to manifestSchemaVersion) can never be reached.
+const manifestSchemaVersionMinRead = 2
+
 // readManifest loads dir/manifest.json. When the file is absent it returns
 // present=false, err=nil. A present-but-unreadable manifest (malformed JSON or an
 // unsupported schemaVersion) returns present=true with a non-nil err: okashi
 // REFUSES to guess structure and NEVER writes the file back (design §4.1).
+//
+// schemaVersion 2 is accepted here too (read-only compatibility, not a migration): the next
+// successful writeManifest on this manuscript rewrites it to manifestSchemaVersion (3)
+// unconditionally, so no explicit v2→v3 migration step is needed or offered.
 func readManifest(dir string) (m manifest, present bool, err error) {
 	data, readErr := os.ReadFile(filepath.Join(dir, manifestName))
 	if os.IsNotExist(readErr) {
@@ -68,7 +84,7 @@ func readManifest(dir string) (m manifest, present bool, err error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return manifest{}, true, err
 	}
-	if m.SchemaVersion != manifestSchemaVersion {
+	if m.SchemaVersion != manifestSchemaVersion && m.SchemaVersion != manifestSchemaVersionMinRead {
 		return manifest{}, true, fmt.Errorf(
 			"unsupported manifest schemaVersion %d (okashi supports %d)",
 			m.SchemaVersion, manifestSchemaVersion)
