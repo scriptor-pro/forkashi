@@ -18,12 +18,15 @@ type manifestText struct {
 	Title string `json:"title"`
 }
 
-// manifestChapter is one chapter: a folder (slug, birth-stable — never renamed by a
-// retitle or reorder) holding one or more ordered texts.
+// manifestChapter is one chapter — OR, when Scene is true, one standalone scene: a single
+// ordered text with no sub-texts and no folder of its own (its file lives at the manuscript
+// root, named by Texts[0].File). Folder is "" for a scene. Invariant: Scene == true iff
+// Folder == "" && len(Texts) == 1.
 type manifestChapter struct {
 	Folder string         `json:"folder"`
 	Title  string         `json:"title"`
 	Texts  []manifestText `json:"texts"`
+	Scene  bool           `json:"scene,omitempty"`
 }
 
 // manifestItem is one top-level manuscript entry: EITHER a bare chapter (Chapter set,
@@ -189,6 +192,20 @@ func findChapterByFolder(m *manifest, folder string) *manifestChapter {
 			if m.Items[i].Chapters[j].Folder == folder {
 				return &m.Items[i].Chapters[j]
 			}
+		}
+	}
+	return nil
+}
+
+// findSceneByFile returns a pointer to the standalone-scene manifestChapter whose
+// Texts[0].File matches file, at the manuscript root — the scene identity lookup mirroring
+// findChapterByFolder (a scene has no Folder, so its birth-stable identity is its filename
+// instead). Returns nil if no standalone scene with that file exists.
+func findSceneByFile(m *manifest, file string) *manifestChapter {
+	for i := range m.Items {
+		if m.Items[i].Chapter != nil && m.Items[i].Chapter.Scene &&
+			len(m.Items[i].Chapter.Texts) > 0 && m.Items[i].Chapter.Texts[0].File == file {
+			return m.Items[i].Chapter
 		}
 	}
 	return nil

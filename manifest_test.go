@@ -167,3 +167,89 @@ func TestFindChapterByFolderNotFound(t *testing.T) {
 		t.Fatalf("expected nil for a folder not in the manifest, got %+v", ch)
 	}
 }
+
+func TestManifestChapterSceneFieldRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	m := manifest{
+		Title: "Windermere",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "opening", Title: "Chapter One",
+				Texts: []manifestText{{File: "opening.md", Title: "Opening"}}}},
+			{Chapter: &manifestChapter{Title: "A Stray Thought", Scene: true,
+				Texts: []manifestText{{File: "a-stray-thought.md", Title: "A Stray Thought"}}}},
+		},
+	}
+	if err := writeManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+	got, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("round-trip read: present=%v err=%v", present, err)
+	}
+	if got.Items[0].Chapter.Scene {
+		t.Fatalf("ordinary chapter must decode Scene=false, got true")
+	}
+	if !got.Items[1].Chapter.Scene {
+		t.Fatalf("standalone scene must decode Scene=true, got false")
+	}
+	if got.Items[1].Chapter.Folder != "" {
+		t.Fatalf("standalone scene must have empty Folder, got %q", got.Items[1].Chapter.Folder)
+	}
+}
+
+func TestManifestV2WithoutSceneFieldDefaultsFalse(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"a","title":"A","texts":[{"file":"a.md","title":"A"}]}}
+	]}`)
+	m, present, err := readManifest(dir)
+	if !present || err != nil {
+		t.Fatalf("present=%v err=%v", present, err)
+	}
+	if m.Items[0].Chapter.Scene {
+		t.Fatal("a manifest entry with no scene field must decode Scene=false")
+	}
+}
+
+func TestFindSceneByFileFinds(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "un", Title: "Un",
+			Texts: []manifestText{{File: "un.md", Title: "Un"}}}},
+		{Chapter: &manifestChapter{Title: "Aparté", Scene: true,
+			Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+	}}
+	sc := findSceneByFile(&m, "aparte.md")
+	if sc == nil || !sc.Scene || sc.Title != "Aparté" {
+		t.Fatalf("expected to find the standalone scene, got %+v", sc)
+	}
+}
+
+func TestFindSceneByFileIgnoresNonSceneChapters(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Folder: "un", Title: "Un",
+			Texts: []manifestText{{File: "un.md", Title: "Un"}}}},
+	}}
+	// "un.md" is a chapter's text, not a standalone scene's file — must not match.
+	if sc := findSceneByFile(&m, "un.md"); sc != nil {
+		t.Fatalf("expected nil (un.md belongs to a folder chapter, not a scene), got %+v", sc)
+	}
+}
+
+func TestFindSceneByFileNotFound(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion}
+	if sc := findSceneByFile(&m, "nope.md"); sc != nil {
+		t.Fatalf("expected nil for an absent file, got %+v", sc)
+	}
+}
+
+func TestFindSceneByFileMutatesThroughPointer(t *testing.T) {
+	m := manifest{SchemaVersion: manifestSchemaVersion, Items: []manifestItem{
+		{Chapter: &manifestChapter{Title: "Aparté", Scene: true,
+			Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+	}}
+	sc := findSceneByFile(&m, "aparte.md")
+	sc.Title = "Renamed"
+	if m.Items[0].Chapter.Title != "Renamed" {
+		t.Fatalf("mutating through the returned pointer must mutate m, got %q", m.Items[0].Chapter.Title)
+	}
+}
