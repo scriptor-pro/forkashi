@@ -284,7 +284,7 @@ func (m *model) reorderStandaloneScenes(fileA, fileB string) {
 		m.status = "échec du déplacement : " + err.Error()
 		return
 	}
-	m.reloadExportSelectAfterMove()
+	m.reloadExportSelectAfterMove(followFile(fileA))
 }
 
 // convertStandaloneSceneToResource drops file's Scene:true item from items[] — the file stays
@@ -308,7 +308,7 @@ func (m *model) convertStandaloneSceneToResource(file string) {
 		m.status = "échec du déplacement : " + err.Error()
 		return
 	}
-	m.reloadExportSelectAfterMove()
+	m.reloadExportSelectAfterMove(followFile(file))
 }
 
 // convertResourceToStandaloneScene adds file as a new Scene:true item at the end of items[] —
@@ -329,7 +329,7 @@ func (m *model) convertResourceToStandaloneScene(file string) {
 		m.status = "échec du déplacement : " + err.Error()
 		return
 	}
-	m.reloadExportSelectAfterMove()
+	m.reloadExportSelectAfterMove(followFile(file))
 }
 
 // moveExportSelectChapterBlock moves the chapter header at index i (plus all its indented
@@ -368,12 +368,13 @@ func (m *model) moveExportSelectChapterBlock(i, dir int) {
 	if target < 0 || target >= len(bareIdx) {
 		return // already at an edge
 	}
+	movedTitle := mani.Items[bareIdx[headerPos]].Chapter.Title
 	mani.Items[bareIdx[headerPos]], mani.Items[bareIdx[target]] = mani.Items[bareIdx[target]], mani.Items[bareIdx[headerPos]]
 	if err := writeManifest(m.files.dir, mani); err != nil {
 		m.status = "échec du déplacement : " + err.Error()
 		return
 	}
-	m.reloadExportSelectAfterMove()
+	m.reloadExportSelectAfterMove(followHeader(movedTitle))
 }
 
 // moveExportSelectSceneWithinChapter moves the scene at index i up/down. If the target stays
@@ -428,7 +429,7 @@ func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
 			m.status = "échec du déplacement : " + err.Error()
 			return
 		}
-		m.reloadExportSelectAfterMove()
+		m.reloadExportSelectAfterMove(followFile(entries[i].file))
 		return
 	}
 
@@ -510,7 +511,7 @@ func (m *model) moveSceneBetweenChapters(srcFolder, file, dstFolder string) {
 			return
 		}
 	}
-	m.reloadExportSelectAfterMove()
+	m.reloadExportSelectAfterMove(followFile(newKey))
 }
 
 // chapterFolderForHeader re-resolves the manuscript to find the folder of the chapter whose
@@ -551,15 +552,68 @@ func countHeadersBefore(entries []exportSelectEntry, upTo int) int {
 // simplest way to keep the display consistent with a just-written manifest, at the cost of a
 // full re-read per move (acceptable: moves are an interactive, human-paced action, not a hot
 // path — same tradeoff enterExportSelect already makes on screen entry).
-func (m *model) reloadExportSelectAfterMove() {
+//
+// follow identifies the entry the cursor must land on in the rebuilt list: a non-header row is
+// identified by its file (relative path, unique across entries); a chapter-header row has no
+// file, so it is identified by isHeader==true and its title instead. This is the ONE mechanism
+// every caller uses — same-container reorders (Task 7, where the numeric index happens to stay
+// correct by construction) and cross-container moves (Task 8, where entry count on either side
+// of the cursor can change non-trivially) both resolve sel by re-finding this same entry in the
+// rebuilt list, rather than one of them clamping a stale numeric index. If no entry matches
+// (should not happen for a successful move), sel falls back to a clamp so it stays in range.
+func (m *model) reloadExportSelectAfterMove(follow exportSelectFollow) {
 	dir := m.files.dir
 	v := resolveManuscript(dir, readEntries(dir))
 	excluded := loadExportSelection(dir)
-	sel := m.exportSelect.sel
-	m.exportSelect = exportSelectModel{entries: buildExportSelectEntries(dir, v, excluded), sel: sel}
-	if m.exportSelect.sel >= len(m.exportSelect.entries) {
-		m.exportSelect.sel = len(m.exportSelect.entries) - 1
+	prevSel := m.exportSelect.sel
+	entries := buildExportSelectEntries(dir, v, excluded)
+	m.exportSelect = exportSelectModel{entries: entries, sel: prevSel}
+	if idx := follow.locate(entries); idx >= 0 {
+		m.exportSelect.sel = idx
+		return
 	}
+	if m.exportSelect.sel >= len(entries) {
+		m.exportSelect.sel = len(entries) - 1
+	}
+}
+
+// exportSelectFollow identifies which rebuilt entry reloadExportSelectAfterMove should move the
+// cursor to. Exactly one of file (non-header rows) or headerTitle (chapter-header rows, which
+// carry no file) is set.
+type exportSelectFollow struct {
+	file        string
+	headerTitle string
+	isHeader    bool
+}
+
+// followFile identifies a non-header entry (scene, standalone scene, or Resource) by its
+// relative file path.
+func followFile(file string) exportSelectFollow { return exportSelectFollow{file: file} }
+
+// followHeader identifies a chapter-header entry by its title.
+func followHeader(title string) exportSelectFollow {
+	return exportSelectFollow{headerTitle: title, isHeader: true}
+}
+
+// locate finds follow's entry in the rebuilt list, returning its index or -1 if not found.
+func (f exportSelectFollow) locate(entries []exportSelectEntry) int {
+	if f.isHeader {
+		for i, e := range entries {
+			if e.isHeader && e.title == f.headerTitle {
+				return i
+			}
+		}
+		return -1
+	}
+	if f.file == "" {
+		return -1
+	}
+	for i, e := range entries {
+		if !e.isHeader && e.file == f.file {
+			return i
+		}
+	}
+	return -1
 }
 
 // exportSelectTotals sums words/chars across every non-header, non-excluded entry.

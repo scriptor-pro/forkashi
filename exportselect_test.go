@@ -473,6 +473,243 @@ func TestMoveExportSelectRefusesNameCollisionInDestination(t *testing.T) {
 	}
 }
 
+// TestExportSelectEndToEndToggleMoveToggleExport is a single integration test chaining several
+// real user actions on the "all texts" screen against ONE manuscript, then verifying the actual
+// exported file content — the kind of scenario an isolated per-operation test (like every other
+// test in this file) cannot catch an integration bug in, such as Fix 1's stale-sel-after-a-
+// cross-container-move bug. Sequence: open the screen; uncheck a text; move a scene across a
+// chapter boundary (shift+down); toggle a different entry's inclusion AFTER the move (proving
+// selection/exclusion state stays coherent post-move); run a real whole-manuscript export; assert
+// on the exported RTF's content.
+func TestExportSelectEndToEndToggleMoveToggleExport(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	dir := filepath.Join(root, "novel")
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("Alpha prose kept."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "b.md"), []byte("Bravo prose excluded."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "c.md"), []byte("Charlie prose kept."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "Novel",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{
+				{File: "a.md", Title: "Alpha"},
+			}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{
+				{File: "b.md", Title: "Bravo"},
+				{File: "c.md", Title: "Charlie"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Step 1: open the screen.
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0]=header First, [1]="Alpha", [2]=header Second, [3]="Bravo", [4]="Charlie".
+
+	// Step 2: uncheck "Bravo" (entry 3).
+	space := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	for i := 0; i < 3; i++ {
+		mm, _ := m.updateExportSelect(downKey())
+		m = mm.(model)
+	}
+	if m.exportSelect.entries[m.exportSelect.sel].title != "Bravo" {
+		t.Fatalf("expected cursor on 'Bravo' before toggling, got %+v", m.exportSelect.entries[m.exportSelect.sel])
+	}
+	mm, _ := m.updateExportSelect(space)
+	m = mm.(model)
+	if !m.exportSelect.entries[3].excluded {
+		t.Fatal("'Bravo' must be excluded after step 2's toggle")
+	}
+
+	// Step 3: move "Alpha" (currently entry 1, ch1's only scene) down, crossing into ch2 — it
+	// becomes ch2's new first scene. Move the cursor up from "Bravo" to "Alpha" first.
+	for i := 0; i < 2; i++ {
+		mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyUp})
+		m = mm.(model)
+	}
+	if m.exportSelect.entries[m.exportSelect.sel].title != "Alpha" {
+		t.Fatalf("expected cursor on 'Alpha' before the cross-chapter move, got %+v", m.exportSelect.entries[m.exportSelect.sel])
+	}
+	mm, _ = m.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m = mm.(model)
+	// Fix 1: sel must now point at "Alpha" in its new position (under Second), not an
+	// unrelated row.
+	moved := m.exportSelect.entries[m.exportSelect.sel]
+	if moved.title != "Alpha" {
+		t.Fatalf("sel must follow 'Alpha' after the cross-chapter move, got entry=%+v (sel=%d, entries=%+v)",
+			moved, m.exportSelect.sel, m.exportSelect.entries)
+	}
+
+	// Step 4: toggle a DIFFERENT entry's inclusion after the move — re-include "Bravo".
+	var bravoIdx = -1
+	for i, e := range m.exportSelect.entries {
+		if e.title == "Bravo" {
+			bravoIdx = i
+		}
+	}
+	if bravoIdx < 0 {
+		t.Fatal("'Bravo' entry must still exist after the move")
+	}
+	for m.exportSelect.sel != bravoIdx {
+		step := downKey
+		if m.exportSelect.sel > bravoIdx {
+			step = func() tea.Msg { return tea.KeyMsg{Type: tea.KeyUp} }
+		}
+		mm, _ := m.updateExportSelect(step())
+		m = mm.(model)
+	}
+	if !m.exportSelect.entries[bravoIdx].excluded {
+		t.Fatal("'Bravo' must still be excluded before step 4's re-include toggle")
+	}
+	mm, _ = m.updateExportSelect(space)
+	m = mm.(model)
+	if m.exportSelect.entries[bravoIdx].excluded {
+		t.Fatal("'Bravo' must be re-included after step 4's toggle")
+	}
+
+	// Step 5: run a real whole-manuscript export (same pattern as export_wiring_test.go's Task
+	// 6 tests: set screenCorkboard + a configured exportChooser, then call runExport()).
+	m.screen = screenCorkboard
+	m.exportChooser = &exportChooserModel{checked: map[exportFormat]bool{formatRTF: true}, style: StyleManuscript}
+	m.runExport()
+
+	out, err := os.ReadFile(filepath.Join(dir, "export", "novel.rtf"))
+	if err != nil {
+		t.Fatalf("export file not written: %v", err)
+	}
+	body := string(out)
+
+	// Step 6a: "Alpha" was never excluded — must appear.
+	if !strings.Contains(body, "Alpha prose kept") {
+		t.Fatal("exported RTF must contain 'Alpha' (never excluded)")
+	}
+	// Step 6b: "Charlie" was never excluded — must appear.
+	if !strings.Contains(body, "Charlie prose kept") {
+		t.Fatal("exported RTF must contain 'Charlie' (never excluded)")
+	}
+	// Step 6c: "Bravo" ended step 4 RE-INCLUDED (toggled back on) — must appear.
+	if !strings.Contains(body, "Bravo prose excluded") {
+		t.Fatal("exported RTF must contain 'Bravo' — it was re-included by step 4's toggle")
+	}
+
+	// Step 6d: "Alpha" must now live under "Second" (moved chapter). moveSceneBetweenChapters
+	// appends the crossed scene to the destination chapter's Texts[] (it does not try to land
+	// it at a specific interior position), so "Alpha" is ch2's LAST scene, after "Bravo" and
+	// "Charlie" — assert that on-disk manifest order, and that the export follows it (Alpha
+	// last among ch2's three scenes).
+	got, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1 := findChapterByFolder(&got, "ch1")
+	ch2 := findChapterByFolder(&got, "ch2")
+	if ch1 == nil || len(ch1.Texts) != 0 {
+		t.Fatalf("ch1 must have 0 texts after 'Alpha' moved out, got %+v", ch1)
+	}
+	if ch2 == nil || len(ch2.Texts) != 3 || ch2.Texts[len(ch2.Texts)-1].File != "a.md" {
+		t.Fatalf("ch2 must list 'a.md' as its last text after the cross-chapter move, got %+v", ch2)
+	}
+	alphaPos := strings.Index(body, "Alpha prose kept")
+	bravoPos := strings.Index(body, "Bravo prose excluded")
+	charliePos := strings.Index(body, "Charlie prose kept")
+	if alphaPos < 0 || bravoPos < 0 || charliePos < 0 || alphaPos < bravoPos || alphaPos < charliePos {
+		t.Fatalf("'Alpha' must appear after 'Bravo' and 'Charlie' in the exported order (now ch2's last scene), alphaPos=%d bravoPos=%d charliePos=%d", alphaPos, bravoPos, charliePos)
+	}
+}
+
+// TestMoveExportSelectCrossChapterSelFollowsMovedScene proves the cursor (sel) tracks the
+// scene that just crossed a chapter boundary, not a stale numeric index. Fix 1: before this
+// fix, sel was clamped numerically and could land on an unrelated row (often the following
+// chapter's header) once entry counts on either side of the cursor shifted non-trivially.
+func TestMoveExportSelectCrossChapterSelFollowsMovedScene(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "only.md"), []byte("The only scene of ch1."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "first.md"), []byte("ch2's first scene."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "second.md"), []byte("ch2's second scene."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{{File: "only.md", Title: "Only"}}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{
+				{File: "first.md", Title: "First"},
+				{File: "second.md", Title: "Second"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0]=header First, [1]="Only" (indented), [2]=header Second, [3]="First", [4]="Second".
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown}) // sel -> 1 ("Only")
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown}) // crosses into ch2
+	m3 := mm2.(model)
+
+	entries := m3.exportSelect.entries
+	if m3.exportSelect.sel < 0 || m3.exportSelect.sel >= len(entries) {
+		t.Fatalf("sel = %d out of range (len=%d)", m3.exportSelect.sel, len(entries))
+	}
+	got := entries[m3.exportSelect.sel]
+	if got.file != filepath.Join("ch2", "only.md") {
+		t.Fatalf("sel must follow the moved scene 'Only' into ch2, got entry=%+v (sel=%d, entries=%+v)",
+			got, m3.exportSelect.sel, entries)
+	}
+
+	// Repeating the same shift+down (pushing the scene further) must keep following it too.
+	mm3, _ := m3.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m4 := mm3.(model)
+	entries4 := m4.exportSelect.entries
+	got4 := entries4[m4.exportSelect.sel]
+	if got4.file != filepath.Join("ch2", "only.md") {
+		t.Fatalf("sel must still follow 'Only' after a second shift+down, got entry=%+v (sel=%d, entries=%+v)",
+			got4, m4.exportSelect.sel, entries4)
+	}
+}
+
+// TestMoveExportSelectResourceToStandaloneSceneSelFollowsEntry proves sel tracks a Resource
+// that converts into a standalone scene when it crosses the boundary with an adjacent
+// standalone scene (Task 8's Resource<->scene conversion), not a stale numeric index.
+func TestMoveExportSelectResourceToStandaloneSceneSelFollowsEntry(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("y"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true, Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0] = standalone scene "Aparté", [1] = Resource "notes".
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown}) // sel -> 1 ("notes")
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftUp}) // notes crosses past Aparté, becomes a scene
+	m3 := mm2.(model)
+
+	entries := m3.exportSelect.entries
+	if m3.exportSelect.sel < 0 || m3.exportSelect.sel >= len(entries) {
+		t.Fatalf("sel = %d out of range (len=%d)", m3.exportSelect.sel, len(entries))
+	}
+	got := entries[m3.exportSelect.sel]
+	if got.file != "notes.md" {
+		t.Fatalf("sel must follow 'notes' as it converts to a standalone scene, got entry=%+v (sel=%d, entries=%+v)",
+			got, m3.exportSelect.sel, entries)
+	}
+}
+
 func TestMoveExportSelectStandaloneSceneBecomesResourceCrossingBoundary(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
