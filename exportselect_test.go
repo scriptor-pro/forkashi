@@ -297,3 +297,58 @@ func TestExportSelectTotalsExcludeExcludedEntries(t *testing.T) {
 		t.Fatalf("totals = (%d, %d), want (10, 50) — excluded entry and header must not count", w, c)
 	}
 }
+
+func TestMoveExportSelectSceneWithinSameChapterReordersTextsOnly(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entry[1] = "Opening", entry[2] = "Confrontation", both in ch1. Move entry 1 down.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown})
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m3 := mm2.(model)
+	if m3.exportSelect.entries[1].title != "Confrontation" || m3.exportSelect.entries[2].title != "Opening" {
+		t.Fatalf("want scenes swapped, got %q, %q", m3.exportSelect.entries[1].title, m3.exportSelect.entries[2].title)
+	}
+	got, _, _ := readManifest(dir)
+	ch := findChapterByFolder(&got, "ch1")
+	if ch == nil || ch.Texts[0].File != "scene-2.md" || ch.Texts[1].File != "scene-1.md" {
+		t.Fatalf("manifest Texts[] must reflect the swap, got %+v", ch)
+	}
+	// No file should have moved on disk — same chapter, same folder.
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "scene-1.md")); err != nil {
+		t.Fatal("scene-1.md must still exist in ch1/")
+	}
+}
+
+func TestMoveExportSelectChapterHeaderMovesWholeBlock(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "ch2"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch2", "b.md"), []byte("y"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "First", Texts: []manifestText{{File: "a.md", Title: "A"}}}},
+			{Chapter: &manifestChapter{Folder: "ch2", Title: "Second", Texts: []manifestText{{File: "b.md", Title: "B"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entry[0] = header "First". Move it down past "Second"'s header + its scene.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
+	m2 := mm.(model)
+	got, _, _ := readManifest(dir)
+	if got.Items[0].Chapter.Folder != "ch2" || got.Items[1].Chapter.Folder != "ch1" {
+		t.Fatalf("manifest items[] must reflect First/Second swap, got %+v", got.Items)
+	}
+	// Entries list must be rebuilt in the new order too.
+	if m2.exportSelect.entries[0].title != "Second" {
+		t.Fatalf("entries[0] = %q, want %q after moving First past Second", m2.exportSelect.entries[0].title, "Second")
+	}
+}

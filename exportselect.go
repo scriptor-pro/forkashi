@@ -125,6 +125,10 @@ func (m model) updateExportSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case " ":
 		m.toggleExportSelectAtCursor()
 		m.saveExportSelectState()
+	case "shift+up":
+		m.moveExportSelectEntry(-1)
+	case "shift+down":
+		m.moveExportSelectEntry(1)
 	}
 	return m, nil
 }
@@ -186,6 +190,176 @@ func (m *model) saveExportSelectState() {
 	}
 	if err := saveExportSelection(m.files.dir, excluded, known); err != nil {
 		m.status = "échec de l'enregistrement de la sélection d'export : " + err.Error()
+	}
+}
+
+// moveExportSelectEntry moves the selected row by dir (-1 up, +1 down) within its current
+// container: a chapter header moves as a block (itself + all its scenes); a scene moves within
+// its own chapter's Texts[]; a standalone scene or Resource moves among the other top-level
+// rows. Persists the manifest (and re-resolves the entry list) immediately. Task 8 extends this
+// to handle a scene/standalone-scene/Resource crossing into a DIFFERENT container.
+func (m *model) moveExportSelectEntry(dir int) {
+	entries := m.exportSelect.entries
+	i := m.exportSelect.sel
+	if i < 0 || i >= len(entries) {
+		return
+	}
+	if entries[i].isHeader {
+		m.moveExportSelectChapterBlock(i, dir)
+		return
+	}
+	if entries[i].indent {
+		m.moveExportSelectSceneWithinChapter(i, dir)
+		return
+	}
+	// Standalone scene / Resource — Task 8 will replace this branch with full cross-boundary
+	// logic. For this task, only reorder among entries of the SAME kind (a real chapter
+	// boundary crossing is out of scope here).
+}
+
+// moveExportSelectChapterBlock moves the chapter header at index i (plus all its indented
+// child rows) up or down past the ADJACENT chapter block, by swapping the two blocks' order in
+// the on-disk manifest's bare-chapter items, then re-resolving the entry list from scratch.
+func (m *model) moveExportSelectChapterBlock(i, dir int) {
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	// Locate bare-chapter indices in mani.Items (Chapter != nil, Scene == false) in order.
+	var bareIdx []int
+	for idx, it := range mani.Items {
+		if it.Chapter != nil && !it.Chapter.Scene {
+			bareIdx = append(bareIdx, idx)
+		}
+	}
+	// Map this header's position among headers in m.exportSelect.entries to a position in
+	// bareIdx by counting headers seen up to i.
+	headerPos := -1
+	seen := 0
+	for idx, e := range m.exportSelect.entries {
+		if e.isHeader {
+			if idx == i {
+				headerPos = seen
+				break
+			}
+			seen++
+		}
+	}
+	if headerPos < 0 {
+		return
+	}
+	target := headerPos + dir
+	if target < 0 || target >= len(bareIdx) {
+		return // already at an edge
+	}
+	mani.Items[bareIdx[headerPos]], mani.Items[bareIdx[target]] = mani.Items[bareIdx[target]], mani.Items[bareIdx[headerPos]]
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	m.reloadExportSelectAfterMove()
+}
+
+// moveExportSelectSceneWithinChapter moves the scene at index i up/down within its own
+// chapter's Texts[], refusing to cross the chapter's own header/footer boundary (that's Task
+// 8's job). i's owning chapter is found by walking backward to the nearest header.
+func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
+	entries := m.exportSelect.entries
+	headerIdx := -1
+	for j := i - 1; j >= 0; j-- {
+		if entries[j].isHeader {
+			headerIdx = j
+			break
+		}
+	}
+	if headerIdx < 0 {
+		return
+	}
+	// This chapter's scene rows span (headerIdx, chapterEnd).
+	chapterEnd := len(entries)
+	for j := headerIdx + 1; j < len(entries); j++ {
+		if entries[j].isHeader || !entries[j].indent {
+			chapterEnd = j
+			break
+		}
+	}
+	target := i + dir
+	if target <= headerIdx || target >= chapterEnd {
+		return // would leave this chapter — Task 8's job, not this task's
+	}
+	folder := m.chapterFolderForHeader(headerIdx)
+	if folder == "" {
+		return
+	}
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	ch := findChapterByFolder(&mani, folder)
+	if ch == nil {
+		return
+	}
+	sceneIdx := i - headerIdx - 1
+	targetIdx := target - headerIdx - 1
+	if sceneIdx < 0 || sceneIdx >= len(ch.Texts) || targetIdx < 0 || targetIdx >= len(ch.Texts) {
+		return
+	}
+	ch.Texts[sceneIdx], ch.Texts[targetIdx] = ch.Texts[targetIdx], ch.Texts[sceneIdx]
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	m.reloadExportSelectAfterMove()
+}
+
+// chapterFolderForHeader re-resolves the manuscript to find the folder of the chapter whose
+// header is at entries[headerIdx] — counting headers up to headerIdx and matching against the
+// resolved view's bare chapters in the same order buildExportSelectEntries used.
+func (m model) chapterFolderForHeader(headerIdx int) string {
+	v := resolveManuscript(m.files.dir, readEntries(m.files.dir))
+	seen := 0
+	for _, part := range v.parts {
+		for _, ch := range part.chapters {
+			if ch.scene {
+				continue
+			}
+			if seen == countHeadersBefore(m.exportSelect.entries, headerIdx) {
+				return ch.folder
+			}
+			seen++
+		}
+	}
+	return ""
+}
+
+// countHeadersBefore counts header rows at indices strictly less than upTo. If entries[upTo]
+// is itself a header, it is NOT counted — its own 0-indexed position among headers equals this
+// count, which is exactly the alignment chapterFolderForHeader's "seen == countHeadersBefore(...)"
+// comparison relies on (the Nth header, 0-indexed, is preceded by exactly N earlier headers).
+func countHeadersBefore(entries []exportSelectEntry, upTo int) int {
+	n := 0
+	for i := 0; i < upTo && i < len(entries); i++ {
+		if entries[i].isHeader {
+			n++
+		}
+	}
+	return n
+}
+
+// reloadExportSelectAfterMove re-resolves the manuscript and rebuilds the entry list — the
+// simplest way to keep the display consistent with a just-written manifest, at the cost of a
+// full re-read per move (acceptable: moves are an interactive, human-paced action, not a hot
+// path — same tradeoff enterExportSelect already makes on screen entry).
+func (m *model) reloadExportSelectAfterMove() {
+	dir := m.files.dir
+	v := resolveManuscript(dir, readEntries(dir))
+	excluded := loadExportSelection(dir)
+	sel := m.exportSelect.sel
+	m.exportSelect = exportSelectModel{entries: buildExportSelectEntries(dir, v, excluded), sel: sel}
+	if m.exportSelect.sel >= len(m.exportSelect.entries) {
+		m.exportSelect.sel = len(m.exportSelect.entries) - 1
 	}
 }
 
