@@ -120,7 +120,7 @@ func (m *model) runExport() {
 	if m.exportWholeManuscript() {
 		entries := readEntries(dir)
 		v := resolveManuscript(dir, entries)
-		doc = manuscriptDocFromChapters(dir, v.parts)
+		doc = manuscriptDocFromChapters(dir, v.parts, nil)
 		title = v.title
 	} else {
 		if m.currentFile == "" {

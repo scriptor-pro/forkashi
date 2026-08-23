@@ -114,7 +114,7 @@ func TestExportManifestManuscriptUsesManifestOrder(t *testing.T) {
 			`{"chapter":{"folder":"opening","title":"Chapter One","texts":[{"file":"opening.md","title":"Chapter One"}]}}]}`), 0o644)
 	entries := readEntries(dir)
 	v := resolveManuscript(dir, entries)
-	doc := manuscriptDocFromChapters(dir, v.parts)
+	doc := manuscriptDocFromChapters(dir, v.parts, nil)
 	if len(doc) != 2 {
 		t.Fatalf("expected 2 sections, got %d", len(doc))
 	}

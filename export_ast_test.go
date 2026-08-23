@@ -205,7 +205,7 @@ func TestManuscriptDocFromChaptersIncludesStandaloneScene(t *testing.T) {
 	parts := []partRef{{title: "", chapters: []chapterRef{
 		{title: "Aparté", scene: true, texts: []textRef{{file: "aparte.md", title: "Aparté"}}},
 	}}}
-	doc := manuscriptDocFromChapters(dir, parts)
+	doc := manuscriptDocFromChapters(dir, parts, nil)
 	if len(doc) != 1 {
 		t.Fatalf("want 1 section, got %d: %+v", len(doc), doc)
 	}
@@ -214,5 +214,67 @@ func TestManuscriptDocFromChaptersIncludesStandaloneScene(t *testing.T) {
 	}
 	if len(doc[0].Blocks) == 0 {
 		t.Fatal("standalone scene's content must have been read and parsed, got zero blocks")
+	}
+}
+
+func TestManuscriptDocFromChaptersIncludesAllScenes(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-1.md"), []byte("First scene."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-2.md"), []byte("Second scene."), 0o644)
+	parts := []partRef{{title: "", chapters: []chapterRef{
+		{folder: "ch1", title: "Chapter One", texts: []textRef{
+			{file: "scene-1.md", title: "Opening"},
+			{file: "scene-2.md", title: "Confrontation"},
+		}},
+	}}}
+	doc := manuscriptDocFromChapters(dir, parts, nil)
+	if len(doc) != 2 {
+		t.Fatalf("want 2 sections (one per scene), got %d: %+v", len(doc), doc)
+	}
+	if doc[0].Title != "Opening" || doc[1].Title != "Confrontation" {
+		t.Fatalf("section titles = %q, %q — want scene titles in order", doc[0].Title, doc[1].Title)
+	}
+}
+
+func TestManuscriptDocFromChaptersRespectsExclusion(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-1.md"), []byte("Kept."), 0o644)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-2.md"), []byte("Excluded."), 0o644)
+	parts := []partRef{{title: "", chapters: []chapterRef{
+		{folder: "ch1", title: "Chapter One", texts: []textRef{
+			{file: "scene-1.md", title: "Kept"},
+			{file: "scene-2.md", title: "Dropped"},
+		}},
+	}}}
+	excluded := map[string]bool{filepath.Join("ch1", "scene-2.md"): true}
+	doc := manuscriptDocFromChapters(dir, parts, excluded)
+	if len(doc) != 1 || doc[0].Title != "Kept" {
+		t.Fatalf("want only the non-excluded scene, got %+v", doc)
+	}
+}
+
+func TestManuscriptDocFromChaptersEmptyChapterStillProducesSection(t *testing.T) {
+	// Preserves the pre-existing behavior: a chapter with zero texts still gets a Section
+	// with nil Blocks, rather than being silently skipped.
+	parts := []partRef{{title: "", chapters: []chapterRef{
+		{folder: "empty", title: "Vide", texts: nil},
+	}}}
+	doc := manuscriptDocFromChapters(t.TempDir(), parts, nil)
+	if len(doc) != 1 || doc[0].Title != "Vide" || doc[0].Blocks != nil {
+		t.Fatalf("empty chapter = %+v, want 1 section titled Vide with nil Blocks", doc)
+	}
+}
+
+func TestManuscriptDocFromChaptersStandaloneSceneReadsFromRoot(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("Some aside text."), 0o644)
+	parts := []partRef{{title: "", chapters: []chapterRef{
+		{title: "Aparté", scene: true, texts: []textRef{{file: "aparte.md", title: "Aparté"}}},
+	}}}
+	doc := manuscriptDocFromChapters(dir, parts, nil)
+	if len(doc) != 1 || doc[0].Title != "Aparté" || len(doc[0].Blocks) == 0 {
+		t.Fatalf("standalone scene doc = %+v, want 1 non-empty section", doc)
 	}
 }

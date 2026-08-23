@@ -230,15 +230,15 @@ func manuscriptDoc(dir string, sections []fileEntry) ManuscriptDoc {
 	return doc
 }
 
-// manuscriptDocFromChapters builds the export doc from a resolved parts list,
-// flattened across parts (Part headers are the next plan's job — this plan
-// keeps export mechanically correct but visually flat). Title comes from
-// chapterRef.title (manifest title or de-slugged filename), so manifest and
-// legacy folders both produce correct section headings. Only the first text of
-// each chapter is read (degraded-but-functional multi-text behavior; real
-// concatenation is the next plan's job); an empty chapter (no texts) produces a
-// Section with empty Blocks rather than being skipped or panicking.
-func manuscriptDocFromChapters(dir string, parts []partRef) ManuscriptDoc {
+// manuscriptDocFromChapters builds the export doc from a resolved parts list, flattened across
+// parts (Part headers are the next plan's job — this plan keeps export mechanically correct but
+// visually flat). Every text of every chapter is read — each scene becomes its own Section,
+// titled with the SCENE's title (not the chapter's), a deliberate granularity change from the
+// previous "first scene only" behavior. excluded is keyed by file path relative to dir
+// (filepath.Join(ch.folder, text.file) — ch.folder == "" for a standalone scene, collapsing
+// correctly via filepath.Join's empty-element handling); nil excluded means nothing is excluded.
+// An empty chapter (no texts) produces a Section with empty Blocks rather than being skipped.
+func manuscriptDocFromChapters(dir string, parts []partRef, excluded map[string]bool) ManuscriptDoc {
 	var doc ManuscriptDoc
 	for _, p := range parts {
 		for _, ch := range p.chapters {
@@ -246,11 +246,17 @@ func manuscriptDocFromChapters(dir string, parts []partRef) ManuscriptDoc {
 				doc = append(doc, Section{Title: ch.title, Blocks: nil})
 				continue
 			}
-			data, err := os.ReadFile(filepath.Join(dir, ch.folder, ch.texts[0].file))
-			if err != nil {
-				continue
+			for _, t := range ch.texts {
+				file := filepath.Join(ch.folder, t.file)
+				if excluded[file] {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil {
+					continue
+				}
+				doc = append(doc, Section{Title: t.title, Blocks: parseSection(data)})
 			}
-			doc = append(doc, Section{Title: ch.title, Blocks: parseSection(data)})
 		}
 	}
 	return doc
