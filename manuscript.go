@@ -20,12 +20,16 @@ type textRef struct {
 	words int
 }
 
-// chapterRef is one ordered chapter: a folder (empty only for a legacy flat-file
-// chapter, pre-v2 display fallback) holding one or more ordered texts.
+// chapterRef is one ordered chapter: a folder (empty only for a legacy flat-file chapter,
+// pre-v2 display fallback, OR a standalone scene — see scene) holding one or more ordered
+// texts. scene == true means folder == "" for a DIFFERENT reason than the legacy fallback: a
+// standalone scene has no chapter folder by design (manifest v3), not because it predates
+// the manifest.
 type chapterRef struct {
 	folder string
 	title  string
 	texts  []textRef
+	scene  bool
 }
 
 // partRef is one ordered group of chapters. title == "" is the synthetic part
@@ -122,11 +126,16 @@ func resolveManuscript(dir string, entries []fileEntry) manuscriptView {
 	}
 }
 
-// isChapterOf reports whether folder is a chapter of the given manuscript view,
-// across all parts (including the synthetic untitled one).
+// isChapterOf reports whether folder is a chapter of the given manuscript view, across all
+// parts (including the synthetic untitled one). A standalone scene never matches, even
+// though its folder is also "" — folder alone can't distinguish a legacy flat-file chapter
+// from a scene, so scene entries are filtered out explicitly.
 func isChapterOf(v manuscriptView, folder string) bool {
 	for _, p := range v.parts {
 		for _, c := range p.chapters {
+			if c.scene {
+				continue
+			}
 			if c.folder == folder {
 				return true
 			}
@@ -167,6 +176,19 @@ func manifestView(dir string, m manifest, entries []fileEntry) manuscriptView {
 	// presence can't be read off entries — it's checked directly on disk here,
 	// the same way resolveChapterTexts reads a chapter folder's own contents.
 	resolve := func(mc manifestChapter) (chapterRef, bool) {
+		if mc.Scene {
+			if len(mc.Texts) == 0 {
+				return chapterRef{}, false
+			}
+			if _, err := os.Stat(filepath.Join(dir, mc.Texts[0].File)); err != nil {
+				return chapterRef{}, false
+			}
+			return chapterRef{
+				title: mc.Title,
+				texts: []textRef{{file: mc.Texts[0].File, title: mc.Texts[0].Title}},
+				scene: true,
+			}, true
+		}
 		info, err := os.Stat(filepath.Join(dir, mc.Folder))
 		if err != nil || !info.IsDir() {
 			return chapterRef{}, false
@@ -216,17 +238,20 @@ func manifestView(dir string, m manifest, entries []fileEntry) manuscriptView {
 	return manuscriptView{source: sourceManifest, title: title, parts: all, loose: loose}
 }
 
-// looseFiles returns every root-level .md file not referenced as a text inside
-// any listed chapter — a Resource (design: unlisted files are Resources).
+// looseFiles returns every root-level .md file not referenced as a text inside any listed
+// chapter, AND not referenced by a standalone scene — a Resource (design: unlisted files are
+// Resources). Ordinary v2 chapters are always folders, so a root-level .md file can only ever
+// collide with a standalone scene (v3), never with an ordinary chapter's text.
 func looseFiles(m manifest, entries []fileEntry) []fileEntry {
-	// Root-level looseness only concerns files directly in the manuscript root;
-	// chapter folders themselves are never loose (they are dirs, filtered by
-	// filterFiles at call sites that need flat files). Nothing under
-	// manifest v2 lists root .md files as chapters anymore (chapters are always
-	// folders), so any root .md file is loose by construction.
+	sceneFiles := map[string]bool{}
+	for _, it := range m.Items {
+		if it.Chapter != nil && it.Chapter.Scene && len(it.Chapter.Texts) > 0 {
+			sceneFiles[it.Chapter.Texts[0].File] = true
+		}
+	}
 	var out []fileEntry
 	for _, e := range entries {
-		if !e.isDir {
+		if !e.isDir && !sceneFiles[e.name] {
 			out = append(out, e)
 		}
 	}

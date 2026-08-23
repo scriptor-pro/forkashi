@@ -215,3 +215,61 @@ func TestIsChapterOf(t *testing.T) {
 		t.Fatal("nope must not be recognized as a chapter")
 	}
 }
+
+func TestResolveManifestStandaloneScenePresent(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "un-aparte.md"), []byte("hello"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}},
+		{"chapter":{"title":"Un aparté","scene":true,"texts":[{"file":"un-aparte.md","title":"Un aparté"}]}}
+	]}`)
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "x"})
+	v := resolveManuscript(dir, readEntries(dir))
+	if len(v.parts[0].chapters) != 2 {
+		t.Fatalf("want 2 entries (chapter + standalone scene), got %+v", v.parts[0].chapters)
+	}
+	sc := v.parts[0].chapters[1]
+	if !sc.scene || sc.folder != "" || sc.title != "Un aparté" {
+		t.Fatalf("standalone scene chapterRef = %+v", sc)
+	}
+	if len(sc.texts) != 1 || sc.texts[0].file != "un-aparte.md" {
+		t.Fatalf("standalone scene texts = %+v", sc.texts)
+	}
+}
+
+func TestResolveManifestStandaloneSceneAbsentFileOmitted(t *testing.T) {
+	dir := t.TempDir()
+	// "gone.md" is listed but never created on disk.
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Gone","scene":true,"texts":[{"file":"gone.md","title":"Gone"}]}}
+	]}`)
+	v := resolveManuscript(dir, readEntries(dir))
+	if len(v.parts) != 0 && len(v.parts[0].chapters) != 0 {
+		t.Fatalf("a standalone scene whose file is absent must be omitted, got %+v", v.parts)
+	}
+}
+
+func TestIsChapterOfExcludesStandaloneScene(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	v := resolveManuscript(dir, readEntries(dir))
+	if isChapterOf(v, "") {
+		t.Fatal("a standalone scene (folder \"\") must never be reported as a chapter by isChapterOf")
+	}
+}
+
+func TestLooseFilesExcludesStandaloneSceneFile(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("y"), 0o644) // a real Resource
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	v := resolveManuscript(dir, readEntries(dir))
+	if len(v.loose) != 1 || v.loose[0].name != "notes.md" {
+		t.Fatalf("loose = %+v, want only notes.md (aparte.md belongs to a scene, not loose)", v.loose)
+	}
+}
