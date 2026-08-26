@@ -159,6 +159,14 @@ func (m *model) runExport() {
 		Title:     title,
 		Contact:   eff.Contact,
 		TitlePage: m.exportWholeManuscript(),
+
+		PdfFont:         eff.PdfFont,
+		PdfLineHeight:   eff.PdfLineHeight,
+		PdfCharsPerLine: eff.PdfCharsPerLine,
+		PdfMarginTop:    eff.PdfMarginTop,
+		PdfMarginBottom: eff.PdfMarginBottom,
+		PdfMarginLeft:   eff.PdfMarginLeft,
+		PdfMarginRight:  eff.PdfMarginRight,
 	}
 	outDir := filepath.Join(dir, "export")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {

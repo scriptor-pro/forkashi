@@ -278,3 +278,13 @@ func TestManuscriptDocFromChaptersStandaloneSceneReadsFromRoot(t *testing.T) {
 		t.Fatalf("standalone scene doc = %+v, want 1 non-empty section", doc)
 	}
 }
+
+func TestMetaCarriesPdfFields(t *testing.T) {
+	m := Meta{
+		Title: "T", PdfFont: "times", PdfLineHeight: 22, PdfCharsPerLine: 70,
+		PdfMarginTop: 60, PdfMarginBottom: 60, PdfMarginLeft: 90, PdfMarginRight: 90,
+	}
+	if m.PdfFont != "times" || m.PdfLineHeight != 22 || m.PdfCharsPerLine != 70 {
+		t.Fatalf("Meta PDF fields not set: %+v", m)
+	}
+}

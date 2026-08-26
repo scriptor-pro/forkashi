@@ -32,6 +32,13 @@ type Meta struct {
 	Contact string // OKASHI_CONTACT: free-text address/email block for the title page
 	// TitlePage requests a Shunn-style manuscript title page (whole-manuscript exports only).
 	TitlePage bool
+
+	// PDF Manuscript-style typography (StyleManuscript only; StyleTufte ignores these).
+	PdfFont                       string
+	PdfLineHeight                 float64
+	PdfCharsPerLine               int
+	PdfMarginTop, PdfMarginBottom float64
+	PdfMarginLeft, PdfMarginRight float64
 }
 
 // Run is a span of text with emphasis flags.
