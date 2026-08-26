@@ -23,6 +23,13 @@ const (
 	propWidth
 	propSmartquotes
 	propCover
+	propPdfFont
+	propPdfLineHeight
+	propPdfCharsPerLine
+	propPdfMarginTop
+	propPdfMarginBottom
+	propPdfMarginLeft
+	propPdfMarginRight
 )
 
 // propertiesModel backs the Properties screen: editable project + personal metadata for one dir.
@@ -38,6 +45,14 @@ type propertiesModel struct {
 	cover       textinput.Model
 	smartquotes bool
 
+	pdfFont         string // "courier" | "times"
+	pdfLineHeight   textinput.Model
+	pdfCharsPerLine textinput.Model
+	pdfMarginTop    textinput.Model
+	pdfMarginBottom textinput.Model
+	pdfMarginLeft   textinput.Model
+	pdfMarginRight  textinput.Model
+
 	fields      []propKind // editable field order (Title omitted for a non-manuscript dir)
 	focus       int        // index into fields
 	editing     bool       // the focused field is capturing keys
@@ -50,6 +65,12 @@ type propertiesModel struct {
 	origWidth       int
 	origSmartquotes bool
 	origCover       string
+
+	origPdfFont                           string
+	origPdfLineHeight                     float64
+	origPdfCharsPerLine                   int
+	origPdfMarginTop, origPdfMarginBottom float64
+	origPdfMarginLeft, origPdfMarginRight float64
 }
 
 func newPropInput(val string, width int) textinput.Model {
@@ -98,13 +119,55 @@ func newPropertiesModel(dir string) propertiesModel {
 		origWidth:       eff.Width,
 		origSmartquotes: eff.Smartquotes,
 		origCover:       eff.Cover,
+
+		pdfFont:         eff.PdfFont,
+		pdfLineHeight:   newPropInput(formatPdfFloat(eff.PdfLineHeight), 6),
+		pdfCharsPerLine: newPropInput(strconv.Itoa(eff.PdfCharsPerLine), 6),
+		pdfMarginTop:    newPropInput(formatPdfFloat(eff.PdfMarginTop), 6),
+		pdfMarginBottom: newPropInput(formatPdfFloat(eff.PdfMarginBottom), 6),
+		pdfMarginLeft:   newPropInput(formatPdfFloat(eff.PdfMarginLeft), 6),
+		pdfMarginRight:  newPropInput(formatPdfFloat(eff.PdfMarginRight), 6),
+
+		origPdfFont:         eff.PdfFont,
+		origPdfLineHeight:   eff.PdfLineHeight,
+		origPdfCharsPerLine: eff.PdfCharsPerLine,
+		origPdfMarginTop:    eff.PdfMarginTop,
+		origPdfMarginBottom: eff.PdfMarginBottom,
+		origPdfMarginLeft:   eff.PdfMarginLeft,
+		origPdfMarginRight:  eff.PdfMarginRight,
 	}
-	if isMs {
-		p.fields = []propKind{propTitle, propAuthor, propContact, propWidth, propCover, propSmartquotes}
-	} else {
-		p.fields = []propKind{propAuthor, propContact, propWidth, propCover, propSmartquotes}
-	}
+	p.rebuildFields()
 	return p
+}
+
+// formatPdfFloat renders a PDF layout float without a trailing ".0" for whole numbers
+// (24, not 24.0), matching how a user types these values.
+func formatPdfFloat(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// rebuildFields recomputes p.fields: the base fields (unchanged), plus the PDF font/line
+// height (always present), plus either chars-per-line (Courier) or the 4 margins
+// (Times) depending on the currently-selected p.pdfFont. Called on init and whenever the
+// font toggle changes p.pdfFont, so the visible field list tracks the in-progress edit
+// (not the saved value).
+func (p *propertiesModel) rebuildFields() {
+	var base []propKind
+	if p.isManuscript {
+		base = []propKind{propTitle, propAuthor, propContact, propWidth, propCover, propSmartquotes}
+	} else {
+		base = []propKind{propAuthor, propContact, propWidth, propCover, propSmartquotes}
+	}
+	base = append(base, propPdfFont, propPdfLineHeight)
+	if p.pdfFont == "times" {
+		base = append(base, propPdfMarginTop, propPdfMarginBottom, propPdfMarginLeft, propPdfMarginRight)
+	} else {
+		base = append(base, propPdfCharsPerLine)
+	}
+	p.fields = base
+	if p.focus >= len(p.fields) {
+		p.focus = len(p.fields) - 1
+	}
 }
 
 // dirty reports whether any field differs from its loaded value.
@@ -124,6 +187,28 @@ func (p *propertiesModel) dirty() bool {
 	if p.cover.Value() != p.origCover {
 		return true
 	}
+	if p.pdfFont != p.origPdfFont {
+		return true
+	}
+	if lh, err := strconv.ParseFloat(strings.TrimSpace(p.pdfLineHeight.Value()), 64); err != nil || lh != p.origPdfLineHeight {
+		return true
+	}
+	if cpl, err := strconv.Atoi(strings.TrimSpace(p.pdfCharsPerLine.Value())); err != nil || cpl != p.origPdfCharsPerLine {
+		return true
+	}
+	for _, pair := range []struct {
+		ti   textinput.Model
+		orig float64
+	}{
+		{p.pdfMarginTop, p.origPdfMarginTop},
+		{p.pdfMarginBottom, p.origPdfMarginBottom},
+		{p.pdfMarginLeft, p.origPdfMarginLeft},
+		{p.pdfMarginRight, p.origPdfMarginRight},
+	} {
+		if v, err := strconv.ParseFloat(strings.TrimSpace(pair.ti.Value()), 64); err != nil || v != pair.orig {
+			return true
+		}
+	}
 	return false
 }
 
@@ -139,6 +224,18 @@ func (p *propertiesModel) focusInput() {
 		p.contact.Focus()
 	case propCover:
 		p.cover.Focus()
+	case propPdfLineHeight:
+		p.pdfLineHeight.Focus()
+	case propPdfCharsPerLine:
+		p.pdfCharsPerLine.Focus()
+	case propPdfMarginTop:
+		p.pdfMarginTop.Focus()
+	case propPdfMarginBottom:
+		p.pdfMarginBottom.Focus()
+	case propPdfMarginLeft:
+		p.pdfMarginLeft.Focus()
+	case propPdfMarginRight:
+		p.pdfMarginRight.Focus()
 	}
 }
 
@@ -148,6 +245,39 @@ func (p *propertiesModel) blurInputs() {
 	p.width.Blur()
 	p.contact.Blur()
 	p.cover.Blur()
+	p.pdfLineHeight.Blur()
+	p.pdfCharsPerLine.Blur()
+	p.pdfMarginTop.Blur()
+	p.pdfMarginBottom.Blur()
+	p.pdfMarginLeft.Blur()
+	p.pdfMarginRight.Blur()
+}
+
+// commitPdfLineHeight validates and clamps the line-height field on commit; invalid
+// input reverts to the original loaded value (mirrors the propWidth pattern).
+func (p *propertiesModel) commitPdfLineHeight() {
+	f, err := strconv.ParseFloat(strings.TrimSpace(p.pdfLineHeight.Value()), 64)
+	if err != nil || f < 10 || f > 40 {
+		p.pdfLineHeight.SetValue(formatPdfFloat(p.origPdfLineHeight))
+	}
+}
+
+// commitPdfCharsPerLine validates and clamps the chars-per-line field on commit;
+// invalid input reverts to the original loaded value.
+func (p *propertiesModel) commitPdfCharsPerLine() {
+	n, err := strconv.Atoi(strings.TrimSpace(p.pdfCharsPerLine.Value()))
+	if err != nil || n < 40 || n > 120 {
+		p.pdfCharsPerLine.SetValue(strconv.Itoa(p.origPdfCharsPerLine))
+	}
+}
+
+// commitPdfMargin validates and clamps one margin field in place, reverting to orig on
+// invalid input.
+func commitPdfMargin(ti *textinput.Model, orig float64) {
+	f, err := strconv.ParseFloat(strings.TrimSpace(ti.Value()), 64)
+	if err != nil || f < 20 || f > 200 {
+		ti.SetValue(formatPdfFloat(orig))
+	}
 }
 
 // save writes only the stores whose fields changed, preserving unrelated on-disk fields. It reports
@@ -172,12 +302,28 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 			return false, werr
 		}
 	}
-	// Width/smartquotes → per-project .okashi.json (overlay onto existing file fields).
+	// Width/smartquotes/cover/PDF typography → per-project .okashi.json (overlay onto existing file fields).
 	w, werr := strconv.Atoi(strings.TrimSpace(p.width.Value()))
 	widthChanged := werr == nil && w != p.origWidth
 	sqChanged := p.smartquotes != p.origSmartquotes
 	coverChanged := p.cover.Value() != p.origCover
-	if widthChanged || sqChanged || coverChanged {
+
+	pdfFontChanged := p.pdfFont != p.origPdfFont
+	lh, lhErr := strconv.ParseFloat(strings.TrimSpace(p.pdfLineHeight.Value()), 64)
+	lhChanged := lhErr == nil && lh != p.origPdfLineHeight
+	cpl, cplErr := strconv.Atoi(strings.TrimSpace(p.pdfCharsPerLine.Value()))
+	cplChanged := cplErr == nil && cpl != p.origPdfCharsPerLine
+	mTop, mTopErr := strconv.ParseFloat(strings.TrimSpace(p.pdfMarginTop.Value()), 64)
+	mTopChanged := mTopErr == nil && mTop != p.origPdfMarginTop
+	mBottom, mBottomErr := strconv.ParseFloat(strings.TrimSpace(p.pdfMarginBottom.Value()), 64)
+	mBottomChanged := mBottomErr == nil && mBottom != p.origPdfMarginBottom
+	mLeft, mLeftErr := strconv.ParseFloat(strings.TrimSpace(p.pdfMarginLeft.Value()), 64)
+	mLeftChanged := mLeftErr == nil && mLeft != p.origPdfMarginLeft
+	mRight, mRightErr := strconv.ParseFloat(strings.TrimSpace(p.pdfMarginRight.Value()), 64)
+	mRightChanged := mRightErr == nil && mRight != p.origPdfMarginRight
+
+	if widthChanged || sqChanged || coverChanged || pdfFontChanged || lhChanged || cplChanged ||
+		mTopChanged || mBottomChanged || mLeftChanged || mRightChanged {
 		ps := loadProjectSettings(p.dir)
 		if widthChanged {
 			wv := clampWidth(w)
@@ -190,6 +336,34 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 		if coverChanged {
 			cv := p.cover.Value()
 			ps.Cover = &cv
+		}
+		if pdfFontChanged {
+			fv := p.pdfFont
+			ps.PdfFont = &fv
+		}
+		if lhChanged {
+			lv := clampPdfLineHeight(lh)
+			ps.PdfLineHeight = &lv
+		}
+		if cplChanged {
+			cv := clampPdfCharsPerLine(cpl)
+			ps.PdfCharsPerLine = &cv
+		}
+		if mTopChanged {
+			v := clampPdfMargin(mTop)
+			ps.PdfMarginTop = &v
+		}
+		if mBottomChanged {
+			v := clampPdfMargin(mBottom)
+			ps.PdfMarginBottom = &v
+		}
+		if mLeftChanged {
+			v := clampPdfMargin(mLeft)
+			ps.PdfMarginLeft = &v
+		}
+		if mRightChanged {
+			v := clampPdfMargin(mRight)
+			ps.PdfMarginRight = &v
 		}
 		if serr := saveProjectSettings(p.dir, ps); serr != nil {
 			return false, serr
@@ -205,6 +379,25 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 	}
 	p.origSmartquotes = p.smartquotes
 	p.origCover = p.cover.Value()
+	p.origPdfFont = p.pdfFont
+	if lhErr == nil {
+		p.origPdfLineHeight = clampPdfLineHeight(lh)
+	}
+	if cplErr == nil {
+		p.origPdfCharsPerLine = clampPdfCharsPerLine(cpl)
+	}
+	if mTopErr == nil {
+		p.origPdfMarginTop = clampPdfMargin(mTop)
+	}
+	if mBottomErr == nil {
+		p.origPdfMarginBottom = clampPdfMargin(mBottom)
+	}
+	if mLeftErr == nil {
+		p.origPdfMarginLeft = clampPdfMargin(mLeft)
+	}
+	if mRightErr == nil {
+		p.origPdfMarginRight = clampPdfMargin(mRight)
+	}
 	return projectChanged, nil
 }
 
@@ -276,9 +469,17 @@ func (m model) updateProperties(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "ctrl+s":
 		m.savePropertiesAndApply()
 	case "enter", " ":
-		if p.fields[p.focus] == propSmartquotes {
+		switch p.fields[p.focus] {
+		case propSmartquotes:
 			p.smartquotes = !p.smartquotes
-		} else {
+		case propPdfFont:
+			if p.pdfFont == "courier" {
+				p.pdfFont = "times"
+			} else {
+				p.pdfFont = "courier"
+			}
+			p.rebuildFields()
+		default:
 			p.editing = true
 			p.focusInput()
 		}
@@ -297,11 +498,24 @@ func (m model) updatePropertiesEditing(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if commit {
 		p.editing = false
 		p.blurInputs()
-		if kind == propWidth {
+		switch kind {
+		case propWidth:
 			if n, err := strconv.Atoi(strings.TrimSpace(p.width.Value())); err != nil || n < 20 || n > 200 {
 				p.width.SetValue(strconv.Itoa(p.origWidth))
 				m.status = "la largeur doit être comprise entre 20 et 200"
 			}
+		case propPdfLineHeight:
+			p.commitPdfLineHeight()
+		case propPdfCharsPerLine:
+			p.commitPdfCharsPerLine()
+		case propPdfMarginTop:
+			commitPdfMargin(&p.pdfMarginTop, p.origPdfMarginTop)
+		case propPdfMarginBottom:
+			commitPdfMargin(&p.pdfMarginBottom, p.origPdfMarginBottom)
+		case propPdfMarginLeft:
+			commitPdfMargin(&p.pdfMarginLeft, p.origPdfMarginLeft)
+		case propPdfMarginRight:
+			commitPdfMargin(&p.pdfMarginRight, p.origPdfMarginRight)
 		}
 		return m, nil
 	}
@@ -318,6 +532,18 @@ func (m model) updatePropertiesEditing(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.contact, cmd = p.contact.Update(key)
 	case propCover:
 		p.cover, cmd = p.cover.Update(key)
+	case propPdfLineHeight:
+		p.pdfLineHeight, cmd = p.pdfLineHeight.Update(key)
+	case propPdfCharsPerLine:
+		p.pdfCharsPerLine, cmd = p.pdfCharsPerLine.Update(key)
+	case propPdfMarginTop:
+		p.pdfMarginTop, cmd = p.pdfMarginTop.Update(key)
+	case propPdfMarginBottom:
+		p.pdfMarginBottom, cmd = p.pdfMarginBottom.Update(key)
+	case propPdfMarginLeft:
+		p.pdfMarginLeft, cmd = p.pdfMarginLeft.Update(key)
+	case propPdfMarginRight:
+		p.pdfMarginRight, cmd = p.pdfMarginRight.Update(key)
 	}
 	return m, cmd
 }
@@ -389,6 +615,25 @@ func (m model) propertiesView() string {
 			} else {
 				val = lipgloss.NewStyle().Foreground(subtle).Render("(aucune)")
 			}
+		case propPdfFont:
+			label = "Police PDF"
+			if p.pdfFont == "times" {
+				val = "Times"
+			} else {
+				val = "Courier"
+			}
+		case propPdfLineHeight:
+			label, val = "Interligne (pt)", fieldVal(p.pdfLineHeight, editing)
+		case propPdfCharsPerLine:
+			label, val = "Caract./ligne", fieldVal(p.pdfCharsPerLine, editing)
+		case propPdfMarginTop:
+			label, val = "Marge haute (pt)", fieldVal(p.pdfMarginTop, editing)
+		case propPdfMarginBottom:
+			label, val = "Marge basse (pt)", fieldVal(p.pdfMarginBottom, editing)
+		case propPdfMarginLeft:
+			label, val = "Marge gauche (pt)", fieldVal(p.pdfMarginLeft, editing)
+		case propPdfMarginRight:
+			label, val = "Marge droite (pt)", fieldVal(p.pdfMarginRight, editing)
 		}
 		rows = append(rows, propRow(label, val, focused && !editing))
 	}
@@ -403,7 +648,7 @@ func (m model) propertiesView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ champ · ⏎ éditer · espace bascule guillemets typo · ctrl+s enregistrer · esc retour · F1 aide")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ champ · ⏎ éditer/basculer · ctrl+s enregistrer · esc retour · F1 aide")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

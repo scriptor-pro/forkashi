@@ -57,7 +57,11 @@ func TestPropertiesViewRendersFields(t *testing.T) {
 func TestPropertiesToggleSmartquotes(t *testing.T) {
 	dir := t.TempDir()
 	m := model{width: 80, height: 24, properties: newPropertiesModel(dir)}
-	m.properties.focus = len(m.properties.fields) - 1 // smartquotes is always last
+	for i, k := range m.properties.fields {
+		if k == propSmartquotes {
+			m.properties.focus = i
+		}
+	}
 	before := m.properties.smartquotes
 	mm, _ := m.updateProperties(tea.KeyMsg{Type: tea.KeySpace})
 	if mm.(model).properties.smartquotes == before {
@@ -211,5 +215,100 @@ func TestPropertiesCoverFieldDefaultsEmpty(t *testing.T) {
 	p := newPropertiesModel(dir)
 	if p.cover.Value() != "" {
 		t.Errorf("Cover default = %q, want empty", p.cover.Value())
+	}
+}
+
+func TestNewPropertiesModelPdfDefaults(t *testing.T) {
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+	if p.pdfFont != "courier" {
+		t.Errorf("pdfFont default = %q, want %q", p.pdfFont, "courier")
+	}
+	if p.pdfLineHeight.Value() != "24" {
+		t.Errorf("pdfLineHeight default = %q, want %q", p.pdfLineHeight.Value(), "24")
+	}
+	if p.pdfCharsPerLine.Value() != "62" {
+		t.Errorf("pdfCharsPerLine default = %q, want %q", p.pdfCharsPerLine.Value(), "62")
+	}
+}
+
+func TestPropertiesFieldsShowCplForCourierMarginsForTimes(t *testing.T) {
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+
+	hasField := func(k propKind) bool {
+		for _, f := range p.fields {
+			if f == k {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !hasField(propPdfCharsPerLine) {
+		t.Error("courier (default) should show propPdfCharsPerLine")
+	}
+	if hasField(propPdfMarginLeft) || hasField(propPdfMarginRight) {
+		t.Error("courier (default) should not show margin fields")
+	}
+
+	p.pdfFont = "times"
+	p.rebuildFields()
+
+	if hasField(propPdfCharsPerLine) {
+		t.Error("times should not show propPdfCharsPerLine")
+	}
+	if !hasField(propPdfMarginLeft) || !hasField(propPdfMarginRight) || !hasField(propPdfMarginTop) || !hasField(propPdfMarginBottom) {
+		t.Error("times should show all 4 margin fields")
+	}
+}
+
+func TestPropertiesPdfDirtyTracking(t *testing.T) {
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+	if p.dirty() {
+		t.Fatal("freshly loaded model should not be dirty")
+	}
+	p.pdfFont = "times"
+	if !p.dirty() {
+		t.Fatal("changing pdfFont should mark dirty")
+	}
+}
+
+func TestPropertiesSavePdfFields(t *testing.T) {
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+	p.pdfFont = "times"
+	p.rebuildFields()
+	p.pdfLineHeight.SetValue("20")
+	p.pdfMarginTop.SetValue("50")
+	p.pdfMarginBottom.SetValue("50")
+	p.pdfMarginLeft.SetValue("85")
+	p.pdfMarginRight.SetValue("85")
+
+	if _, err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+
+	ps := loadProjectSettings(dir)
+	if ps.PdfFont == nil || *ps.PdfFont != "times" {
+		t.Fatalf("saved PdfFont: %+v", ps.PdfFont)
+	}
+	if ps.PdfLineHeight == nil || *ps.PdfLineHeight != 20 {
+		t.Fatalf("saved PdfLineHeight: %+v", ps.PdfLineHeight)
+	}
+	if ps.PdfMarginLeft == nil || *ps.PdfMarginLeft != 85 {
+		t.Fatalf("saved PdfMarginLeft: %+v", ps.PdfMarginLeft)
+	}
+}
+
+func TestPropertiesSaveInvalidPdfFieldReverts(t *testing.T) {
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+	p.pdfLineHeight.SetValue("not-a-number")
+	// Simulate the commit path used by updatePropertiesEditing for an out-of-range/invalid value.
+	p.commitPdfLineHeight()
+	if p.pdfLineHeight.Value() != "24" {
+		t.Fatalf("invalid line height should revert to original 24, got %q", p.pdfLineHeight.Value())
 	}
 }
