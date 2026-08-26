@@ -51,6 +51,59 @@ func stripAstral(s string) string {
 	return b.String()
 }
 
+// resolvePdfFontName maps a stored/effective PdfFont value to the fpdf core-font name.
+// Anything other than exactly "times" resolves to Courier — this includes the empty
+// string, so a zero-value Meta (every call site that predates this feature) renders on
+// the Courier path exactly as before.
+func resolvePdfFontName(font string) string {
+	if font == "times" {
+		return "Times"
+	}
+	return "Courier"
+}
+
+// resolveManuscriptMargins computes the 4 page margins for the Manuscript PDF style.
+// Courier (fixed-pitch) derives left/right from PdfCharsPerLine so the body text wraps
+// at exactly that column count; Times (variable-pitch) has no meaningful "chars per
+// line", so its margins are used directly.
+func resolveManuscriptMargins(pdf *fpdf.Fpdf, meta Meta) (top, bottom, left, right float64) {
+	top, bottom = meta.PdfMarginTop, meta.PdfMarginBottom
+	if resolvePdfFontName(meta.PdfFont) != "Courier" {
+		return top, bottom, meta.PdfMarginLeft, meta.PdfMarginRight
+	}
+	pdf.SetFont("Courier", "", 12)
+	charWidth := pdf.GetStringWidth("0") // fixed-pitch: any character has the same width
+	pageWidth, _ := pdf.GetPageSize()
+	textWidth := float64(meta.PdfCharsPerLine) * charWidth
+	margin := (pageWidth - textWidth) / 2
+	if margin < 20 {
+		margin = 20 // guard; unreachable with CharsPerLine clamped to [40,120]
+	}
+	return top, bottom, margin, margin
+}
+
+// withManuscriptMarginDefaults fills in the Manuscript-style PDF defaults for any
+// zero-value field in meta, so pre-existing call sites (a bare Meta{Title: ...}) render
+// identically to before this feature — a zero float64 must not be treated as "margin 0".
+func withManuscriptMarginDefaults(meta Meta) Meta {
+	if meta.PdfCharsPerLine == 0 {
+		meta.PdfCharsPerLine = defaultPdfCharsPerLine
+	}
+	if meta.PdfMarginTop == 0 {
+		meta.PdfMarginTop = defaultPdfMargin
+	}
+	if meta.PdfMarginBottom == 0 {
+		meta.PdfMarginBottom = defaultPdfMargin
+	}
+	if meta.PdfMarginLeft == 0 {
+		meta.PdfMarginLeft = defaultPdfMargin
+	}
+	if meta.PdfMarginRight == 0 {
+		meta.PdfMarginRight = defaultPdfMargin
+	}
+	return meta
+}
+
 func plainText(runs []Run) string {
 	var b strings.Builder
 	for _, r := range runs {
@@ -84,29 +137,37 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 		}
 	}()
 	pdf := fpdf.New("P", "pt", "A4", "")
-	cfg := pdfStyle{font: "Courier", bodySize: 12, titleSize: 14, lineHeight: 24, indent: "     "}
+	fontName := resolvePdfFontName(meta.PdfFont)
+	lineHeight := meta.PdfLineHeight
+	if lineHeight == 0 {
+		lineHeight = defaultPdfLineHeight // zero-value Meta (pre-existing call sites)
+	}
+	cfg := pdfStyle{font: fontName, bodySize: 12, titleSize: 14, lineHeight: lineHeight, indent: "     "}
+	autoBreakMargin := 72.0
 	if st == StyleTufte {
 		registerETBook(pdf)
 		cfg = pdfStyle{font: "etbook", bodySize: 12, titleSize: 16, lineHeight: 17, indent: ""}
 		pdf.SetMargins(108, 90, 108)
 	} else {
-		pdf.SetMargins(72, 72, 72)
+		top, bottom, left, right := resolveManuscriptMargins(pdf, withManuscriptMarginDefaults(meta))
+		pdf.SetMargins(left, top, right)
+		autoBreakMargin = bottom
 		pdf.AliasNbPages("{nb}")
 		hasTitle := meta.TitlePage
 		pdf.SetHeaderFunc(func() {
 			if hasTitle && pdf.PageNo() == 1 {
 				return // the title page carries no running header
 			}
-			pdf.SetFont("Courier", "", 12)
+			pdf.SetFont(fontName, "", 12)
 			hdr := fmt.Sprintf("%s / %s / %d", meta.Author, strings.ToUpper(meta.Title), pdf.PageNo())
 			pdf.CellFormat(0, 14, pdfEnc(st, hdr), "", 0, "R", false, 0, "")
 			pdf.Ln(24)
 		})
 	}
-	pdf.SetAutoPageBreak(true, 72)
+	pdf.SetAutoPageBreak(true, autoBreakMargin)
 
 	if st == StyleManuscript && meta.TitlePage {
-		writeTitlePagePDF(pdf, st, meta, manuscriptWordCount(doc))
+		writeTitlePagePDF(pdf, st, meta, manuscriptWordCount(doc), fontName)
 	}
 	for _, sec := range doc {
 		pdf.AddPage()
@@ -128,9 +189,9 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 // writeTitlePagePDF renders the Shunn title page as page 1: contact block top-left and word
 // count top-right (same top band), title + byline centered near the vertical middle. The
 // header func suppresses the running header on this page; the first section's AddPage follows.
-func writeTitlePagePDF(pdf *fpdf.Fpdf, st ExportStyle, meta Meta, words int) {
+func writeTitlePagePDF(pdf *fpdf.Fpdf, st ExportStyle, meta Meta, words int, fontName string) {
 	pdf.AddPage()
-	pdf.SetFont("Courier", "", 12)
+	pdf.SetFont(fontName, "", 12)
 	topY := pdf.GetY()
 	// Word count, top-right.
 	pdf.CellFormat(0, 14, pdfEnc(st, approxWords(words)), "", 1, "R", false, 0, "")

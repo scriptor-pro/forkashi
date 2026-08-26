@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"testing"
+
+	"codeberg.org/go-pdf/fpdf"
 )
 
 func TestWritePDFManuscriptValid(t *testing.T) {
@@ -104,5 +106,109 @@ func TestWritePDFEndnotesBuilds(t *testing.T) {
 		if !bytes.HasPrefix(out, []byte("%PDF")) {
 			t.Fatalf("style %d: not a PDF", st)
 		}
+	}
+}
+
+func TestWritePDFTimesFont(t *testing.T) {
+	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Times body text."}}},
+	}}}
+	out, err := writePDF(doc, StyleManuscript, Meta{Title: "T", PdfFont: "times"})
+	if err != nil {
+		t.Fatalf("times font should not error: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF")) {
+		t.Fatal("not a PDF")
+	}
+}
+
+func TestWritePDFZeroValueMetaMatchesDefaults(t *testing.T) {
+	// A Meta with no PDF fields set (as every pre-existing call site produces) must
+	// render without error, on the Courier path, identically to before this change.
+	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Plain line."}}},
+	}}}
+	out, err := writePDF(doc, StyleManuscript, Meta{Title: "T"})
+	if err != nil {
+		t.Fatalf("zero-value Meta should render fine: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF")) {
+		t.Fatal("not a PDF")
+	}
+}
+
+func TestResolvePdfFontName(t *testing.T) {
+	cases := map[string]string{
+		"":        "Courier",
+		"courier": "Courier",
+		"times":   "Times",
+		"bogus":   "Courier",
+	}
+	for in, want := range cases {
+		if got := resolvePdfFontName(in); got != want {
+			t.Errorf("resolvePdfFontName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestResolveManuscriptMarginsCourierDerivesFromCPL(t *testing.T) {
+	pdf := fpdf.New("P", "pt", "A4", "")
+	pdf.AddPage()
+	meta := Meta{PdfFont: "courier", PdfCharsPerLine: 62, PdfMarginTop: 72, PdfMarginBottom: 72}
+	top, bottom, left, right := resolveManuscriptMargins(pdf, meta)
+	if top != 72 || bottom != 72 {
+		t.Fatalf("top/bottom should pass through: got %v/%v", top, bottom)
+	}
+	if left != right {
+		t.Fatalf("courier margins should be symmetric: left=%v right=%v", left, right)
+	}
+	// CPL 62 at Courier 12pt on A4 (595.28pt wide) reproduces ~72pt margins (today's default).
+	if left < 68 || left > 76 {
+		t.Fatalf("left margin = %v, want close to 72 (default CPL)", left)
+	}
+}
+
+func TestResolveManuscriptMarginsTimesUsesDirectValues(t *testing.T) {
+	pdf := fpdf.New("P", "pt", "A4", "")
+	pdf.AddPage()
+	meta := Meta{PdfFont: "times", PdfMarginTop: 50, PdfMarginBottom: 60, PdfMarginLeft: 80, PdfMarginRight: 90}
+	top, bottom, left, right := resolveManuscriptMargins(pdf, meta)
+	if top != 50 || bottom != 60 || left != 80 || right != 90 {
+		t.Fatalf("times margins should pass through directly: got %v/%v/%v/%v", top, bottom, left, right)
+	}
+}
+
+func TestWritePDFCustomLineHeightNoError(t *testing.T) {
+	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Line."}}},
+	}}}
+	out, err := writePDF(doc, StyleManuscript, Meta{Title: "T", PdfFont: "courier", PdfLineHeight: 30, PdfCharsPerLine: 62, PdfMarginTop: 72, PdfMarginBottom: 72})
+	if err != nil {
+		t.Fatalf("custom line height should not error: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF")) {
+		t.Fatal("not a PDF")
+	}
+}
+
+func TestWritePDFTufteIgnoresPdfMetaFields(t *testing.T) {
+	// Tufte must render identically regardless of what's in the new Meta fields —
+	// they're Manuscript-only.
+	doc := ManuscriptDoc{{Title: "t", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Tufte body."}}},
+	}}}
+	baseline, err := writePDF(doc, StyleTufte, Meta{Title: "T"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withPdfFields, err := writePDF(doc, StyleTufte, Meta{
+		Title: "T", PdfFont: "times", PdfLineHeight: 30, PdfCharsPerLine: 100,
+		PdfMarginTop: 200, PdfMarginBottom: 200, PdfMarginLeft: 200, PdfMarginRight: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(baseline) != len(withPdfFields) {
+		t.Fatalf("Tufte output size differs when Manuscript-only fields are set: %d vs %d", len(baseline), len(withPdfFields))
 	}
 }
