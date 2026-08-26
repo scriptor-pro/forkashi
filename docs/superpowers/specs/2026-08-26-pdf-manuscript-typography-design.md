@@ -221,6 +221,16 @@ puisqu'ils partagent déjà le même fichier).
 - Pas d'unité alternative (cm/pouces) pour les marges — points uniquement, cohérent avec
   le système de coordonnées fpdf déjà en `"pt"`.
 
+**Extensibilité notée pour un chantier futur (pas ce chantier-ci) :** l'utilisateur a
+signalé vouloir potentiellement d'autres polices que Courier/Times plus tard. `PdfFont`
+est stocké comme `string` (pas un type énuméré Go fermé), et le mapping nom→config
+(core font vs police embarquée, chasse fixe ou non pour le CPL) est isolé dans une
+fonction dédiée du plan (pas dispersé) — ce qui laisse la porte ouverte à ajouter une
+police embarquée (sur le modèle d'ET Book, TTF sous `assets/`) sans réécrire le schéma
+`.okashi.json` ni l'UI Properties. Toute police au-delà de Courier/Times reste un
+chantier à part, à brainstormer le moment venu (embarquer un TTF a un coût de licence et
+de taille de binaire à évaluer).
+
 ## Impact CLAUDE.md
 
 À la fin de l'implémentation, ajouter une note sous la section Properties existante du
