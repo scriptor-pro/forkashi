@@ -23,6 +23,16 @@ type projectSettings struct {
 	Width       *int    `json:"width,omitempty"`
 	Smartquotes *bool   `json:"smartquotes,omitempty"`
 	Cover       *string `json:"cover,omitempty"`
+
+	// PDF Manuscript-style typography (Manuscript only; Tufte is unaffected). All nil =
+	// today's hardcoded defaults, so an unconfigured project renders identically.
+	PdfFont         *string  `json:"pdfFont,omitempty"`         // "courier" | "times"
+	PdfLineHeight   *float64 `json:"pdfLineHeight,omitempty"`   // points
+	PdfCharsPerLine *int     `json:"pdfCharsPerLine,omitempty"` // Courier only; ignored for Times
+	PdfMarginTop    *float64 `json:"pdfMarginTop,omitempty"`    // points
+	PdfMarginBottom *float64 `json:"pdfMarginBottom,omitempty"` // points
+	PdfMarginLeft   *float64 `json:"pdfMarginLeft,omitempty"`   // points; ignored for Courier (derived from CPL)
+	PdfMarginRight  *float64 `json:"pdfMarginRight,omitempty"`  // points; ignored for Courier (derived from CPL)
 }
 
 // effectiveSettings is the resolved result after overlaying defaults ← env ← file, per field.
@@ -31,6 +41,12 @@ type effectiveSettings struct {
 	Width           int
 	Smartquotes     bool
 	Cover           string
+
+	PdfFont                       string
+	PdfLineHeight                 float64
+	PdfCharsPerLine               int
+	PdfMarginTop, PdfMarginBottom float64
+	PdfMarginLeft, PdfMarginRight float64
 }
 
 // userConfigPath is the personal config path, or "" if there is no usable config dir.
@@ -109,6 +125,46 @@ func clampWidth(n int) int {
 	return n
 }
 
+const (
+	defaultPdfFont         = "courier"
+	defaultPdfLineHeight   = 24.0
+	defaultPdfCharsPerLine = 62
+	defaultPdfMargin       = 72.0
+)
+
+// clampPdfLineHeight constrains PDF line height to the supported [10,40]pt range.
+func clampPdfLineHeight(f float64) float64 {
+	if f < 10 {
+		return 10
+	}
+	if f > 40 {
+		return 40
+	}
+	return f
+}
+
+// clampPdfCharsPerLine constrains chars-per-line to the supported [40,120] range.
+func clampPdfCharsPerLine(n int) int {
+	if n < 40 {
+		return 40
+	}
+	if n > 120 {
+		return 120
+	}
+	return n
+}
+
+// clampPdfMargin constrains a PDF margin to the supported [20,200]pt range.
+func clampPdfMargin(f float64) float64 {
+	if f < 20 {
+		return 20
+	}
+	if f > 200 {
+		return 200
+	}
+	return f
+}
+
 // mergeSettings overlays defaults ← env ← file per field. Split from IO so the precedence logic is
 // unit-testable with constructed inputs (env is controlled via the process environment).
 func mergeSettings(uc userConfig, ps projectSettings) effectiveSettings {
@@ -117,6 +173,14 @@ func mergeSettings(uc userConfig, ps projectSettings) effectiveSettings {
 		Contact:     os.Getenv("OKASHI_CONTACT"),
 		Width:       defaultColumnWidth,
 		Smartquotes: true,
+
+		PdfFont:         defaultPdfFont,
+		PdfLineHeight:   defaultPdfLineHeight,
+		PdfCharsPerLine: defaultPdfCharsPerLine,
+		PdfMarginTop:    defaultPdfMargin,
+		PdfMarginBottom: defaultPdfMargin,
+		PdfMarginLeft:   defaultPdfMargin,
+		PdfMarginRight:  defaultPdfMargin,
 	}
 	if w, ok := resolveColumnWidthEnv(); ok {
 		eff.Width = w
@@ -138,6 +202,27 @@ func mergeSettings(uc userConfig, ps projectSettings) effectiveSettings {
 	}
 	if ps.Cover != nil {
 		eff.Cover = *ps.Cover
+	}
+	if ps.PdfFont != nil {
+		eff.PdfFont = *ps.PdfFont
+	}
+	if ps.PdfLineHeight != nil {
+		eff.PdfLineHeight = clampPdfLineHeight(*ps.PdfLineHeight)
+	}
+	if ps.PdfCharsPerLine != nil {
+		eff.PdfCharsPerLine = clampPdfCharsPerLine(*ps.PdfCharsPerLine)
+	}
+	if ps.PdfMarginTop != nil {
+		eff.PdfMarginTop = clampPdfMargin(*ps.PdfMarginTop)
+	}
+	if ps.PdfMarginBottom != nil {
+		eff.PdfMarginBottom = clampPdfMargin(*ps.PdfMarginBottom)
+	}
+	if ps.PdfMarginLeft != nil {
+		eff.PdfMarginLeft = clampPdfMargin(*ps.PdfMarginLeft)
+	}
+	if ps.PdfMarginRight != nil {
+		eff.PdfMarginRight = clampPdfMargin(*ps.PdfMarginRight)
 	}
 	return eff
 }

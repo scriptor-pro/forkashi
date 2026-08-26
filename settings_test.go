@@ -134,3 +134,102 @@ func TestMergeSettingsCoverUnsetIsEmpty(t *testing.T) {
 		t.Errorf("Cover with no ps.Cover set = %q, want empty", eff.Cover)
 	}
 }
+
+func TestMergeSettingsPdfDefaults(t *testing.T) {
+	eff := mergeSettings(userConfig{}, projectSettings{})
+	if eff.PdfFont != "courier" {
+		t.Errorf("PdfFont default = %q, want %q", eff.PdfFont, "courier")
+	}
+	if eff.PdfLineHeight != 24 {
+		t.Errorf("PdfLineHeight default = %v, want 24", eff.PdfLineHeight)
+	}
+	if eff.PdfCharsPerLine != 62 {
+		t.Errorf("PdfCharsPerLine default = %v, want 62", eff.PdfCharsPerLine)
+	}
+	for name, got := range map[string]float64{
+		"top": eff.PdfMarginTop, "bottom": eff.PdfMarginBottom,
+		"left": eff.PdfMarginLeft, "right": eff.PdfMarginRight,
+	} {
+		if got != 72 {
+			t.Errorf("PdfMargin%s default = %v, want 72", name, got)
+		}
+	}
+}
+
+func TestMergeSettingsPdfFileOverrides(t *testing.T) {
+	font := "times"
+	lh := 20.0
+	top, bottom, left, right := 50.0, 60.0, 80.0, 90.0
+	eff := mergeSettings(userConfig{}, projectSettings{
+		PdfFont: &font, PdfLineHeight: &lh,
+		PdfMarginTop: &top, PdfMarginBottom: &bottom, PdfMarginLeft: &left, PdfMarginRight: &right,
+	})
+	if eff.PdfFont != "times" || eff.PdfLineHeight != 20 {
+		t.Fatalf("font/line height override: %+v", eff)
+	}
+	if eff.PdfMarginTop != 50 || eff.PdfMarginBottom != 60 || eff.PdfMarginLeft != 80 || eff.PdfMarginRight != 90 {
+		t.Fatalf("margin override: %+v", eff)
+	}
+}
+
+func TestMergeSettingsPdfCharsPerLineOverride(t *testing.T) {
+	cpl := 80
+	eff := mergeSettings(userConfig{}, projectSettings{PdfCharsPerLine: &cpl})
+	if eff.PdfCharsPerLine != 80 {
+		t.Fatalf("PdfCharsPerLine override: %+v", eff)
+	}
+}
+
+func TestMergeSettingsPdfClamping(t *testing.T) {
+	lhLow, lhHigh := 1.0, 999.0
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfLineHeight: &lhLow}); eff.PdfLineHeight != 10 {
+		t.Errorf("line height low clamp = %v, want 10", eff.PdfLineHeight)
+	}
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfLineHeight: &lhHigh}); eff.PdfLineHeight != 40 {
+		t.Errorf("line height high clamp = %v, want 40", eff.PdfLineHeight)
+	}
+
+	cplLow, cplHigh := 1, 999
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfCharsPerLine: &cplLow}); eff.PdfCharsPerLine != 40 {
+		t.Errorf("cpl low clamp = %v, want 40", eff.PdfCharsPerLine)
+	}
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfCharsPerLine: &cplHigh}); eff.PdfCharsPerLine != 120 {
+		t.Errorf("cpl high clamp = %v, want 120", eff.PdfCharsPerLine)
+	}
+
+	mLow, mHigh := 1.0, 999.0
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfMarginTop: &mLow}); eff.PdfMarginTop != 20 {
+		t.Errorf("margin low clamp = %v, want 20", eff.PdfMarginTop)
+	}
+	if eff := mergeSettings(userConfig{}, projectSettings{PdfMarginTop: &mHigh}); eff.PdfMarginTop != 200 {
+		t.Errorf("margin high clamp = %v, want 200", eff.PdfMarginTop)
+	}
+}
+
+func TestProjectSettingsPdfRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	font := "times"
+	lh := 22.0
+	cpl := 70
+	top, bottom, left, right := 60.0, 60.0, 90.0, 90.0
+	ps := projectSettings{
+		PdfFont: &font, PdfLineHeight: &lh, PdfCharsPerLine: &cpl,
+		PdfMarginTop: &top, PdfMarginBottom: &bottom, PdfMarginLeft: &left, PdfMarginRight: &right,
+	}
+	if err := saveProjectSettings(dir, ps); err != nil {
+		t.Fatal(err)
+	}
+	got := loadProjectSettings(dir)
+	if got.PdfFont == nil || *got.PdfFont != "times" {
+		t.Fatalf("PdfFont round-trip: %+v", got)
+	}
+	if got.PdfLineHeight == nil || *got.PdfLineHeight != 22 {
+		t.Fatalf("PdfLineHeight round-trip: %+v", got)
+	}
+	if got.PdfCharsPerLine == nil || *got.PdfCharsPerLine != 70 {
+		t.Fatalf("PdfCharsPerLine round-trip: %+v", got)
+	}
+	if got.PdfMarginLeft == nil || *got.PdfMarginLeft != 90 {
+		t.Fatalf("PdfMarginLeft round-trip: %+v", got)
+	}
+}
