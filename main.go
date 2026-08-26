@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode"
@@ -72,6 +73,18 @@ OBJECTIFS & TEMPS
 
 APPLICATION
   i propriétés (accueil)   F1/? aide   ctrl+c quitter`
+
+// helpTextWidth is the display width of helpText's longest line, so the help panel can
+// size itself to fit without truncating — computed once since helpText is a constant.
+var helpTextWidth = sync.OnceValue(func() int {
+	w := 0
+	for _, line := range strings.Split(helpText, "\n") {
+		if lw := lipgloss.Width(line); lw > w {
+			w = lw
+		}
+	}
+	return w
+})
 
 // resolveColumnWidthEnv reads OKASHI_WIDTH (a column count in [20,200]); the bool reports whether a
 // valid value was present (so a higher tier can decide whether to override it).
@@ -1956,7 +1969,10 @@ func (m model) View() string {
 		if hH < 1 {
 			hH = 1
 		}
-		card := framedPanel("Touches", helpText, 58, min(hH, lipgloss.Height(helpText)+2), "")
+		// contentW (framedPanel) = width-4, so width must be the longest helpText line
+		// + 4 to avoid truncating it — capped by the terminal width so it never overflows.
+		helpW := min(helpTextWidth()+4, m.width)
+		card := framedPanel("Touches", helpText, helpW, min(hH, lipgloss.Height(helpText)+2), "")
 		body := lipgloss.Place(m.width, hH, lipgloss.Center, lipgloss.Center, card)
 		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1 · ? · esc  fermer"))
 	}
