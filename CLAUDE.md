@@ -117,6 +117,13 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   smartquotes → `<project>/.okashi.json`; title → `manifest.json`. Effective value resolves
   **file → env → default** per field (`resolveSettings` in `settings.go`), so `OKASHI_*` stays a
   working default. **No manifest schema change** — the shared-contract HARD GATE is untriggered.
+  Properties also edits **PDF Manuscript-style typography** (2026-08-26): font (Courier/Times —
+  Times is an fpdf core font, no embedded TTF), line height, and either characters-per-line
+  (Courier, fixed-pitch — derives the left/right margins) or 4 direct margins (Times,
+  variable-pitch, no meaningful CPL), all per-project in `.okashi.json` (**file → default** only;
+  no `OKASHI_*` env knob was added for these). Applies **only** to the PDF export's Manuscript
+  style — the Tufte style (ET Book, fixed 108/90/108 margins) is unaffected. RTF/DOCX/ODT/EPUB
+  are unaffected.
 - Env knobs (all now **defaults** overridable in Properties where a field exists): `OKASHI_DIR`,
   `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
   `OKASHI_ICONS` (`nerd`/`plain`/`auto`; unset = auto — Nerd Font glyphs except on
