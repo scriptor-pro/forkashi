@@ -82,7 +82,10 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   manuscript folder but not listed in `items`; shown, excluded from the ordered view and
   from export.
 - Shipped features: the launch hub; a manuscript-aware sidebar (titles + per-chapter word
-  counts); the **outline** (`ctrl+l`: a full-screen **editor-first** planning surface — two-level
+  counts; a multi-scene chapter's scenes show inline, indented, under a pliable/foldable
+  chapter row — `⏎` toggles; state persists per-chapter in `.okashi-folded.json`, collapsed by
+  default — the sidebar's own text-picker hand-off is retired for this case; `screenTextPicker`
+  remains used by the corkboard and by `ctrl+n` on an empty chapter); the **outline** (`ctrl+l`: a full-screen **editor-first** planning surface — two-level
   **beats + notes** in `outline.md`; `shift/alt+↑↓` move a beat, `ctrl+p`/`alt+↵` **promote** a beat
   → chapter [seeds the synopsis from its notes, marks it `[x]`], one-way; the `outline.md` format is
   a shared contract with the companion app — see Shared Contracts §4); the **pager** (`m`: read-through with jump-to-edit); **export**
