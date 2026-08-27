@@ -218,9 +218,12 @@ func (f filelist) View(editRow int, editField string) string {
 			b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
 		case i == f.selected:
 			var content string
-			if section {
+			switch {
+			case section:
 				content = f.sectionRow(e, false) // selected: count + icon plain
-			} else {
+			case e.isChildScene:
+				content = "   " + renderIcon(g, true) + f.childSceneTitle(e)
+			default:
 				content = " " + renderIcon(g, true) + e.name
 			}
 			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(content, f.width, "…")))
@@ -228,6 +231,10 @@ func (f filelist) View(editRow int, editField string) string {
 			b.WriteString(f.sectionRow(e, true))
 		case e.isDir:
 			row := " " + renderIcon(g, false) + lipgloss.NewStyle().Foreground(accent).Render(e.name)
+			b.WriteString(ansi.Truncate(row, f.width, "…"))
+		case e.isChildScene:
+			title := f.childSceneTitle(e)
+			row := "   " + renderIcon(f.icons.iconFor(e), false) + title
 			b.WriteString(ansi.Truncate(row, f.width, "…"))
 		default:
 			ext := filepath.Ext(e.name)
@@ -269,14 +276,18 @@ func (f filelist) isChapterEntry(e fileEntry) bool {
 	return false
 }
 
-// sectionRow builds a width-f.width row for a manuscript section: gutter+icon+
-// title on the left, the word count right-aligned. dimCount styles the count
-// subtle (used for non-selected rows; the selected bar keeps it plain).
+// sectionRow builds a width-f.width row for a manuscript section: gutter+fold-indicator+icon+
+// title on the left, the word count right-aligned. dimCount styles the count subtle (used for
+// non-selected rows; the selected bar keeps it plain). fold is "" for a chapter with 0/1 text
+// (no indicator), "▸ " collapsed, "▾ " expanded — composed as a literal prefix rather than
+// added to iconSet, since it signals fold STATE, not entry TYPE (iconFor's byExt/isDir/isScene
+// switch stays type-only).
 func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 	n := f.chapterWords(e.name)
 	count := commafy(n) + " m"
 	g := f.icons.iconFor(e)
-	left := " " + renderIcon(g, !dimCount) + f.chapterTitle(e.name)
+	fold := f.foldIndicator(e.name)
+	left := " " + fold + renderIcon(g, !dimCount) + f.chapterTitle(e.name)
 	maxLeft := f.width - lipgloss.Width(count) - 1
 	if maxLeft < 1 {
 		maxLeft = 1
@@ -291,6 +302,45 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 		rendered = lipgloss.NewStyle().Foreground(subtle).Render(count)
 	}
 	return left + strings.Repeat(" ", gap) + rendered
+}
+
+// foldIndicator returns "▸ " (collapsed) or "▾ " (expanded) for a multi-text chapter folder
+// name, "" for anything else (0/1-text chapter, standalone scene, legacy flat chapter) — those
+// never show a triangle since there is nothing to expand.
+func (f filelist) foldIndicator(folderName string) string {
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder != folderName || len(ch.texts) < 2 {
+				continue
+			}
+			if f.folded[corkKey(ch)] {
+				return "▾ "
+			}
+			return "▸ "
+		}
+	}
+	return ""
+}
+
+// childSceneTitle resolves an isChildScene entry's display title: the manifest-provided
+// textRef.title when non-empty, else a de-slugged fallback from its filename (textRef.title
+// has no built-in fallback — unlike chapterRef/manuscriptView's title, which always resolve to
+// something non-empty — see manuscript.go's resolveChapterTexts, which passes t.Title through
+// verbatim from the JSON).
+func (f filelist) childSceneTitle(e fileEntry) string {
+	for _, p := range f.view.parts {
+		for _, ch := range p.chapters {
+			if ch.folder != e.parentFolder {
+				continue
+			}
+			for _, t := range ch.texts {
+				if t.file == e.name && t.title != "" {
+					return t.title
+				}
+			}
+		}
+	}
+	return sectionTitle(e.name)
 }
 
 // chapterWords sums the word counts of every text in the chapter whose folder is

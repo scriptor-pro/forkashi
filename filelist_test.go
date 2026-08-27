@@ -1037,3 +1037,87 @@ func TestActivateSingleTextChapterUnchanged(t *testing.T) {
 		t.Fatalf("single-text chapter activate: path=%q result=%v", path, result)
 	}
 }
+
+func TestSectionRowShowsCollapsedTriangleForMultiTextChapter(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.width = 40
+	f.height = 10
+	f.SetDir(dir)
+	out := f.View(-1, "")
+	if !strings.Contains(out, "▸") {
+		t.Fatalf("collapsed multi-text chapter row must show a ▸ triangle, got:\n%s", out)
+	}
+	if strings.Contains(out, "▾") {
+		t.Fatalf("collapsed chapter must not show the expanded ▾ triangle, got:\n%s", out)
+	}
+}
+
+func TestSectionRowShowsExpandedTriangleAndIndentedChildren(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.width = 40
+	f.height = 10
+	f.SetDir(dir)
+	out := f.View(-1, "")
+	if !strings.Contains(out, "▾") {
+		t.Fatalf("expanded multi-text chapter row must show a ▾ triangle, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Part One") || !strings.Contains(out, "Part Two") {
+		t.Fatalf("expanded chapter must render its scene titles, got:\n%s", out)
+	}
+}
+
+func TestSectionRowNoTriangleForSingleTextChapter(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}
+	]}`)
+	f := newFilelist()
+	f.width = 40
+	f.height = 10
+	f.SetDir(dir)
+	out := f.View(-1, "")
+	if strings.Contains(out, "▸") || strings.Contains(out, "▾") {
+		t.Fatalf("single-text chapter must never show a fold triangle, got:\n%s", out)
+	}
+}
+
+func TestChildSceneRowFallsBackToFilenameWhenTitleEmpty(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":""},{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.width = 40
+	f.height = 10
+	f.SetDir(dir)
+	out := f.View(-1, "")
+	// sectionTitle("opening.md") de-slugs to "Opening" — the fallback must not render an
+	// empty label for the first child row.
+	if !strings.Contains(out, sectionTitle("opening.md")) {
+		t.Fatalf("empty scene title must fall back to a de-slugged filename, got:\n%s", out)
+	}
+}
