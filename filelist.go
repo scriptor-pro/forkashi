@@ -437,10 +437,11 @@ func (f *filelist) selectRow(visibleRow int) {
 	f.selected = idx
 }
 
-// activateResult is what activate() found at the cursor: a plain-dir navigation (or
-// nothing selectable) needs no further action from the caller; a single-text chapter
-// or ordinary file is ready to open at path; a multi-text (or empty) chapter needs
-// the caller to open the text picker instead of opening a file directly.
+// activateResult is what activate() found at the cursor: a plain-dir navigation, a
+// fold-state toggle on a multi-text chapter, or nothing selectable, needs no further
+// action from the caller (activateNone); a single-text chapter, a child-scene row, or
+// an ordinary file is ready to open at path (activateFile); an empty chapter needs the
+// caller to open the text picker to create its first scene (activateTextPicker).
 type activateResult int
 
 const (
@@ -453,9 +454,13 @@ const (
 // row (guarded above by moveBy/selectRow, but defensively checked here too) navigates
 // and returns activateNone. A v2 chapter folder with exactly one text returns its
 // path with activateFile — unchanged behavior from before multi-text chapters
-// existed. A v2 chapter folder with zero or 2+ texts returns activateTextPicker; the
-// caller opens the picker screen instead of a file. Anything else (an ordinary file,
-// or a legacy single-file chapter) returns its path with activateFile.
+// existed. A v2 chapter folder with zero texts returns activateTextPicker (caller opens
+// the picker to create the first scene). A v2 chapter folder with 2+ texts TOGGLES its
+// sidebar fold state (persisted via saveFolded) and returns activateNone — the caller
+// does nothing further; f.entries already reflects the new state. A child-scene row
+// (isChildScene, only present when its chapter is expanded) returns its own file path
+// with activateFile. Anything else (an ordinary file, or a legacy single-file chapter)
+// returns its path with activateFile.
 func (f *filelist) activate() (string, activateResult) {
 	if len(f.entries) == 0 || f.selected >= len(f.entries) {
 		return "", activateNone
@@ -470,7 +475,25 @@ func (f *filelist) activate() (string, activateResult) {
 			if len(ch.texts) == 1 {
 				return filepath.Join(f.dir, ch.folder, ch.texts[0].file), activateFile
 			}
-			return "", activateTextPicker
+			if len(ch.texts) == 0 {
+				return "", activateTextPicker
+			}
+			// 2+ texts: toggle this chapter's fold state instead of opening a picker.
+			key := corkKey(ch)
+			if f.folded[key] {
+				delete(f.folded, key)
+			} else {
+				if f.folded == nil {
+					f.folded = map[string]bool{}
+				}
+				f.folded[key] = true
+			}
+			if err := saveFolded(f.foldedRoot, f.folded, foldChapterSet(f.foldedRoot)); err == nil {
+				f.SetDir(f.dir) // rebuild f.entries with/without the child rows; also reloads
+				// f.folded from what was just saved — harmless (same content) and keeps SetDir
+				// as the single source of truth for entry construction.
+			}
+			return "", activateNone
 		}
 		if e.name == ".." {
 			f.SetDir(filepath.Dir(f.dir))
@@ -478,6 +501,9 @@ func (f *filelist) activate() (string, activateResult) {
 			f.SetDir(filepath.Join(f.dir, e.name))
 		}
 		return "", activateNone
+	}
+	if e.isChildScene {
+		return filepath.Join(f.dir, e.parentFolder, e.name), activateFile
 	}
 	return filepath.Join(f.dir, e.name), activateFile
 }

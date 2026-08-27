@@ -687,6 +687,11 @@ func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
 }
 
 func TestActivateMultiTextChapterSignalsPicker(t *testing.T) {
+	// Superseded by the sidebar scene tree (2026-08-27): activating a multi-text chapter now
+	// toggles its fold state inline (see TestActivateMultiTextChapterTogglesFoldInsteadOfPicker)
+	// instead of routing to screenTextPicker. This test keeps the original scenario/name as a
+	// regression guard on the NEW contract, so a future reader searching for this test name
+	// still finds the current expected behavior.
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
 	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("x"), 0o644)
@@ -701,8 +706,11 @@ func TestActivateMultiTextChapterSignalsPicker(t *testing.T) {
 	f.SetDir(dir)
 	f.selectName("chapitre-un")
 	_, result := f.activate()
-	if result != activateTextPicker {
-		t.Fatalf("a multi-text chapter must activate as activateTextPicker, got %v", result)
+	if result != activateNone {
+		t.Fatalf("a multi-text chapter must now toggle its fold state (activateNone), got %v", result)
+	}
+	if !f.folded["chapitre-un"] {
+		t.Fatal("activate must have expanded the chapter")
 	}
 }
 
@@ -918,5 +926,114 @@ func TestSetDirNonManuscriptFolderNeverLoadsFolded(t *testing.T) {
 	}
 	if len(f.folded) != 0 {
 		t.Fatalf("folded should stay empty for a non-manuscript folder, got %+v", f.folded)
+	}
+}
+
+func TestActivateMultiTextChapterTogglesFoldInsteadOfPicker(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	f.selectName("opening") // chapter row, collapsed
+
+	path, result := f.activate()
+	if result != activateNone || path != "" {
+		t.Fatalf("expanding a chapter must return activateNone/\"\", got %q/%v", path, result)
+	}
+	if !f.folded["opening"] {
+		t.Fatal("activate on a collapsed multi-text chapter must expand it")
+	}
+	// f.entries must have been rebuilt with the child rows now visible.
+	found := false
+	for _, e := range f.entries {
+		if e.isChildScene && e.name == "opening.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("after expanding, child-scene rows must be present in f.entries")
+	}
+
+	// Activating again on the (still selected) chapter row collapses it back.
+	f.selectName("opening")
+	path, result = f.activate()
+	if result != activateNone || path != "" {
+		t.Fatalf("collapsing a chapter must return activateNone/\"\", got %q/%v", path, result)
+	}
+	if f.folded["opening"] {
+		t.Fatal("activate on an expanded multi-text chapter must collapse it")
+	}
+}
+
+func TestActivateFoldTogglePersistsToSidecar(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	f.selectName("opening")
+	f.activate() // expand
+
+	// Fresh filelist re-reading the same manuscript root must see the persisted state.
+	f2 := newFilelist()
+	f2.SetDir(dir)
+	found := false
+	for _, e := range f2.entries {
+		if e.isChildScene {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("fold toggle must be persisted to .okashi-folded.json, not just in-memory")
+	}
+}
+
+func TestActivateChildSceneOpensItsFile(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.SetDir(dir)
+	f.selectName("opening2.md") // second child-scene row
+
+	path, result := f.activate()
+	if result != activateFile {
+		t.Fatalf("activating a child-scene row must return activateFile, got %v", result)
+	}
+	want := filepath.Join(dir, "opening", "opening2.md")
+	if path != want {
+		t.Fatalf("path = %q, want %q", path, want)
+	}
+}
+
+func TestActivateSingleTextChapterUnchanged(t *testing.T) {
+	// Regression guard: single-text chapters must keep opening directly, never toggle a fold.
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	f.selectName("opening")
+	path, result := f.activate()
+	if result != activateFile || path != filepath.Join(dir, "opening", "opening.md") {
+		t.Fatalf("single-text chapter activate: path=%q result=%v", path, result)
 	}
 }
