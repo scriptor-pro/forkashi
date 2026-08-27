@@ -1654,7 +1654,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusEditor
 				m.editor.Focus()
 			} else if result == activateTextPicker {
-				m.enterTextPicker()
+				m.enterTextPicker() // only reachable for a 0-text chapter — a 2+-text chapter
+				// now toggles its own fold state inside activate() and returns activateNone
 			}
 			m.lastClickTime = time.Time{} // consume the double-click
 		} else {
@@ -1869,7 +1870,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.focus = focusEditor
 						m.editor.Focus()
 					} else if result == activateTextPicker {
-						m.enterTextPicker()
+						m.enterTextPicker() // only reachable for a 0-text chapter — a 2+-text
+						// chapter now toggles its own fold state inside activate() and
+						// returns activateNone
 					}
 				case "left", "h", "backspace":
 					m.files.SetDir(filepath.Dir(m.files.dir))

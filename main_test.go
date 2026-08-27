@@ -490,6 +490,34 @@ func TestCtrlNPickerAlwaysOffersSceneOption(t *testing.T) {
 	}
 }
 
+func TestSidebarEnterOnMultiTextChapterNeverOpensTextPicker(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	t.Setenv("OKASHI_DIR", dir) // see the file-header note: SetDir post-hoc gets redirected to root
+	m := initialModel()
+	m.screen = screenWriting
+	m.focus = focusSidebar
+	m.width, m.height = 80, 24
+	m.files.selectName("opening")
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m2 := updated.(model)
+	if m2.screen == screenTextPicker {
+		t.Fatal("enter on a multi-text chapter must no longer open screenTextPicker from the sidebar")
+	}
+	if m2.screen != screenWriting {
+		t.Fatalf("screen should stay screenWriting (fold toggled in place), got %v", m2.screen)
+	}
+	if !m2.files.folded["opening"] {
+		t.Fatal("enter must have expanded the chapter's fold state")
+	}
+}
+
 func TestCharCountCountsRunesNotBytes(t *testing.T) {
 	// "café" is 4 runes but 5 bytes (é is 2 bytes in UTF-8) — len() would return 5.
 	if got := charCount("café"); got != 4 {
