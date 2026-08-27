@@ -792,3 +792,131 @@ func TestIsChapterEntryFalseForStandaloneScene(t *testing.T) {
 		t.Fatal("a standalone scene must not be reported as a chapter entry (it has its own icon/behavior, not the legacy-chapter path)")
 	}
 }
+
+func TestSetDirCollapsedChapterHidesChildScenes(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{
+		"opening.md":  "hello",
+		"opening2.md": "world",
+	})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},
+			{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.isChildScene {
+			t.Fatalf("collapsed chapter must not have child-scene rows, got entries=%+v", f.entries)
+		}
+	}
+}
+
+func TestSetDirExpandedChapterShowsChildScenesInOrder(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{
+		"opening.md":  "hello",
+		"opening2.md": "world",
+	})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},
+			{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.SetDir(dir)
+
+	var got []fileEntry
+	for _, e := range f.entries {
+		if e.isChildScene {
+			got = append(got, e)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 child-scene rows, got %+v", got)
+	}
+	if got[0].name != "opening.md" || got[0].parentFolder != "opening" {
+		t.Fatalf("first child scene wrong: %+v", got[0])
+	}
+	if got[1].name != "opening2.md" || got[1].parentFolder != "opening" {
+		t.Fatalf("second child scene wrong: %+v", got[1])
+	}
+	// Child rows must be positioned immediately after their chapter's own row.
+	chIdx, child1Idx := -1, -1
+	for i, e := range f.entries {
+		if e.name == "opening" && e.isDir {
+			chIdx = i
+		}
+		if e.name == "opening.md" && e.isChildScene {
+			child1Idx = i
+		}
+	}
+	if chIdx == -1 || child1Idx != chIdx+1 {
+		t.Fatalf("child scene must immediately follow its chapter row: chIdx=%d child1Idx=%d", chIdx, child1Idx)
+	}
+}
+
+func TestSetDirSingleTextChapterNeverExpandsEvenIfFolded(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}
+	]}`)
+	// Force a folded=true entry for a single-text chapter — SetDir must ignore it.
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.isChildScene {
+			t.Fatalf("single-text chapter must never show child-scene rows, got entries=%+v", f.entries)
+		}
+	}
+}
+
+func TestSetDirLoadsFoldedOnceForSameManuscriptRoot(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "a", "opening2.md": "b"})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"P1"},{"file":"opening2.md","title":"P2"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+	if f.foldedRoot != dir {
+		t.Fatalf("foldedRoot = %q, want %q", f.foldedRoot, dir)
+	}
+	// Mutate the sidecar on disk directly, then call SetDir again on the SAME dir — the
+	// in-memory f.folded must NOT pick up the change (loaded once per manuscript root, by
+	// design — see spec's "Chargement du sidecar" section).
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f.SetDir(dir)
+	for _, e := range f.entries {
+		if e.isChildScene {
+			t.Fatal("second SetDir on the same manuscript root must not reload the sidecar")
+		}
+	}
+}
+
+func TestSetDirNonManuscriptFolderNeverLoadsFolded(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "note.md"), "x") // plain category, no manifest
+	f := newFilelist()
+	f.SetDir(dir)
+	if f.foldedRoot != "" {
+		t.Fatalf("foldedRoot should stay empty for a non-manuscript folder, got %q", f.foldedRoot)
+	}
+	if len(f.folded) != 0 {
+		t.Fatalf("folded should stay empty for a non-manuscript folder, got %+v", f.folded)
+	}
+}

@@ -24,23 +24,27 @@ func renderIcon(g glyph, selected bool) string {
 type fileEntry struct {
 	name         string
 	isDir        bool
-	isPartHeader bool // a non-selectable Part title row; cursor movement skips it
-	isScene      bool // a standalone scene (manifest v3, chapterRef.scene) — distinct glyph
+	isPartHeader bool   // a non-selectable Part title row; cursor movement skips it
+	isScene      bool   // a standalone scene (manifest v3, chapterRef.scene) — distinct glyph
+	isChildScene bool   // a scene row nested under an expanded multi-text chapter (fold state)
+	parentFolder string // isChildScene only: the owning chapter's folder, for activate()
 }
 
 // filelist is a minimal, mouse-friendly file browser we fully own.
 type filelist struct {
-	dir      string
-	root     string
-	entries  []fileEntry
-	view     manuscriptView // resolved structure of dir (chapters, loose, source)
-	selected int
-	offset   int // index of the top visible row
-	width    int
-	height   int
-	allowed  map[string]bool
-	icons    iconSet
-	wc       *wordCountCache
+	dir        string
+	root       string
+	entries    []fileEntry
+	view       manuscriptView // resolved structure of dir (chapters, loose, source)
+	selected   int
+	offset     int // index of the top visible row
+	width      int
+	height     int
+	allowed    map[string]bool
+	folded     map[string]bool // corkKey(chapterRef) → true if EXPANDED (absence = collapsed)
+	foldedRoot string          // manuscript dir folded was loaded for; "" when not a manuscript
+	icons      iconSet
+	wc         *wordCountCache
 }
 
 // allowedDocExts is the single source of truth for which files count as editable
@@ -124,6 +128,16 @@ func (f *filelist) SetDir(dir string) {
 	// of chapter order/titles/membership for View(), sectionRow(), and callers.
 	f.view = resolveManuscript(dir, files)
 
+	if f.view.ordered() {
+		if dir != f.foldedRoot {
+			f.folded = loadFolded(dir)
+			f.foldedRoot = dir
+		}
+	} else {
+		f.folded = nil
+		f.foldedRoot = ""
+	}
+
 	// Build the ordered entry list: dirs first, then chapters in view order
 	// (flattened across parts — Part headers are the next plan's job), then loose.
 	// A manifest (v2) chapter is represented in f.entries by its folder name, since
@@ -155,6 +169,15 @@ func (f *filelist) SetDir(dir string) {
 				continue
 			}
 			f.entries = append(f.entries, fileEntry{name: ch.folder, isDir: true})
+			if len(ch.texts) >= 2 && f.folded[corkKey(ch)] {
+				for _, t := range ch.texts {
+					f.entries = append(f.entries, fileEntry{
+						name:         t.file,
+						isChildScene: true,
+						parentFolder: ch.folder,
+					})
+				}
+			}
 		}
 	}
 	f.entries = append(f.entries, f.view.loose...)
