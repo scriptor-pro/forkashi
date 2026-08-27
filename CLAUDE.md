@@ -71,9 +71,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - **Manuscript** = a folder containing a `manifest.json`. The manifest is the sole source of
   order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
   Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it **and
-  writes it** — create + chapter-title retitle, and **structure mode** (reorder / insert / remove
-  chapters, confirm-on-commit); cross-container **move** via the general **file mover** (`M`) is planned (see Shared
-  Contracts §1).
+  writes it** — create + chapter-title retitle, **structure mode** (reorder / insert / remove
+  chapters, confirm-on-commit), and cross-container **move** via the general **file mover** (`M`,
+  shipped 2026-08-04 — see Shared Contracts §1).
   - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
     treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
     filename. A read-only transitional courtesy for un-migrated corpora.
@@ -155,8 +155,9 @@ with the companion app's copy.
     okashi reads this **and writes it** — it creates manuscripts and retitles `items[].title`
     (no-confirm; filename birth-stable), and **structure mode** reorders / inserts / removes
     chapters (`s` from the binder; staged, committed on exit behind one confirm). Cross-container
-    **move** (into/out of a manuscript) via the general **file mover** (`M`) is still planned. If the manifest is
-    unreadable or its `schemaVersion` is unsupported,
+    **move** (into/out of a manuscript, across sources, folder or single file, cross-volume
+    fallback for single files) via the general **file mover** (`M`, shipped 2026-08-04) is
+    implemented in `move.go`/`mover.go`. If the manifest is unreadable or its `schemaVersion` is unsupported,
     okashi refuses to infer structure — it shows files flat as loose documents with a status
     note; it does **not** fall back to prefix ordering.
   - **Legacy manuscript** (no manifest, ≥1 numerically-prefixed file): filename-prefix
@@ -170,7 +171,12 @@ with the companion app's copy.
   behind a commit **confirmation** (`s` from the binder), mirroring the companion app's own confirm sheet.
   Cross-container **move** via the **export-selection screen** (`v` → `space`/`shift+↑↓` to move texts across chapters or
   convert between Resources and standalone scenes) rewrites `manifest.json` using the existing v3 shape (retrofit `Texts[]`/`items[]`
-  entries per the v3 schema, no new field, no schema-shape change). The general **file mover** (`M`, a separate cross-container mechanism) is still planned. The companion app owns
+  entries per the v3 schema, no new field, no schema-shape change). The general **file mover**
+  (`M`, a separate cross-container mechanism, shipped 2026-08-04) additionally covers whole-folder
+  moves, cross-source destinations (via the Sources level), and a cross-volume copy+remove fallback
+  for single files; it does not yet drop a loose file into an existing chapter as an extra scene or
+  as a standalone scene (only as a brand-new chapter) — that finer-grained placement is only
+  available today via the export-selection screen. The companion app owns
   the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
   Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
   `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
@@ -264,5 +270,6 @@ with the companion app's copy.
   rule set.
 - Adopted & shipped: **atomic writes** (pending earlier, now in `save()` + export), **GFM +
   footnotes** in the export parser (shipped with Tasks 1–3 of the 2026-06-22 export refactor),
-  and **okashi as a manifest writer** (create + chapter-title retitle; 2026-06-30, shared-contract
-  change mirrored in the companion app).
+  **okashi as a manifest writer** (create + chapter-title retitle; 2026-06-30, shared-contract
+  change mirrored in the companion app), and the general **file mover** (`M`, 2026-08-04 —
+  `move.go`/`mover.go`, cross-container/cross-source/cross-volume file and folder moves).
