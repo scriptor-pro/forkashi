@@ -754,3 +754,36 @@ func exportSelectView(m model) string {
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
+
+// isResourceFile reports whether name (a root-level filename) is currently a Resource — i.e.
+// present among looseFiles's output for dir (resolved via resolveManuscript/v.loose).
+func isResourceFile(dir, name string) bool {
+	v := resolveManuscript(dir, readEntries(dir))
+	for _, e := range v.loose {
+		if e.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// toggleSelectedSceneResourceStatus advances the sidebar's selected entry one step along the
+// chapter-scene → standalone-scene → Resource → standalone-scene cycle (design §1): a scene
+// nested in a chapter exits to standalone; a standalone scene becomes a Resource; a Resource
+// becomes standalone again. A chapter header, Part header, or directory has no status to toggle
+// and is a no-op.
+func (m *model) toggleSelectedSceneResourceStatus() {
+	e, ok := m.files.selectedEntry()
+	if !ok {
+		return
+	}
+	switch {
+	case e.isChildScene:
+		m.convertChapterSceneToStandalone(e.parentFolder, e.name)
+	case e.isScene:
+		m.convertStandaloneSceneToResource(e.name)
+	case !e.isDir && !e.isPartHeader && isResourceFile(m.files.dir, e.name):
+		m.convertResourceToStandaloneScene(e.name)
+	}
+	m.files.SetDir(m.files.dir) // refresh sidebar entries + word counts from the rewritten manifest
+}

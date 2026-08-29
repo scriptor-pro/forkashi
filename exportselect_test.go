@@ -954,3 +954,26 @@ func TestBuildEntryExplicitKeyAlwaysWinsOverTypeDefault(t *testing.T) {
 		t.Fatal("an explicit true in the excluded map must win over the listed-item default")
 	}
 }
+
+func TestIsResourceFileTrueForUnlistedRootFile(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{"scene-1.md": "x"})
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("a Resource"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !isResourceFile(dir, "notes.md") {
+		t.Fatal("notes.md is not listed in items[] — must be reported as a Resource")
+	}
+	if isResourceFile(dir, "scene-1.md") {
+		t.Fatal("scene-1.md is listed in ch1's Texts[] — must NOT be reported as a Resource")
+	}
+}

@@ -582,6 +582,14 @@ func (f filelist) selectedEntryName() (string, bool) {
 	return f.entries[f.selected].name, true
 }
 
+// selectedEntry returns the full selected fileEntry, or ok=false if nothing is selected.
+func (f filelist) selectedEntry() (fileEntry, bool) {
+	if f.selected < 0 || f.selected >= len(f.entries) {
+		return fileEntry{}, false
+	}
+	return f.entries[f.selected], true
+}
+
 // selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").
 func (f filelist) selectedFile() (string, bool) {
 	if f.selected < 0 || f.selected >= len(f.entries) {

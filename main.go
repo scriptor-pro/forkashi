@@ -1896,6 +1896,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterManuscript() // read-through pager
 				case "v":
 					m.enterExportSelect()
+				case "R":
+					m.toggleSelectedSceneResourceStatus()
 				}
 			}
 		}

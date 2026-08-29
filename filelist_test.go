@@ -1160,3 +1160,50 @@ func TestChildSceneRowFallsBackToFilenameWhenTitleEmpty(t *testing.T) {
 		t.Fatalf("empty scene title must fall back to a de-slugged filename, got:\n%s", out)
 	}
 }
+
+func TestSelectedEntryReturnsFullEntryUnderCursor(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{
+		"opening.md":  "hello",
+		"opening2.md": "world",
+	})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},
+			{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.SetDir(dir)
+
+	childIdx := -1
+	for i, e := range f.entries {
+		if e.isChildScene && e.name == "opening2.md" {
+			childIdx = i
+		}
+	}
+	if childIdx == -1 {
+		t.Fatalf("expected a child-scene row for opening2.md, got entries=%+v", f.entries)
+	}
+	f.selected = childIdx
+
+	got, ok := f.selectedEntry()
+	if !ok {
+		t.Fatal("selectedEntry() ok = false, want true")
+	}
+	if !got.isChildScene || got.name != "opening2.md" || got.parentFolder != "opening" {
+		t.Fatalf("selectedEntry() = %+v, want isChildScene=true name=opening2.md parentFolder=opening", got)
+	}
+}
+
+func TestSelectedEntryOutOfBoundsReturnsFalse(t *testing.T) {
+	f := newFilelist()
+	f.selected = 5
+	_, ok := f.selectedEntry()
+	if ok {
+		t.Fatal("selectedEntry() ok = true for an out-of-bounds selection, want false")
+	}
+}

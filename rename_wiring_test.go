@@ -349,3 +349,117 @@ func TestCtrlKOnNonManuscriptStaysPut(t *testing.T) {
 		t.Fatalf("ctrl+k on a non-manuscript must not open the corkboard (screen=%v)", m.screen)
 	}
 }
+
+func TestSidebarRToggleChapterSceneBecomesStandalone(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	mkChapterDir(t, root, "ch1", map[string]string{
+		"scene-1.md": "First scene.",
+		"scene-2.md": "Second scene.",
+	})
+	writeManifestRaw(t, root, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"ch1","title":"Chapter One","texts":[
+			{"file":"scene-1.md","title":"Opening"},
+			{"file":"scene-2.md","title":"Confrontation"}
+		]}}
+	]}`)
+	if err := saveFolded(root, map[string]bool{"ch1": true}, map[string]bool{"ch1": true}); err != nil {
+		t.Fatal(err)
+	}
+	m := sidebarModel(t, root)
+	childIdx := -1
+	for i, e := range m.files.entries {
+		if e.isChildScene && e.name == "scene-2.md" {
+			childIdx = i
+		}
+	}
+	if childIdx == -1 {
+		t.Fatalf("expected a child-scene row for scene-2.md, got entries=%+v", m.files.entries)
+	}
+	m.files.selected = childIdx
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	m = nm.(model)
+
+	got, _, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSceneByFile(&got, "scene-2.md") == nil {
+		t.Fatal("scene-2.md must now be a standalone scene")
+	}
+}
+
+func TestSidebarRToggleStandaloneSceneBecomesResource(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "aparte.md"), []byte("A standalone scene."), 0o644)
+	writeManifestRaw(t, root, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	m := sidebarModel(t, root)
+	m.files.selectName("aparte.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	m = nm.(model)
+
+	got, _, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Items) != 0 {
+		t.Fatalf("aparte.md must have been dropped from items[] (now a Resource), got %+v", got.Items)
+	}
+	if _, err := os.Stat(filepath.Join(root, "aparte.md")); err != nil {
+		t.Fatal("aparte.md must still exist on disk (unmoved — root stays root)")
+	}
+}
+
+func TestSidebarRToggleResourceBecomesStandaloneScene(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "notes.md"), []byte("A Resource."), 0o644)
+	// convertResourceToStandaloneScene (pre-existing, exportselect.go) requires a readable
+	// manifest.json to append to — it never creates one from scratch (readManifest's
+	// present=false is a deliberate refusal-to-infer-structure guard, not a bug this task's
+	// scope covers). A manifest-less "category" folder (CLAUDE.md project model) is therefore
+	// not a case R can promote a Resource in; seed an (otherwise-empty) manifest so this test
+	// exercises the toggle itself rather than that pre-existing, out-of-scope guard.
+	writeManifestRaw(t, root, `{"schemaVersion":3,"title":"N","items":[]}`)
+	m := sidebarModel(t, root)
+	m.files.selectName("notes.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	m = nm.(model)
+
+	got, _, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSceneByFile(&got, "notes.md") == nil {
+		t.Fatal("notes.md must now be listed as a standalone scene")
+	}
+}
+
+func TestSidebarRToggleOnChapterHeaderIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	mkChapterDir(t, root, "ch1", map[string]string{"scene-1.md": "x"})
+	writeManifestRaw(t, root, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"ch1","title":"Chapter One","texts":[{"file":"scene-1.md","title":"Opening"}]}}
+	]}`)
+	m := sidebarModel(t, root)
+	m.files.selectName("ch1")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	m = nm.(model)
+
+	got, _, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1 := findChapterByFolder(&got, "ch1")
+	if ch1 == nil || len(ch1.Texts) != 1 || ch1.Texts[0].File != "scene-1.md" {
+		t.Fatalf("chapter header R must be a no-op, got %+v", ch1)
+	}
+}
