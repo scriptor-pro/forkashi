@@ -242,21 +242,49 @@ type allNotesModel struct {
 }
 
 // enterAllNotes loads every chapter's notes across the current manuscript into one flat,
-// read-only list. All I/O happens here, once, before m.screen flips — allNotesView stays I/O-free.
+// read-only list, plus notes on Resource files (any .md not listed in a chapter, at the
+// manuscript root or nested in a subfolder like Ressources/) — a Resource keeps its notes
+// sidecar even though it has no chapterTitle, so it's grouped under its own de-slugged
+// filename instead. All I/O happens here, once, before m.screen flips — allNotesView stays
+// I/O-free.
 func (m *model) enterAllNotes() {
 	dir := m.files.dir
 	v := resolveManuscript(dir, readEntries(dir))
 	var entries []allNotesEntry
+	chapterFiles := map[string]bool{}
 	for _, part := range v.parts {
 		for _, ch := range part.chapters {
 			for _, t := range ch.texts {
 				file := filepath.Join(ch.folder, t.file)
+				chapterFiles[file] = true
 				for _, n := range loadNotes(filepath.Join(dir, file)) {
 					entries = append(entries, allNotesEntry{file: file, chapterTitle: ch.title, n: n})
 				}
 			}
 		}
 	}
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") || !allowedDocExts[strings.ToLower(filepath.Ext(d.Name()))] {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil || chapterFiles[rel] {
+			return nil
+		}
+		for _, n := range loadNotes(path) {
+			entries = append(entries, allNotesEntry{file: rel, chapterTitle: sectionTitle(d.Name()), n: n})
+		}
+		return nil
+	})
 	m.allNotes = allNotesModel{entries: entries}
 	m.screen = screenAllNotes
 }

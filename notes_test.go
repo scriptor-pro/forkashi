@@ -162,6 +162,44 @@ func TestEnterAllNotesFlattensAcrossChapters(t *testing.T) {
 	}
 }
 
+func TestEnterAllNotesIncludesResourceNotes(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "Ressources"), 0o755)
+	os.WriteFile(filepath.Join(dir, "un", "un.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "racine.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "Ressources", "premisse.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":3,"title":"N","items":[`+
+			`{"chapter":{"folder":"un","title":"Un","texts":[{"file":"un.md","title":"Un"}]}}]}`), 0o644)
+
+	saveNotes(filepath.Join(dir, "un", "un.md"), []note{{ID: "n1", Text: "Note de chapitre."}})
+	saveNotes(filepath.Join(dir, "racine.md"), []note{{ID: "n2", Text: "Note racine."}})
+	saveNotes(filepath.Join(dir, "Ressources", "premisse.md"), []note{{ID: "n3", Text: "Note sous-dossier."}})
+
+	m := model{files: filelist{dir: dir}}
+	m.enterAllNotes()
+
+	if len(m.allNotes.entries) != 3 {
+		t.Fatalf("expected 3 entries (chapter + 2 resources), got %d: %+v", len(m.allNotes.entries), m.allNotes.entries)
+	}
+	var texts []string
+	for _, e := range m.allNotes.entries {
+		texts = append(texts, e.n.Text)
+	}
+	for _, want := range []string{"Note de chapitre.", "Note racine.", "Note sous-dossier."} {
+		found := false
+		for _, got := range texts {
+			if got == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected entry with text %q, got %+v", want, texts)
+		}
+	}
+}
+
 func TestEnterAllNotesSkipsChaptersWithoutNotes(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "un"), 0o755)
