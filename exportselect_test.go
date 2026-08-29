@@ -664,13 +664,14 @@ func TestMoveExportSelectCrossChapterSelFollowsMovedScene(t *testing.T) {
 			got, m3.exportSelect.sel, entries)
 	}
 
-	// Repeating the same shift+down (pushing the scene further) must keep following it too.
+	// Repeating the same shift+down (pushing the scene further down past ch2) converts
+	// the scene to a standalone scene (no adjacent chapter below ch2), but sel still follows it.
 	mm3, _ := m3.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftDown})
 	m4 := mm3.(model)
 	entries4 := m4.exportSelect.entries
 	got4 := entries4[m4.exportSelect.sel]
-	if got4.file != filepath.Join("ch2", "only.md") {
-		t.Fatalf("sel must still follow 'Only' after a second shift+down, got entry=%+v (sel=%d, entries=%+v)",
+	if got4.file != "only.md" || got4.indent {
+		t.Fatalf("sel must follow 'Only' as it becomes standalone after the second shift+down, got entry=%+v (sel=%d, entries=%+v)",
 			got4, m4.exportSelect.sel, entries4)
 	}
 }
@@ -859,4 +860,51 @@ func TestConvertChapterSceneToStandaloneMigratesSidecarKey(t *testing.T) {
 	if !got["scene-2.md"] {
 		t.Fatal("exclusion must migrate to the new root-relative key")
 	}
+}
+
+func TestMoveExportSelectSceneExitsChapterWhenNoAdjacentChapter(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{
+		"scene-1.md": "First scene.",
+		"scene-2.md": "Second scene, at the top edge of the only chapter.",
+	})
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+				{File: "scene-2.md", Title: "Confrontation"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	// entries: [0]=header "Chapter One", [1]="Opening" (indented, top of chapter).
+	// Moving entry 1 UP: no adjacent chapter above → must exit to a standalone scene.
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown}) // sel -> 1 ("Opening")
+	m2 := mm.(model)
+	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyShiftUp})
+	m3 := mm2.(model)
+
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "scene-1.md")); !os.IsNotExist(err) {
+		t.Fatal("scene-1.md must no longer exist in ch1/")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "scene-1.md")); err != nil {
+		t.Fatalf("scene-1.md must now exist at the manuscript root: %v", err)
+	}
+	got, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1 := findChapterByFolder(&got, "ch1")
+	if ch1 == nil || len(ch1.Texts) != 1 || ch1.Texts[0].File != "scene-2.md" {
+		t.Fatalf("ch1 must keep only scene-2.md, got %+v", ch1)
+	}
+	if findSceneByFile(&got, "scene-1.md") == nil {
+		t.Fatal("scene-1.md must now be a standalone scene")
+	}
+	_ = m3
 }

@@ -514,7 +514,14 @@ func (m *model) moveExportSelectSceneWithinChapter(i, dir int) {
 		dstHeaderIdx = chapterEnd
 	}
 	if dstHeaderIdx < 0 || dstHeaderIdx >= len(entries) || !entries[dstHeaderIdx].isHeader {
-		return // no adjacent chapter in that direction — already at an edge
+		// No adjacent chapter in that direction — the scene exits its chapter entirely and
+		// becomes a standalone scene (never directly a Resource — see design §1).
+		srcFolder := m.chapterFolderForHeader(headerIdx)
+		if srcFolder == "" {
+			return
+		}
+		m.convertChapterSceneToStandalone(srcFolder, entries[i].file)
+		return
 	}
 	srcFolder := m.chapterFolderForHeader(headerIdx)
 	dstFolder := m.chapterFolderForHeader(dstHeaderIdx)
