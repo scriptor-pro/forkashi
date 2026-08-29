@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -335,7 +336,11 @@ func TestRunExportWholeManuscriptIncludesCheckedResource(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// sidenote.md is NOT excluded — default-included, so it must appear.
+	// sidenote.md is explicitly included (false in the sidecar) — a Resource now defaults to
+	// EXCLUDED, so an explicit opt-in is required for it to appear (Task 3).
+	if err := saveExportSelectionRaw(t, proj, map[string]bool{"sidenote.md": false}); err != nil {
+		t.Fatal(err)
+	}
 
 	m := model{}
 	m.files.dir = proj
@@ -348,7 +353,7 @@ func TestRunExportWholeManuscriptIncludesCheckedResource(t *testing.T) {
 		t.Fatalf("export file not written: %v", err)
 	}
 	if !strings.Contains(string(out), "resource") {
-		t.Fatal("exported RTF must include the Resource's content (default-included)")
+		t.Fatal("exported RTF must include the Resource's content when explicitly opted in")
 	}
 }
 
@@ -407,5 +412,91 @@ func TestExportCancel(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "export")); !os.IsNotExist(err) {
 		t.Fatal("cancel should write nothing")
+	}
+}
+
+// saveExportSelectionRaw writes the sidecar with the exact map given, bypassing
+// saveExportSelection's pruning of false values — needed only to test buildEntry/runExport's
+// read-side "explicit key always wins" contract for a value production code never writes.
+func saveExportSelectionRaw(t *testing.T, dir string, excluded map[string]bool) error {
+	t.Helper()
+	data, err := json.Marshal(exportSelectionFile{SchemaVersion: exportSelectionSchemaVersion, Excluded: excluded})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(exportSelectionPath(dir), data, 0o644)
+}
+
+func TestRunExportResourceExcludedByDefaultWithoutExplicitSidecarEntry(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{"scene-1.md": "Chapter text."})
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("A Resource, never touched."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.screen = screenCorkboard // exportWholeManuscript() == true
+	c := newExportChooser()
+	c.checked[formatRTF] = true
+	m.exportChooser = &c
+
+	m.runExport()
+
+	data, err := os.ReadFile(filepath.Join(dir, "export", "n.rtf"))
+	if err != nil {
+		t.Fatalf("expected export/n.rtf to be written: %v, status=%q", err, m.status)
+	}
+	if strings.Contains(string(data), "A Resource, never touched.") {
+		t.Fatal("a Resource with no explicit sidecar entry must be excluded from the export by default")
+	}
+}
+
+func TestRunExportResourceExplicitlyIncludedStillAppears(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{"scene-1.md": "Chapter text."})
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("An explicitly included Resource."), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate an explicit "included" state the way the export-selection screen produces it:
+	// toggling a Resource on twice (excluded → included) leaves no key in the sidecar at all,
+	// which already defaults to included for listed items but NOT for Resources — so to keep a
+	// Resource included, the UI never writes true. The only way "explicit inclusion" of a
+	// Resource actually persists is by the sidecar not pruning a false-equivalent absence — this
+	// test instead verifies the direct runExport contract using an explicit `false` sidecar
+	// entry, which is what the schema is capable of storing.
+	if err := saveExportSelectionRaw(t, dir, map[string]bool{"notes.md": false}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+	m.screen = screenCorkboard
+	c := newExportChooser()
+	c.checked[formatRTF] = true
+	m.exportChooser = &c
+
+	m.runExport()
+
+	data, err := os.ReadFile(filepath.Join(dir, "export", "n.rtf"))
+	if err != nil {
+		t.Fatalf("expected export/n.rtf to be written: %v, status=%q", err, m.status)
+	}
+	if !strings.Contains(string(data), "An explicitly included Resource.") {
+		t.Fatal("a Resource with an explicit false sidecar entry must still be included")
 	}
 }

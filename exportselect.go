@@ -54,7 +54,7 @@ func buildExportSelectEntries(dir string, v manuscriptView, excluded map[string]
 			out = append(out, exportSelectEntry{title: ch.title, isHeader: true})
 			for _, t := range ch.texts {
 				rel := filepath.Join(ch.folder, t.file)
-				out = append(out, buildEntry(dir, rel, t.title, true, excluded))
+				out = append(out, buildEntry(dir, rel, t.title, true, false, excluded))
 			}
 		}
 	}
@@ -64,27 +64,33 @@ func buildExportSelectEntries(dir string, v manuscriptView, excluded map[string]
 				continue
 			}
 			rel := ch.texts[0].file
-			out = append(out, buildEntry(dir, rel, ch.title, false, excluded))
+			out = append(out, buildEntry(dir, rel, ch.title, false, false, excluded))
 		}
 	}
 	for _, e := range v.loose {
-		out = append(out, buildEntry(dir, e.name, sectionTitle(e.name), false, excluded))
+		out = append(out, buildEntry(dir, e.name, sectionTitle(e.name), false, true, excluded))
 	}
 	return out
 }
 
 // buildEntry reads rel's content once to compute words/chars/preview and reports its excluded
-// state from the sidecar map.
-func buildEntry(dir, rel, title string, indent bool, excluded map[string]bool) exportSelectEntry {
+// state from the sidecar map. isResource selects the default when rel has no explicit entry in
+// excluded: a listed item (chapter/scene/standalone scene) defaults to included; a Resource
+// defaults to EXCLUDED.
+func buildEntry(dir, rel, title string, indent, isResource bool, excluded map[string]bool) exportSelectEntry {
 	data, _ := os.ReadFile(filepath.Join(dir, rel)) // best-effort: an unreadable file gets zero counts, not a crash
 	text := string(data)
+	ex, explicit := excluded[rel]
+	if !explicit {
+		ex = isResource
+	}
 	return exportSelectEntry{
 		file:     rel,
 		title:    title,
 		preview:  previewOf(data),
 		words:    wordCount(text),
 		chars:    charCount(text),
-		excluded: excluded[rel],
+		excluded: ex,
 		indent:   indent,
 	}
 }

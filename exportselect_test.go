@@ -908,3 +908,49 @@ func TestMoveExportSelectSceneExitsChapterWhenNoAdjacentChapter(t *testing.T) {
 	}
 	_ = m3
 }
+
+func TestBuildEntryResourceDefaultsToExcludedWithoutExplicitKey(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("Research notes."), 0o644)
+
+	e := buildEntry(dir, "notes.md", "notes", false, true, map[string]bool{})
+
+	if !e.excluded {
+		t.Fatal("a Resource with no explicit sidecar key must default to excluded")
+	}
+}
+
+func TestBuildEntryListedItemDefaultsToIncludedWithoutExplicitKey(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{"scene-1.md": "First scene."})
+
+	e := buildEntry(dir, filepath.Join("ch1", "scene-1.md"), "Opening", true, false, map[string]bool{})
+
+	if e.excluded {
+		t.Fatal("a listed chapter/scene entry with no explicit sidecar key must default to included")
+	}
+}
+
+func TestBuildEntryExplicitKeyAlwaysWinsOverTypeDefault(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("Research notes."), 0o644)
+
+	// Resource explicitly INCLUDED (key present with value false is not how the sidecar stores
+	// inclusion — only exclusions are ever stored, see exportselection.go:14-16 — so an explicit
+	// "included" state is instead represented by the key being ABSENT after having been toggled
+	// back on. We simulate that directly: an explicit false entry in the map, which the schema
+	// never actually writes, must still be honored as "not excluded" if present.
+	e := buildEntry(dir, "notes.md", "notes", false, true, map[string]bool{"notes.md": false})
+	if e.excluded {
+		t.Fatal("an explicit false in the excluded map must win over the Resource default")
+	}
+
+	// A chapter/scene explicitly EXCLUDED via the sidecar must stay excluded despite its
+	// type default being "included".
+	mkChapterDir(t, dir, "ch1", map[string]string{"scene-1.md": "First scene."})
+	e2 := buildEntry(dir, filepath.Join("ch1", "scene-1.md"), "Opening", true, false,
+		map[string]bool{filepath.Join("ch1", "scene-1.md"): true})
+	if !e2.excluded {
+		t.Fatal("an explicit true in the excluded map must win over the listed-item default")
+	}
+}

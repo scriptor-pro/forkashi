@@ -123,7 +123,11 @@ func (m *model) runExport() {
 		excluded := loadExportSelection(dir)
 		doc = manuscriptDocFromChapters(dir, v.parts, excluded)
 		for _, e := range v.loose {
-			if excluded[e.name] {
+			ex, explicit := excluded[e.name]
+			if !explicit {
+				ex = true // Resource, no explicit sidecar entry → excluded by default
+			}
+			if ex {
 				continue
 			}
 			data, err := os.ReadFile(filepath.Join(dir, e.name))
