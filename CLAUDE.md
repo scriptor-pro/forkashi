@@ -94,7 +94,12 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   totals, and a 111-character preview per entry; `space` toggles inclusion, `shift+↑↓` moves an entry within its container
   or across container boundaries, converting independent resources ↔ standalone scenes as needed; the selection state
   persists in a per-project `.okashi-export.json` sidecar; **Resources can now appear in an export when checked on this screen**
-  — previously impossible); **rename** (`r`: manifest chapters
+  ; a Resource is now EXCLUDED from export by default (an item listed in the manifest — chapter,
+  chapter-scene, standalone scene — stays included by default as before; only an explicit checkbox
+  state ever overrides either default). A chapter-scene can exit its chapter to become a standalone
+  scene via `shift+↑↓` past the chapter boundary on this screen, or via **`R`** from the sidebar on
+  the selected entry — `R` also converts a standalone scene → Resource and a Resource → standalone
+  scene, one step of the cycle per press; a chapter/Part header is a no-op); **rename** (`r`: manifest chapters
   **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
   loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
   glamour); **Properties** (`i` from the hub: edit title / author / contact / width /
