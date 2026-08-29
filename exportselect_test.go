@@ -737,3 +737,126 @@ func TestMoveExportSelectStandaloneSceneBecomesResourceCrossingBoundary(t *testi
 	}
 	_ = m2
 }
+
+func TestConvertChapterSceneToStandaloneMovesFileAndUpdatesManifest(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{
+		"scene-1.md": "First scene.",
+		"scene-2.md": "Second scene, about to leave the chapter.",
+	})
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+				{File: "scene-2.md", Title: "Confrontation"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+
+	m.convertChapterSceneToStandalone("ch1", filepath.Join("ch1", "scene-2.md"))
+
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "scene-2.md")); !os.IsNotExist(err) {
+		t.Fatal("scene-2.md must no longer exist in ch1/")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "scene-2.md")); err != nil {
+		t.Fatalf("scene-2.md must now exist at the manuscript root: %v", err)
+	}
+	got, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1 := findChapterByFolder(&got, "ch1")
+	if ch1 == nil || len(ch1.Texts) != 1 || ch1.Texts[0].File != "scene-1.md" {
+		t.Fatalf("ch1 must keep only scene-1.md, got %+v", ch1)
+	}
+	sc := findSceneByFile(&got, "scene-2.md")
+	if sc == nil {
+		t.Fatal("scene-2.md must now be listed as a standalone scene in items[]")
+	}
+	if sc.Title != "Confrontation" {
+		t.Fatalf("standalone scene title must be preserved, got %q, want %q", sc.Title, "Confrontation")
+	}
+}
+
+func TestConvertChapterSceneToStandaloneRefusesNameCollisionAtRoot(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{
+		"scene-1.md": "First scene.",
+		"scene-2.md": "Second scene.",
+	})
+	os.WriteFile(filepath.Join(dir, "scene-2.md"), []byte("already at root"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+				{File: "scene-2.md", Title: "Confrontation"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+
+	m.convertChapterSceneToStandalone("ch1", filepath.Join("ch1", "scene-2.md"))
+
+	if !strings.Contains(m.status, "scene-2.md") {
+		t.Fatalf("status should report the name collision, got %q", m.status)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "scene-2.md")); err != nil {
+		t.Fatal("scene-2.md must still exist in ch1/ — the move must have been refused")
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "scene-2.md"))
+	if err != nil || string(b) != "already at root" {
+		t.Fatal("the pre-existing root scene-2.md must be untouched")
+	}
+	got, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch1 := findChapterByFolder(&got, "ch1")
+	if len(ch1.Texts) != 2 {
+		t.Fatalf("ch1 must still list both texts (no manifest change on refusal), got %+v", ch1.Texts)
+	}
+}
+
+func TestConvertChapterSceneToStandaloneMigratesSidecarKey(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "ch1", map[string]string{
+		"scene-1.md": "First scene.",
+		"scene-2.md": "Second scene.",
+	})
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{
+				{File: "scene-1.md", Title: "Opening"},
+				{File: "scene-2.md", Title: "Confrontation"},
+			}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	oldKey := filepath.Join("ch1", "scene-2.md")
+	if err := saveExportSelection(dir, map[string]bool{oldKey: true}, map[string]bool{oldKey: true}); err != nil {
+		t.Fatal(err)
+	}
+	m := model{}
+	m.files.dir = dir
+
+	m.convertChapterSceneToStandalone("ch1", oldKey)
+
+	got := loadExportSelection(dir)
+	if got[oldKey] {
+		t.Fatal("old sidecar key must not survive the conversion")
+	}
+	if !got["scene-2.md"] {
+		t.Fatal("exclusion must migrate to the new root-relative key")
+	}
+}

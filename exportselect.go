@@ -332,6 +332,76 @@ func (m *model) convertResourceToStandaloneScene(file string) {
 	m.reloadExportSelectAfterMove(followFile(file))
 }
 
+// convertChapterSceneToStandalone drops file from its parent chapter's Texts[] (identified by
+// folder) and adds it as a new Scene:true item at the end of items[] — the scene's own title is
+// preserved. Unlike the standalone-scene↔Resource conversions (which never move a file, since
+// both statuses already live at the manuscript root), this DOES move the file on disk, chapter
+// folder → manuscript root, using the same safeMove already used by moveSceneBetweenChapters.
+func (m *model) convertChapterSceneToStandalone(folder, file string) {
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return
+	}
+	ch := findChapterByFolder(&mani, folder)
+	if ch == nil {
+		return
+	}
+	base := filepath.Base(file)
+	var moved manifestText
+	found := false
+	kept := ch.Texts[:0]
+	for _, t := range ch.Texts {
+		if t.File == base {
+			moved = t
+			found = true
+			continue
+		}
+		kept = append(kept, t)
+	}
+	if !found {
+		return
+	}
+
+	src := filepath.Join(m.files.dir, folder, base)
+	dst := filepath.Join(m.files.dir, base)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "un fichier nommé " + base + " existe déjà à la racine du manuscrit"
+		return
+	}
+	if err := safeMove(src, dst); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+	ch.Texts = kept
+
+	mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
+		Title: moved.Title,
+		Scene: true,
+		Texts: []manifestText{{File: base, Title: moved.Title}},
+	}})
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+
+	oldKey := filepath.Join(folder, base)
+	excluded := loadExportSelection(m.files.dir)
+	if excluded[oldKey] {
+		delete(excluded, oldKey)
+		excluded[base] = true
+		known := map[string]bool{base: true}
+		for k := range excluded {
+			known[k] = true
+		}
+		if err := saveExportSelection(m.files.dir, excluded, known); err != nil {
+			m.status = "scène convertie mais échec de la migration de la sélection d'export : " + err.Error()
+			return
+		}
+	}
+	m.reloadExportSelectAfterMove(followFile(base))
+}
+
 // moveExportSelectChapterBlock moves the chapter header at index i (plus all its indented
 // child rows) up or down past the ADJACENT chapter block, by swapping the two blocks' order in
 // the on-disk manifest's bare-chapter items, then re-resolving the entry list from scratch.
