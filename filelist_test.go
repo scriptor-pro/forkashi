@@ -870,6 +870,45 @@ func TestSetDirExpandedChapterShowsChildScenesInOrder(t *testing.T) {
 	}
 }
 
+func TestSelectedFileOnChildSceneIncludesParentFolder(t *testing.T) {
+	dir := t.TempDir()
+	mkChapterDir(t, dir, "opening", map[string]string{
+		"opening.md":  "hello",
+		"opening2.md": "world",
+	})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},
+			{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.SetDir(dir)
+
+	childIdx := -1
+	for i, e := range f.entries {
+		if e.isChildScene && e.name == "opening2.md" {
+			childIdx = i
+		}
+	}
+	if childIdx == -1 {
+		t.Fatalf("expected a child-scene row for opening2.md, got entries=%+v", f.entries)
+	}
+	f.selected = childIdx
+
+	got, ok := f.selectedFile()
+	if !ok {
+		t.Fatal("selectedFile() ok = false for a child-scene row, want true")
+	}
+	want := filepath.Join(dir, "opening", "opening2.md")
+	if got != want {
+		t.Fatalf("selectedFile() = %q, want %q (must include the chapter's parentFolder)", got, want)
+	}
+}
+
 func TestSetDirSingleTextChapterNeverExpandsEvenIfFolded(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})

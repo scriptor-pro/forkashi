@@ -591,6 +591,9 @@ func (f filelist) selectedFile() (string, bool) {
 	if e.isDir {
 		return "", false
 	}
+	if e.isChildScene {
+		return filepath.Join(f.dir, e.parentFolder, e.name), true
+	}
 	return filepath.Join(f.dir, e.name), true
 }
 
