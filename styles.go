@@ -12,6 +12,21 @@ var (
 	errColor = lipgloss.Color("#ff5555") // red (Dracula)
 )
 
+// Sidebar focus indicator: the file pane's background switches between these two to show
+// whether it currently holds keyboard focus (focusSidebar) or not (focusEditor).
+var (
+	sidebarFocusBg = lipgloss.Color("#002fa7") // International Klein Blue — focused
+	sidebarBlurBg  = lipgloss.Color("#001640") // same hue, dimmed — unfocused
+)
+
+// Editor focus indicator: same mechanism as the sidebar, distinct hue (green, chosen for
+// its documented association with creative-task performance) so which pane holds focus is
+// legible at a glance.
+var (
+	editorFocusBg = lipgloss.Color("#0f4d30") // focused
+	editorBlurBg  = lipgloss.Color("#08281a") // same hue, dimmed — unfocused
+)
+
 // Per-type icon colors (Dracula palette). The base palette above is unchanged.
 var (
 	iconFolderColor  = lipgloss.Color("#8be9fd") // cyan

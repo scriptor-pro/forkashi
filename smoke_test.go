@@ -984,22 +984,23 @@ func TestLayoutFilePaneWidth(t *testing.T) {
 func TestDimFollowsTypewriterAndToggle(t *testing.T) {
 	m := initialModel()
 	m.screen = screenWriting
-	// default: typewriter on, dimEnabled on → editor.Dim on
-	if !m.dimEnabled || !m.editor.Dim {
-		t.Fatal("dim should default on (typewriter on, dimEnabled on)")
+	// default: typewriter on, dimEnabled off → editor.Dim off (uniform intensity)
+	if m.dimEnabled || m.editor.Dim {
+		t.Fatal("dim should default off (uniform text intensity)")
 	}
-	// ctrl+d turns dimming off but keeps typewriter
+	if !m.typewriter {
+		t.Fatal("typewriter should default on")
+	}
+	// ctrl+d turns dimming on but keeps typewriter
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
 	m = nm.(model)
-	if m.dimEnabled || m.editor.Dim {
-		t.Fatal("ctrl+d should turn dimming off")
+	if !m.dimEnabled || !m.editor.Dim {
+		t.Fatal("ctrl+d should turn dimming on")
 	}
 	if !m.typewriter {
 		t.Fatal("ctrl+d must not affect typewriter")
 	}
 	// ctrl+t off → dim off regardless of dimEnabled
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlD}) // dim back on
-	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT}) // typewriter off
 	m = nm.(model)
 	if m.editor.Dim {
@@ -1015,13 +1016,13 @@ func TestStatsAtEditorTextLeftEdge(t *testing.T) {
 	stats := "✓ 1,240 mots · +142 session"
 	bar := m.composeStatus("", stats)
 	leading := len(bar) - len(strings.TrimLeft(bar, " "))
-	// Stats should start at the editor text's left edge:
-	// editorArea = 100-sidebarWidth; cw = min(colWidth, editorArea-2)
+	// Stats should start at the editor text's left edge, inside the focus-indicator
+	// frame: editorArea = 100-sidebarWidth; cw = min(colWidth, editorArea-4-2)
 	_, _, editorArea := m.effectivePanels()
-	cw := min(m.colWidth, editorArea-2)
+	cw := min(m.colWidth, editorArea-4-2)
 	// composeStatus is now relative to the editor column (the View places that
 	// column at the sidebar offset), so the leading spaces are column-relative.
-	want := (editorArea-cw)/2 - 1
+	want := 2 + (editorArea-4-cw)/2 - 1
 	if want < 0 {
 		want = 0
 	}

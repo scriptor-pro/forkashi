@@ -750,7 +750,7 @@ func exportSelectView(m model) string {
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, body))
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, lipgloss.NewStyle().Foreground(accent).Render(footer)))
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ sélectionner · espace inclure/exclure · shift+↑↓ déplacer · esc retour · F1 aide")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ naviguer · espace inclure/exclure · shift+↑↓ déplacer · esc retour · F1 aide")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

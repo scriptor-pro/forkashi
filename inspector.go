@@ -29,6 +29,13 @@ func sectionHeader(label string, width int) string {
 // with title injected into the top border. Inner lines are padded/truncated ansi-aware.
 // action, when non-empty, is rendered right-aligned in the top border before ╮.
 func framedPanel(title, inner string, width, height int, action string) string {
+	return framedPanelBg(title, inner, width, height, action, nil)
+}
+
+// framedPanelBg is framedPanel with an optional background color (bg == nil means no
+// background, i.e. identical output to framedPanel) applied across the whole panel —
+// border and content alike — used to show which pane currently has keyboard focus.
+func framedPanelBg(title, inner string, width, height int, action string, bg lipgloss.TerminalColor) string {
 	if width < 6 {
 		width = 6
 	}
@@ -37,6 +44,10 @@ func framedPanel(title, inner string, width, height int, action string) string {
 	}
 	bs := lipgloss.NewStyle().Foreground(subtle)
 	ts := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	if bg != nil {
+		bs = bs.Background(bg)
+		ts = ts.Background(bg)
+	}
 	contentW := width - 4 // │ <space> content <space> │
 
 	rightSeg := ""
@@ -57,6 +68,9 @@ func framedPanel(title, inner string, width, height int, action string) string {
 	// Pad to contentW; truncate FIRST (ansi-aware) so an over-long line never
 	// wraps and breaks the frame.
 	cell := lipgloss.NewStyle().Width(contentW)
+	if bg != nil {
+		cell = cell.Background(bg)
+	}
 	lines := strings.Split(inner, "\n")
 	out := make([]string, 0, height)
 	out = append(out, top)

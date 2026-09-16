@@ -62,8 +62,10 @@ PLAN  (ctrl+l)
 
 ÉCRIRE
   ctrl+s enregistrer   ctrl+z annuler   ⇥/⇧⇥ indenter
-  ctrl+t machine à écrire   ctrl+d focus atténué   ctrl+x sélection
-  ctrl+r orthographe   ⌥/⇧+glisser sélectionner · ⌘C copier
+  ctrl+t machine à écrire   ctrl+d focus atténué
+  ctrl+r orthographe
+  maj+↑↓←→ sélectionner   ctrl+c copier   ctrl+x couper   ctrl+v coller
+  alt+s sélection souris (terminal)
 
 RELECTURE & SORTIE
   ctrl+f rechercher   ctrl+p aperçu   ctrl+e exporter
@@ -72,7 +74,7 @@ OBJECTIFS & TEMPS
   ctrl+g objectifs   ctrl+u sprint   g historique (panneau)
 
 APPLICATION
-  i propriétés (accueil)   F1/? aide   ctrl+c quitter`
+  i propriétés (accueil)   F1/? aide   alt+x quitter`
 
 // helpTextWidth is the display width of helpText's longest line, so the help panel can
 // size itself to fit without truncating — computed once since helpText is a constant.
@@ -540,7 +542,7 @@ type model struct {
 
 	showHelp bool
 
-	selectMode bool // native drag-select mode: okashi's mouse capture is released (ctrl+x toggles)
+	selectMode bool // native drag-select mode: okashi's mouse capture is released (alt+s toggles)
 
 	properties propertiesModel
 	snapshots  snapshotsModel
@@ -592,8 +594,9 @@ func initialModel() model {
 	ta.BlurredStyle.Base = lipgloss.NewStyle()
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.Typewriter = true // typewriter scrolling on by default; ctrl+t toggles
-	ta.Dim = true
+	ta.Dim = false
 	ta.DimStyle = lipgloss.NewStyle().Foreground(subtle)
+	ta.SelectionStyle = selectedStyle
 
 	ti := textinput.New()
 	ti.Prompt = ""
@@ -646,7 +649,7 @@ func initialModel() model {
 		sidebarVisible:  true,
 		focus:           focusSidebar,
 		typewriter:      true,
-		dimEnabled:      true,
+		dimEnabled:      false,
 		status:          startupStatus,
 		icons:           resolveIcons(),
 		todayQuote:      todayQuote,
@@ -1171,7 +1174,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Global quit: flush unsaved work first, from any screen.
-	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "alt+x" {
 		m.saveIfDirty()
 		return m, tea.Quit
 	}
@@ -1179,7 +1182,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Global help overlay — F1 from anywhere, or `?` where the user isn't typing; any key closes it.
 	if m.showHelp {
 		if key, ok := msg.(tea.KeyMsg); ok {
-			if key.String() == "ctrl+c" {
+			if key.String() == "alt+x" {
 				return m, tea.Quit
 			}
 			m.showHelp = false
@@ -1254,7 +1257,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.createPicker {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "c":
 				m.createPicker, m.createKind = false, 1
@@ -1280,7 +1283,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.creatingFile {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "esc":
 				m.creatingFile = false
@@ -1304,7 +1307,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.renaming {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "esc":
 				m.renaming = false
@@ -1326,7 +1329,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.deleting {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "y":
 				m.confirmDelete()
@@ -1343,7 +1346,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.exportChooser != nil {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "up", "k":
 				m.exportChooser.cursor = (m.exportChooser.cursor - 1 + exportChooserRowCount) % exportChooserRowCount
@@ -1377,7 +1380,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.goalPromptField != 0 {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "esc":
 				m.goalPromptField = 0
@@ -1442,7 +1445,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.suggesting {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
-			case "ctrl+c":
+			case "alt+x":
 				return m, tea.Quit
 			case "esc":
 				m.suggesting = false
@@ -1604,9 +1607,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			inEditor := msg.X >= editorStart && (!showInspector || msg.X < m.width-inspectorWidth) && msg.Y < m.height-2
 			if inEditor && !m.previewing {
-				cw := min(m.colWidth, editorArea-2)
-				textLeft := editorStart + (editorArea-cw)/2
-				m.editor.ClickTo(msg.Y, msg.X-textLeft)
+				cw := min(m.colWidth, editorArea-4-2)
+				textLeft := editorStart + 2 + (editorArea-4-cw)/2
+				m.editor.ClickTo(msg.Y-1, msg.X-textLeft)
 				m.focus = focusEditor
 				m.editor.Focus()
 				if !m.maybeOpenGrammarSuggestion() { // click a flagged span → suggestion bar;
@@ -1667,7 +1670,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m.syncGoal()
 		switch msg.String() {
-		case "ctrl+c":
+		case "alt+x":
 			return m, tea.Quit
 		case "ctrl+o":
 			m.previewing = false
@@ -1675,7 +1678,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot(), m.pinned)
 			m.resetHomeSelection()
 			if m.selectMode {
-				// Select mode disabled mouse capture; the hub needs clicks, and ctrl+x can't be
+				// Select mode disabled mouse capture; the hub needs clicks, and alt+s can't be
 				// reached there — so restore the mouse on the way out.
 				m.selectMode = false
 				return m, tea.EnableMouseCellMotion
@@ -1714,12 +1717,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+p":
 			m.togglePreview()
 			return m, nil
-		case "ctrl+x":
+		case "alt+s":
 			// Toggle native selection: release okashi's mouse capture so a plain drag selects
 			// text (and the terminal's own copy works), then restore capture so clicks work again.
 			m.selectMode = !m.selectMode
 			if m.selectMode {
-				m.status = "-- SÉLECTION -- · glissez pour sélectionner, copiez avec votre terminal · ctrl+x quitte"
+				m.status = "-- SÉLECTION -- · glissez pour sélectionner, copiez avec votre terminal · alt+s quitte"
 				return m, tea.DisableMouse
 			}
 			m.status = "mode sélection désactivé"
@@ -2078,18 +2081,41 @@ func (m model) View() string {
 		} else if m.creatingFile && m.creatingInPane {
 			editRow, editField = createRowSentinel, m.nameInput.View()
 		}
-		cols = append(cols, framedPanel(title, m.files.View(editRow, editField), sidebarWidth, m.height, "+"))
+		sidebarBg := sidebarBlurBg
+		if m.focus == focusSidebar {
+			sidebarBg = sidebarFocusBg
+		}
+		cols = append(cols, framedPanelBg(title, m.files.View(editRow, editField), sidebarWidth, m.height, "+", sidebarBg))
 	}
-	// Editor column: the editor pane, a blank line break, then the status bar —
-	// all at the editor width, so the side panels render truly full height and the
-	// status/spelling hint stay within the editor column.
-	editorH := bodyH - 1 // leave one row for the blank line above the status
+	// Editor column: the framed editor pane, then the status bar — all at the editor
+	// width, so the side panels render truly full height and the status/spelling
+	// hint stay within the editor column.
+	editorH := bodyH - 1 // leave one row for the status bar
 	if editorH < 1 {
 		editorH = 1
 	}
-	editorPane := lipgloss.Place(editorArea, editorH, lipgloss.Center, lipgloss.Top, pane)
+	// framedPanelBg reserves 4 cols / 2 rows for its border+padding, so the inner
+	// Place must shrink to match — mirrors how the sidebar reserves sidebarWidth-4
+	// for m.files (main.go layout()).
+	innerW, innerH := editorArea-4, editorH-2
+	if innerW < 1 {
+		innerW = 1
+	}
+	if innerH < 1 {
+		innerH = 1
+	}
+	editorPane := lipgloss.Place(innerW, innerH, lipgloss.Center, lipgloss.Top, pane)
+	editorTitle := filepath.Base(m.currentFile)
+	if m.currentFile == "" {
+		editorTitle = "sans titre"
+	}
+	editorBg := editorBlurBg
+	if m.focus == focusEditor {
+		editorBg = editorFocusBg
+	}
+	editorFrame := framedPanelBg(editorTitle, editorPane, editorArea, editorH, "", editorBg)
 	statusRow := statusStyle.Width(editorArea).Render(m.statusBar())
-	editorCol := lipgloss.JoinVertical(lipgloss.Left, editorPane, strings.Repeat(" ", editorArea), statusRow)
+	editorCol := lipgloss.JoinVertical(lipgloss.Left, editorFrame, statusRow)
 	cols = append(cols, editorCol)
 	if showInspector {
 		doc := computeDocStats(m.editor.Value())
@@ -2169,16 +2195,18 @@ func (m *model) layout() {
 	}
 
 	showSidebar, _, editorArea := m.effectivePanels()
-	cw := min(m.colWidth, editorArea-2)
+	// -4/-2 reserve the editor's own focus-indicator frame (border+padding), mirroring
+	// how the sidebar reserves sidebarWidth-4 for m.files below.
+	cw := min(m.colWidth, editorArea-4-2)
 	if showSidebar {
 		m.files.height = m.height - 2 // full-height panel content (m.height minus top+bottom border)
 		m.files.width = sidebarWidth - 4
 	}
-	editorH := bodyH - 1 // editor column reserves a blank line + the status row
+	editorH := bodyH - 1 - 2 // editor column reserves the status row + its own frame
 	if editorH < 1 {
 		editorH = 1
 	}
-	m.previewAvail = editorArea - 2
+	m.previewAvail = editorArea - 4 - 2
 	if m.previewAvail < 0 {
 		m.previewAvail = 0
 	}
@@ -2237,7 +2265,7 @@ func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch key.String() {
-	case "ctrl+c":
+	case "alt+x":
 		return m, tea.Quit
 	case "up", "k":
 		m.pager.moveCursor(-1)
@@ -3080,7 +3108,7 @@ func (m model) statusBar() string {
 		if reason != "" {
 			hint += " · " + reason
 		}
-		return ansi.Truncate(hint, max(10, editorArea-2), "…") // keep the fix visible; trim the reason
+		return ansi.Truncate(hint, max(10, editorArea-4-2), "…") // keep the fix visible; trim the reason
 	}
 	if m.renaming && (!m.renamingInPane || !showSidebar) {
 		return "renommer ▸ " + m.nameInput.View()
@@ -3122,13 +3150,13 @@ func (m model) statusBar() string {
 // text column. Stats win if both don't fit.
 func (m model) composeStatus(status, stats string) string {
 	_, _, editorArea := m.effectivePanels()
-	cw := min(m.colWidth, editorArea-2)
-	totalW := editorArea - 2 // status renders at editorArea width; statusStyle pads one col each side
+	cw := min(m.colWidth, editorArea-4-2) // matches layout()'s editor text width, inside the focus frame
+	totalW := editorArea - 2              // status renders at editorArea width; statusStyle pads one col each side
 	sw := lipgloss.Width(stats)
 	if cw < sw+1 || totalW < sw {
 		return stats // too narrow for the two-element layout
 	}
-	left := (editorArea-cw)/2 - 1 // content col of the text's left edge (within the editor column)
+	left := 2 + (editorArea-4-cw)/2 - 1 // content col of the text's left edge, offset by the frame's left border+padding
 	if left < 0 {
 		left = 0
 	}
