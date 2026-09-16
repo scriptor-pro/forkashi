@@ -589,9 +589,13 @@ func initialModel() model {
 	ta.MaxHeight = 0 // unlimited — chapters routinely exceed the fork's default 99-line cap
 	ta.Focus()
 
-	// Strip the textarea's built-in chrome so the prose stands alone.
-	ta.FocusedStyle.Base = lipgloss.NewStyle()
-	ta.BlurredStyle.Base = lipgloss.NewStyle()
+	// Strip the textarea's built-in chrome so the prose stands alone. Base still
+	// carries a background (every computedX() style Inherit()s it) so the focus
+	// indicator paints the pane's actual text, not just the frame drawn around it —
+	// painting only from the outside can't survive a "\x1b[49m" reset embedded in
+	// the textarea's own rendered lines.
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Background(editorFocusBg)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().Background(editorBlurBg)
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.Typewriter = true // typewriter scrolling on by default; ctrl+t toggles
 	ta.Dim = false
@@ -2055,6 +2059,11 @@ func (m model) View() string {
 		m.applyDecorator()
 	}
 
+	editorBg := editorBlurBg
+	if m.focus == focusEditor {
+		editorBg = editorFocusBg
+	}
+
 	// The writing pane shows either the live editor or the rendered preview.
 	pane := m.editor.View()
 	if m.previewing {
@@ -2069,6 +2078,10 @@ func (m model) View() string {
 		header := breadcrumbStyle.Render("▌ APERÇU · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
 	}
+	// Paint the pane's own background BEFORE Place/framedPanelBg wrap it: the
+	// textarea/glamour output carries per-line ANSI resets (e.g. "\x1b[49m") that
+	// would otherwise cut a background applied only around the outside.
+	pane = lipgloss.NewStyle().Background(editorBg).Render(pane)
 
 	showSidebar, showInspector, editorArea := m.effectivePanels()
 
@@ -2104,15 +2117,11 @@ func (m model) View() string {
 	if innerH < 1 {
 		innerH = 1
 	}
-	editorPane := lipgloss.Place(innerW, innerH, lipgloss.Center, lipgloss.Top, pane)
 	editorTitle := filepath.Base(m.currentFile)
 	if m.currentFile == "" {
 		editorTitle = "sans titre"
 	}
-	editorBg := editorBlurBg
-	if m.focus == focusEditor {
-		editorBg = editorFocusBg
-	}
+	editorPane := lipgloss.Place(innerW, innerH, lipgloss.Center, lipgloss.Top, pane, lipgloss.WithWhitespaceBackground(editorBg))
 	editorFrame := framedPanelBg(editorTitle, editorPane, editorArea, editorH, "", editorBg)
 	statusRow := statusStyle.Width(editorArea).Render(m.statusBar())
 	editorCol := lipgloss.JoinVertical(lipgloss.Left, editorFrame, statusRow)

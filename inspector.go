@@ -68,8 +68,10 @@ func framedPanelBg(title, inner string, width, height int, action string, bg lip
 	// Pad to contentW; truncate FIRST (ansi-aware) so an over-long line never
 	// wraps and breaks the frame.
 	cell := lipgloss.NewStyle().Width(contentW)
+	pad := " "
 	if bg != nil {
 		cell = cell.Background(bg)
+		pad = lipgloss.NewStyle().Background(bg).Render(" ")
 	}
 	lines := strings.Split(inner, "\n")
 	out := make([]string, 0, height)
@@ -79,7 +81,7 @@ func framedPanelBg(title, inner string, width, height int, action string, bg lip
 		if r < len(lines) {
 			c = ansi.Truncate(lines[r], contentW, "")
 		}
-		out = append(out, bs.Render("│")+" "+cell.Render(c)+" "+bs.Render("│"))
+		out = append(out, bs.Render("│")+pad+cell.Render(c)+pad+bs.Render("│"))
 	}
 	out = append(out, bs.Render("╰"+strings.Repeat("─", width-2)+"╯"))
 	return strings.Join(out, "\n")
