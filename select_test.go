@@ -11,19 +11,19 @@ import (
 func TestSelectModeToggle(t *testing.T) {
 	m := model{screen: screenWriting, editor: textarea.New()}
 
-	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}, Alt: true})
 	m = mm.(model)
 	if !m.selectMode {
-		t.Fatal("ctrl+x should enable select mode")
+		t.Fatal("alt+s should enable select mode")
 	}
 	if cmd == nil {
 		t.Fatal("enabling select mode should return a mouse-disable command")
 	}
 
-	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}, Alt: true})
 	m = mm.(model)
 	if m.selectMode {
-		t.Fatal("a second ctrl+x should disable select mode")
+		t.Fatal("a second alt+s should disable select mode")
 	}
 	if cmd == nil {
 		t.Fatal("disabling select mode should return a mouse-enable command")
@@ -31,7 +31,7 @@ func TestSelectModeToggle(t *testing.T) {
 }
 
 // Leaving the writing screen for the hub must restore the mouse — the hub needs clicks and
-// ctrl+x is unreachable there, so a lingering select mode would trap the user with a dead mouse.
+// alt+s is unreachable there, so a lingering select mode would trap the user with a dead mouse.
 func TestSelectModeRestoredOnGoHome(t *testing.T) {
 	m := model{screen: screenWriting, selectMode: true, editor: textarea.New()}
 	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})

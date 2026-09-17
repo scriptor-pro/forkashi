@@ -65,6 +65,14 @@ type KeyMap struct {
 	CapitalizeWordForward key.Binding
 
 	TransposeCharacterBackward key.Binding
+
+	// okashi:selection — keyboard-driven selection and clipboard actions.
+	SelectLeft  key.Binding
+	SelectRight key.Binding
+	SelectUp    key.Binding
+	SelectDown  key.Binding
+	Copy        key.Binding
+	Cut         key.Binding
 }
 
 // DefaultKeyMap is the default set of key bindings for navigating and acting
@@ -94,6 +102,13 @@ var DefaultKeyMap = KeyMap{
 	UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
 
 	TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
+
+	SelectLeft:  key.NewBinding(key.WithKeys("shift+left"), key.WithHelp("shift+left", "extend selection left")),
+	SelectRight: key.NewBinding(key.WithKeys("shift+right"), key.WithHelp("shift+right", "extend selection right")),
+	SelectUp:    key.NewBinding(key.WithKeys("shift+up"), key.WithHelp("shift+up", "extend selection up")),
+	SelectDown:  key.NewBinding(key.WithKeys("shift+down"), key.WithHelp("shift+down", "extend selection down")),
+	Copy:        key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "copy selection")),
+	Cut:         key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "cut selection")),
 }
 
 // LineInfo is a helper for keeping track of line information regarding
@@ -239,6 +254,10 @@ type Model struct {
 	// style (spellcheck/syntax/grammar). nil → no decorations. okashi:decorations
 	Decorator func(line string, lineIndex int) []Decoration
 
+	// SelectionStyle renders the active keyboard-driven selection (shift+arrows).
+	// okashi:selection
+	SelectionStyle lipgloss.Style
+
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
 	CharLimit int
@@ -291,6 +310,13 @@ type Model struct {
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
+
+	// okashi:selection — keyboard-driven text selection (shift+arrows). When
+	// selecting is true, selAnchorRow/selAnchorCol mark the fixed end of the
+	// selection and (row, col) mark the moving end.
+	selecting    bool
+	selAnchorRow int
+	selAnchorCol int
 }
 
 // New creates a new model with default settings.
@@ -312,6 +338,7 @@ func New() Model {
 		ShowLineNumbers:      true,
 		Cursor:               cur,
 		KeyMap:               DefaultKeyMap,
+		SelectionStyle:       lipgloss.NewStyle().Reverse(true),
 
 		value: make([][]rune, minHeight, defaultMaxHeight),
 		focus: false,
@@ -1161,6 +1188,35 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// okashi:selection — shift+arrows extend the selection without
+		// clearing it. Every other key below clears an active selection
+		// first, same as most editors (esc included, via this same clear).
+		selectionHandled := true
+		switch {
+		case key.Matches(msg, m.KeyMap.SelectLeft):
+			m.startOrContinueSelecting()
+			m.characterLeft(false)
+		case key.Matches(msg, m.KeyMap.SelectRight):
+			m.startOrContinueSelecting()
+			m.characterRight()
+		case key.Matches(msg, m.KeyMap.SelectUp):
+			m.startOrContinueSelecting()
+			m.CursorUp()
+		case key.Matches(msg, m.KeyMap.SelectDown):
+			m.startOrContinueSelecting()
+			m.CursorDown()
+		case key.Matches(msg, m.KeyMap.Copy):
+			cmds = append(cmds, m.Copy())
+		case key.Matches(msg, m.KeyMap.Cut):
+			cmds = append(cmds, m.Cut())
+		default:
+			selectionHandled = false
+			m.clearSelection()
+		}
+		if selectionHandled {
+			break
+		}
+
 		switch {
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
@@ -1323,6 +1379,14 @@ func (m Model) View() string {
 	startRow := max(0, top)
 	l0, wl0, lineOffset := m.locateRow(startRow)
 
+	// okashi:selection — precompute the selection's source-line range once;
+	// per-line bounds are derived from it below.
+	var selStartRow, selStartCol, selEndRow, selEndCol int
+	hasSelection := m.HasSelection()
+	if hasSelection {
+		selStartRow, selStartCol, selEndRow, selEndCol = m.selectionRange()
+	}
+
 	// Per-piece render block over the visible window.
 	for l := l0; l < len(m.value) && rendered < h; l++ {
 		line := m.value[l]
@@ -1334,6 +1398,23 @@ func (m Model) View() string {
 		if m.Decorator != nil {
 			for _, d := range m.Decorator(string(line), l) {
 				lineDecos = append(lineDecos, Decoration{Start: lineOffset + d.Start, End: lineOffset + d.End, Style: d.Style})
+			}
+		}
+
+		// okashi:selection — this source line's portion of the selection, if
+		// any, rendered as a decoration so it takes precedence over dim/decos
+		// the same way spellcheck highlights already do.
+		if hasSelection && l >= selStartRow && l <= selEndRow {
+			from := 0
+			if l == selStartRow {
+				from = selStartCol
+			}
+			to := len(line)
+			if l == selEndRow {
+				to = selEndCol
+			}
+			if from < to {
+				lineDecos = append([]Decoration{{Start: lineOffset + from, End: lineOffset + to, Style: m.SelectionStyle}}, lineDecos...)
 			}
 		}
 
@@ -1652,6 +1733,123 @@ func Paste() tea.Msg {
 		return pasteErrMsg{err}
 	}
 	return pasteMsg(str)
+}
+
+// okashi:selection — keyboard-driven selection, copy and cut.
+
+// startOrContinueSelecting anchors the selection at the cursor's current
+// position the first time it's called, and is a no-op on subsequent calls
+// until the selection is cleared.
+func (m *Model) startOrContinueSelecting() {
+	if m.selecting {
+		return
+	}
+	m.selecting = true
+	m.selAnchorRow = m.row
+	m.selAnchorCol = m.col
+}
+
+// clearSelection cancels the active selection, if any.
+func (m *Model) clearSelection() {
+	m.selecting = false
+}
+
+// HasSelection reports whether a selection is currently active.
+func (m *Model) HasSelection() bool {
+	return m.selecting && (m.selAnchorRow != m.row || m.selAnchorCol != m.col)
+}
+
+// selectionRange returns the selection's start and end (row, col) in
+// document order (start comes before end), regardless of which end is the
+// anchor and which is the moving cursor.
+func (m *Model) selectionRange() (startRow, startCol, endRow, endCol int) {
+	startRow, startCol, endRow, endCol = m.selAnchorRow, m.selAnchorCol, m.row, m.col
+	if startRow > endRow || (startRow == endRow && startCol > endCol) {
+		startRow, endRow = endRow, startRow
+		startCol, endCol = endCol, startCol
+	}
+	return startRow, startCol, endRow, endCol
+}
+
+// selectedText returns the text currently selected, or "" if there is no
+// selection.
+func (m *Model) selectedText() string {
+	if !m.HasSelection() {
+		return ""
+	}
+	startRow, startCol, endRow, endCol := m.selectionRange()
+
+	if startRow == endRow {
+		return string(m.value[startRow][startCol:endCol])
+	}
+
+	var b strings.Builder
+	b.WriteString(string(m.value[startRow][startCol:]))
+	for r := startRow + 1; r < endRow; r++ {
+		b.WriteByte('\n')
+		b.WriteString(string(m.value[r]))
+	}
+	b.WriteByte('\n')
+	b.WriteString(string(m.value[endRow][:endCol]))
+	return b.String()
+}
+
+// deleteSelection removes the selected text from the buffer and places the
+// cursor at the start of what was selected. It is a no-op if there is no
+// selection.
+func (m *Model) deleteSelection() {
+	if !m.HasSelection() {
+		return
+	}
+	startRow, startCol, endRow, endCol := m.selectionRange()
+
+	head := m.value[startRow][:startCol]
+	tail := m.value[endRow][endCol:]
+	merged := make([]rune, 0, len(head)+len(tail))
+	merged = append(merged, head...)
+	merged = append(merged, tail...)
+
+	newValue := make([][]rune, 0, len(m.value)-(endRow-startRow))
+	newValue = append(newValue, m.value[:startRow]...)
+	newValue = append(newValue, merged)
+	newValue = append(newValue, m.value[endRow+1:]...)
+	m.value = newValue
+
+	m.row, m.col = startRow, startCol
+	m.clearSelection()
+	m.SetCursor(m.col)
+}
+
+// Copy is a command that writes the current selection to the system
+// clipboard. It does not modify the buffer.
+func (m *Model) Copy() tea.Cmd {
+	text := m.selectedText()
+	if text == "" {
+		return nil
+	}
+	m.clearSelection()
+	return func() tea.Msg {
+		if err := clipboard.WriteAll(text); err != nil {
+			return pasteErrMsg{err}
+		}
+		return nil
+	}
+}
+
+// Cut is a command that writes the current selection to the system
+// clipboard and removes it from the buffer.
+func (m *Model) Cut() tea.Cmd {
+	text := m.selectedText()
+	if text == "" {
+		return nil
+	}
+	m.deleteSelection()
+	return func() tea.Msg {
+		if err := clipboard.WriteAll(text); err != nil {
+			return pasteErrMsg{err}
+		}
+		return nil
+	}
 }
 
 func wrap(runes []rune, width int) [][]rune {
