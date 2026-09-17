@@ -131,9 +131,9 @@ func (m model) updateExportSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case " ":
 		m.toggleExportSelectAtCursor()
 		m.saveExportSelectState()
-	case "shift+up":
+	case "shift+up", "alt+up", "K":
 		m.moveExportSelectEntry(-1)
-	case "shift+down":
+	case "shift+down", "alt+down", "J":
 		m.moveExportSelectEntry(1)
 	}
 	return m, nil
