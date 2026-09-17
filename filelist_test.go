@@ -664,7 +664,7 @@ func TestSidebarEmptyPartHeaderIsSkippedByRealCursorMovement(t *testing.T) {
 	}
 }
 
-func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
+func TestActivateSingleTextChapterTogglesFold(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "opening"), 0o755)
 	os.WriteFile(filepath.Join(dir, "opening", "opening.md"), []byte("x"), 0o644)
@@ -677,12 +677,17 @@ func TestActivateSingleTextChapterOpensDirectly(t *testing.T) {
 	f.SetDir(dir)
 	f.selectName("opening")
 	path, result := f.activate()
-	if result != activateFile {
-		t.Fatalf("a single-text chapter must activate as activateFile, got %v", result)
+	if result != activateNone || path != "" {
+		t.Fatalf("a single-text chapter must toggle child scene rows, got path=%q result=%v", path, result)
 	}
-	want := filepath.Join(dir, "opening", "opening.md")
-	if path != want {
-		t.Fatalf("path = %q, want %q", path, want)
+	found := false
+	for _, e := range f.entries {
+		if e.isChildScene && e.parentFolder == "opening" && e.name == "opening.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("single-scene chapter should expand to its scene row, entries=%+v", f.entries)
 	}
 }
 
@@ -909,22 +914,70 @@ func TestSelectedFileOnChildSceneIncludesParentFolder(t *testing.T) {
 	}
 }
 
-func TestSetDirSingleTextChapterNeverExpandsEvenIfFolded(t *testing.T) {
+func TestSelectedFileResolvesSingleTextChapterFolder(t *testing.T) {
+	dir := t.TempDir()
+	// A single-text chapter (one text), plus a multi-text chapter (two texts).
+	mkChapterDir(t, dir, "sensations", map[string]string{"sensations.md": "hi"})
+	mkChapterDir(t, dir, "opening", map[string]string{
+		"opening.md":  "hello",
+		"opening2.md": "world",
+	})
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"sensations","title":"Sensations","texts":[
+			{"file":"sensations.md","title":"Sensations"}
+		]}},
+		{"chapter":{"folder":"opening","title":"Opening","texts":[
+			{"file":"opening.md","title":"Part One"},
+			{"file":"opening2.md","title":"Part Two"}
+		]}}
+	]}`)
+	f := newFilelist()
+	f.SetDir(dir)
+
+	sel := func(name string) {
+		for i, e := range f.entries {
+			if e.isDir && e.name == name {
+				f.selected = i
+				return
+			}
+		}
+		t.Fatalf("no chapter-folder row named %q in entries=%+v", name, f.entries)
+	}
+
+	// Single-text chapter folder is still a container; callers must pick its scene row.
+	sel("sensations")
+	if _, ok := f.selectedFile(); ok {
+		t.Fatal("selectedFile() ok = true for a single-text chapter folder, want false")
+	}
+
+	// Multi-text chapter folder is also a container.
+	sel("opening")
+	if _, ok := f.selectedFile(); ok {
+		t.Fatal("selectedFile() ok = true for a multi-text chapter folder, want false")
+	}
+}
+
+func TestSetDirSingleTextChapterExpandsWhenFolded(t *testing.T) {
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})
 	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
 		{"chapter":{"folder":"opening","title":"Opening","texts":[{"file":"opening.md","title":"Opening"}]}}
 	]}`)
-	// Force a folded=true entry for a single-text chapter — SetDir must ignore it.
+	// Single-text chapters are containers too; a persisted folded=true entry exposes
+	// their one scene row.
 	if err := saveFolded(dir, map[string]bool{"opening": true}, map[string]bool{"opening": true}); err != nil {
 		t.Fatal(err)
 	}
 	f := newFilelist()
 	f.SetDir(dir)
+	found := false
 	for _, e := range f.entries {
-		if e.isChildScene {
-			t.Fatalf("single-text chapter must never show child-scene rows, got entries=%+v", f.entries)
+		if e.isChildScene && e.parentFolder == "opening" && e.name == "opening.md" {
+			found = true
 		}
+	}
+	if !found {
+		t.Fatalf("single-text chapter should show its scene row when expanded, got entries=%+v", f.entries)
 	}
 }
 
@@ -1061,8 +1114,8 @@ func TestActivateChildSceneOpensItsFile(t *testing.T) {
 	}
 }
 
-func TestActivateSingleTextChapterUnchanged(t *testing.T) {
-	// Regression guard: single-text chapters must keep opening directly, never toggle a fold.
+func TestActivateSingleTextChapterIsContainer(t *testing.T) {
+	// Regression guard: single-text chapters are still chapter containers, never direct files.
 	dir := t.TempDir()
 	mkChapterDir(t, dir, "opening", map[string]string{"opening.md": "hello"})
 	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
@@ -1072,7 +1125,7 @@ func TestActivateSingleTextChapterUnchanged(t *testing.T) {
 	f.SetDir(dir)
 	f.selectName("opening")
 	path, result := f.activate()
-	if result != activateFile || path != filepath.Join(dir, "opening", "opening.md") {
+	if result != activateNone || path != "" {
 		t.Fatalf("single-text chapter activate: path=%q result=%v", path, result)
 	}
 }

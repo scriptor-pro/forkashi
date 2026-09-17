@@ -85,11 +85,12 @@ func TestCreateManuscriptRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createManuscript: %v", err)
 	}
-	if first != filepath.Join("untitled", "untitled.md") {
-		t.Fatalf("first chapter file = %q, want untitled/untitled.md", first)
+	if first != "untitled" {
+		t.Fatalf("first chapter folder = %q, want untitled", first)
 	}
-	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
-		t.Fatalf("first chapter not on disk: %v", err)
+	info, err := os.Stat(filepath.Join(dir, first))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("first chapter folder not on disk: info=%v err=%v", info, err)
 	}
 	m, present, err := readManifest(dir)
 	if err != nil || !present {
@@ -99,7 +100,7 @@ func TestCreateManuscriptRoundTrips(t *testing.T) {
 		t.Fatalf("manifest = %+v", m)
 	}
 	if len(m.Items) != 1 || m.Items[0].Chapter == nil || m.Items[0].Chapter.Folder != "untitled" ||
-		m.Items[0].Chapter.Title != "Untitled" {
+		m.Items[0].Chapter.Title != "Untitled" || len(m.Items[0].Chapter.Texts) != 0 {
 		t.Fatalf("items = %+v", m.Items)
 	}
 	// The resolver must see it as an ordered manifest manuscript.
@@ -122,7 +123,7 @@ func TestCreateManuscriptRefusesExisting(t *testing.T) {
 func TestRenameChapterTitleChangesOnlyTitle(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "book")
 	first, _ := createManuscript(dir, "Book", "Untitled")
-	folder := filepath.Dir(first)
+	folder := first
 	if err := renameChapterTitle(dir, folder, "Opening"); err != nil {
 		t.Fatalf("renameChapterTitle: %v", err)
 	}
@@ -133,8 +134,9 @@ func TestRenameChapterTitleChangesOnlyTitle(t *testing.T) {
 	if m.Items[0].Chapter.Folder != folder {
 		t.Fatalf("folder changed to %q — must be birth-stable", m.Items[0].Chapter.Folder)
 	}
-	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
-		t.Fatalf("chapter file must NOT be renamed on disk: %v", err)
+	info, err := os.Stat(filepath.Join(dir, first))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("chapter folder must NOT be renamed on disk: info=%v err=%v", info, err)
 	}
 }
 
@@ -192,7 +194,7 @@ func TestStartRenameManifestChapterRetitles(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "book")
 	first, _ := createManuscript(dir, "Book", "Untitled")
-	folder := filepath.Dir(first)
+	folder := first
 
 	m := initialModel() // same construction as Task 2 (smoke_test.go:369)
 	m.files.root = ""
@@ -217,8 +219,9 @@ func TestStartRenameManifestChapterRetitles(t *testing.T) {
 	if mf.Items[0].Chapter.Folder != folder {
 		t.Fatalf("folder changed to %q — must stay birth-stable", mf.Items[0].Chapter.Folder)
 	}
-	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
-		t.Fatalf("chapter file must not be renamed on disk: %v", err)
+	info, err := os.Stat(filepath.Join(dir, first))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("chapter folder must not be renamed on disk: info=%v err=%v", info, err)
 	}
 }
 
@@ -241,10 +244,10 @@ func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
 	if m.files.dir != dir {
 		t.Fatalf("pane dir = %q, want %q (should enter the project)", m.files.dir, dir)
 	}
-	if filepath.Base(m.currentFile) != "pas-encore-de-titre.md" {
-		t.Fatalf("currentFile = %q, want the opened first chapter", m.currentFile)
+	if m.currentFile != "" {
+		t.Fatalf("currentFile = %q, want no opened chapter text", m.currentFile)
 	}
-	if m.focus != focusEditor {
-		t.Fatalf("focus = %v, want focusEditor (land writing)", m.focus)
+	if m.focus != focusSidebar {
+		t.Fatalf("focus = %v, want focusSidebar (land on chapter container)", m.focus)
 	}
 }

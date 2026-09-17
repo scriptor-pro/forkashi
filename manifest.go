@@ -125,11 +125,10 @@ func writeManifest(dir string, m manifest) error {
 	return atomicWrite(filepath.Join(dir, manifestName), bytes.TrimRight(buf.Bytes(), "\n"), 0o644)
 }
 
-// createManuscript makes a brand-new manuscript at dir: the folder, a first chapter folder
-// holding one empty text file, and a v2 manifest listing it as a bare chapter (no Part).
-// firstChapter is that chapter's display title. It refuses to clobber an existing manifest
-// and returns the first chapter's text filename (relative to its chapter folder) so the
-// caller can build the full path (filepath.Join(dir, folder, file)) to open it.
+// createManuscript makes a brand-new manuscript at dir: the folder, an empty first
+// chapter directory, and a v3 manifest listing that chapter as a bare container.
+// firstChapter is that chapter's display title. It refuses to clobber an existing
+// manifest and returns the first chapter folder relative to dir.
 func createManuscript(dir, title, firstChapter string) (string, error) {
 	if hasManifest(dir) {
 		return "", fmt.Errorf("a manuscript already exists at %s", dir)
@@ -138,12 +137,8 @@ func createManuscript(dir, title, firstChapter string) (string, error) {
 		return "", err
 	}
 	folder := slugify(firstChapter)
-	file := folder + ".md"
 	chDir := filepath.Join(dir, folder)
 	if err := os.MkdirAll(chDir, 0o755); err != nil {
-		return "", err
-	}
-	if err := atomicWrite(filepath.Join(chDir, file), []byte(""), 0o644); err != nil {
 		return "", err
 	}
 	err := writeManifest(dir, manifest{
@@ -152,10 +147,10 @@ func createManuscript(dir, title, firstChapter string) (string, error) {
 		Items: []manifestItem{{Chapter: &manifestChapter{
 			Folder: folder,
 			Title:  firstChapter,
-			Texts:  []manifestText{{File: file, Title: firstChapter}},
+			Texts:  []manifestText{},
 		}}},
 	})
-	return filepath.Join(folder, file), err
+	return folder, err
 }
 
 // renameChapterTitle edits ONLY the items[].chapter.title (or items[].chapters[].title, for a

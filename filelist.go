@@ -140,12 +140,13 @@ func (f *filelist) SetDir(dir string) {
 
 	// Build the ordered entry list: dirs first, then chapters in view order
 	// (flattened across parts — Part headers are the next plan's job), then loose.
-	// A manifest (v2) chapter is represented in f.entries by its folder name, since
-	// it is now a directory on disk, not a direct file. A LEGACY chapter (no
-	// manifest, numeric-prefix fallback) has folder == "" — resolveManuscript
-	// keeps those as single-text chapterRefs with the flat filename in
-	// texts[0].file, so it's represented as a plain (non-dir) file entry instead,
-	// exactly as it was on disk before v2.
+	// A manifest chapter is represented by its folder row only: chapters are
+	// containers, not editable texts. Selecting the folder toggles the child scene
+	// rows; selecting a child scene opens that scene file.
+	// A LEGACY chapter (no manifest, numeric-prefix fallback) has folder == "" —
+	// resolveManuscript keeps those as single-text chapterRefs with the flat
+	// filename in texts[0].file, so it's represented as a plain file entry exactly
+	// as it was on disk before manifests.
 	// A chapter's folder is a real directory on disk, so it would otherwise ALSO
 	// show up in the raw dirs listing above — exclude it there; the chapter loop
 	// below is its single source of truth for where it appears (in manifest order).
@@ -169,7 +170,7 @@ func (f *filelist) SetDir(dir string) {
 				continue
 			}
 			f.entries = append(f.entries, fileEntry{name: ch.folder, isDir: true})
-			if len(ch.texts) >= 2 && f.folded[corkKey(ch)] {
+			if len(ch.texts) > 0 && f.folded[corkKey(ch)] {
 				for _, t := range ch.texts {
 					f.entries = append(f.entries, fileEntry{
 						name:         t.file,
@@ -502,15 +503,12 @@ const (
 
 // activate acts on the selected entry. A "..", a plain directory, or a Part-header
 // row (guarded above by moveBy/selectRow, but defensively checked here too) navigates
-// and returns activateNone. A v2 chapter folder with exactly one text returns its
-// path with activateFile — unchanged behavior from before multi-text chapters
-// existed. A v2 chapter folder with zero texts returns activateTextPicker (caller opens
-// the picker to create the first scene). A v2 chapter folder with 2+ texts TOGGLES its
-// sidebar fold state (persisted via saveFolded) and returns activateNone — the caller
-// does nothing further; f.entries already reflects the new state. A child-scene row
-// (isChildScene, only present when its chapter is expanded) returns its own file path
-// with activateFile. Anything else (an ordinary file, or a legacy single-file chapter)
-// returns its path with activateFile.
+// and returns activateNone. A manifest chapter folder with zero texts returns
+// activateTextPicker (caller opens the picker to create the first scene). A manifest
+// chapter folder with one or more texts toggles its child scene rows and returns
+// activateNone: the scene row, not the chapter row, is what opens prose. A child-scene
+// row returns its own file path with activateFile. Anything else (an ordinary file, or
+// a legacy single-file chapter) returns its path with activateFile.
 func (f *filelist) activate() (string, activateResult) {
 	if len(f.entries) == 0 || f.selected >= len(f.entries) {
 		return "", activateNone
@@ -522,13 +520,11 @@ func (f *filelist) activate() (string, activateResult) {
 	if e.isDir {
 		if isChapterOf(f.view, e.name) {
 			ch := chapterByFolder(f.view, e.name)
-			if len(ch.texts) == 1 {
-				return filepath.Join(f.dir, ch.folder, ch.texts[0].file), activateFile
-			}
 			if len(ch.texts) == 0 {
 				return "", activateTextPicker
 			}
-			// 2+ texts: toggle this chapter's fold state instead of opening a picker.
+			// Chapters are containers. Toggle child scene rows even for a single-scene
+			// chapter; opening the chapter itself would make it act like a text.
 			key := corkKey(ch)
 			if f.folded[key] {
 				delete(f.folded, key)
@@ -590,7 +586,10 @@ func (f filelist) selectedEntry() (fileEntry, bool) {
 	return f.entries[f.selected], true
 }
 
-// selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").
+// selectedFile returns the selected entry's path if it resolves to a single regular file: an
+// ordinary file / Resource / standalone scene, or a child-scene row (nested under an expanded
+// chapter). A plain directory, a ".." row, or any manifest chapter folder return ok=false:
+// chapters are containers, so callers must select a specific scene row.
 func (f filelist) selectedFile() (string, bool) {
 	if f.selected < 0 || f.selected >= len(f.entries) {
 		return "", false

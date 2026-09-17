@@ -203,14 +203,22 @@ func (m *model) enterTextPicker() {
 }
 
 // updateTextPicker handles input while the text-picker screen is showing: up/down
-// move the selection, enter opens the chosen text and enters the writing screen,
-// esc dismisses without opening anything.
+// move the selection, alt+up/down reorder scenes in the chapter, enter opens the
+// chosen text, esc dismisses without opening anything.
 func (m model) updateTextPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
 	}
 	texts := m.textPickerChapter.texts
+	if (km.Alt || strings.HasPrefix(km.String(), "alt+")) && (km.Type == tea.KeyUp || km.Type == tea.KeyDown) {
+		dir := -1
+		if km.Type == tea.KeyDown {
+			dir = 1
+		}
+		m.reorderTextPickerScene(dir)
+		return m, nil
+	}
 	switch km.Type {
 	case tea.KeyUp:
 		if m.textPickerSel > 0 {
@@ -246,6 +254,74 @@ func (m model) updateTextPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) reorderTextPickerScene(dir int) {
+	if m.textPickerChapter == nil || len(m.textPickerChapter.texts) == 0 {
+		return
+	}
+	if m.reorderChapterScene(m.textPickerDir, m.textPickerChapter.folder, m.textPickerSel, dir) {
+		m.textPickerSel += dir
+		ch := chapterByFolder(resolveManuscript(m.textPickerDir, readEntries(m.textPickerDir)), m.textPickerChapter.folder)
+		m.textPickerChapter = &ch
+	}
+}
+
+func (m *model) moveSelectedChapterScene(dir int) {
+	e, ok := m.files.selectedEntry()
+	if !ok || !e.isChildScene {
+		return
+	}
+	ch := chapterByFolder(m.files.view, e.parentFolder)
+	idx := -1
+	for i, t := range ch.texts {
+		if t.file == e.name {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return
+	}
+	if !m.reorderChapterScene(m.files.dir, e.parentFolder, idx, dir) {
+		return
+	}
+	if m.files.folded == nil {
+		m.files.folded = map[string]bool{}
+	}
+	m.files.folded[corkKey(ch)] = true
+	_ = saveFolded(m.files.foldedRoot, m.files.folded, foldChapterSet(m.files.foldedRoot))
+	m.files.SetDir(m.files.dir)
+	for i, entry := range m.files.entries {
+		if entry.isChildScene && entry.parentFolder == e.parentFolder && entry.name == e.name {
+			m.files.selected = i
+			m.files.scrollIntoView()
+			break
+		}
+	}
+}
+
+func (m *model) reorderChapterScene(dir, folder string, idx, delta int) bool {
+	target := idx + delta
+	if target < 0 {
+		return false
+	}
+	mani, present, err := readManifest(dir)
+	if err != nil || !present {
+		m.status = "impossible de déplacer : le manifeste est introuvable ou illisible"
+		return false
+	}
+	ch := findChapterByFolder(&mani, folder)
+	if ch == nil || idx < 0 || idx >= len(ch.Texts) || target >= len(ch.Texts) {
+		return false
+	}
+	ch.Texts[idx], ch.Texts[target] = ch.Texts[target], ch.Texts[idx]
+	if err := writeManifest(dir, mani); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return false
+	}
+	m.status = "scène déplacée"
+	return true
+}
+
 // textPickerView renders the list of a chapter's texts, one per line, each with
 // its own word count — or an empty-state message if the chapter has none. Placed
 // centered over the full width/height (AltScreen only diffs changed lines, so an
@@ -266,7 +342,7 @@ func textPickerView(ch *chapterRef, sel int, dir string, wc *wordCountCache, wid
 		words := wc.count(filepath.Join(dir, ch.folder, t.file))
 		fmt.Fprintf(&b, "%s%s  %s m\n", marker, t.title, commafy(words))
 	}
-	b.WriteString("\n↑↓ sélectionner · Entrée ouvrir · Échap annuler")
+	b.WriteString("\n↑↓ sélectionner · alt+↑↓ déplacer · Entrée ouvrir · Échap annuler")
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, b.String())
 }
 
@@ -1867,6 +1943,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.startDelete()
 			} else {
 				switch key.String() {
+				case "alt+up":
+					m.moveSelectedChapterScene(-1)
+				case "alt+down":
+					m.moveSelectedChapterScene(1)
 				case "up", "k":
 					m.files.moveBy(-1)
 				case "down", "j":
@@ -2378,9 +2458,9 @@ func (m *model) loadFile(path string) {
 // pane dir. A trailing "/" (or an explicit New-project) makes a folder; an
 // explicit New-project then enters it, while the sidebar "name/" convention
 // creates-and-stays. Files default to .md and open a blank buffer.
-// createChapter makes a new blank chapter — a folder holding one text file — at the
-// manuscript root and appends it to the manifest as a bare chapter (read-modify-write,
-// atomic), then opens it. name is the chapter's display title (also slugified into its
+// createChapter makes a new blank chapter container — a folder with no implicit
+// text file — at the manuscript root and appends it to the manifest as a bare
+// chapter. name is the chapter's display title (also slugified into its
 // birth-stable folder name).
 func (m *model) createChapter(name string) {
 	if strings.Contains(name, "/") {
@@ -2389,7 +2469,6 @@ func (m *model) createChapter(name string) {
 	}
 	title := name
 	folder := slugify(title)
-	file := folder + ".md"
 	chDir := filepath.Join(m.files.dir, folder)
 	if _, err := os.Stat(chDir); err == nil {
 		m.status = "un chapitre nommé " + folder + " existe déjà"
@@ -2399,26 +2478,21 @@ func (m *model) createChapter(name string) {
 		m.status = "impossible de créer le chapitre : " + err.Error()
 		return
 	}
-	dst := filepath.Join(chDir, file)
-	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
-		m.status = "impossible de créer le chapitre : " + err.Error()
-		return
-	}
 	if mani, present, err := readManifest(m.files.dir); err == nil && present {
 		mani.Items = append(mani.Items, manifestItem{Chapter: &manifestChapter{
 			Folder: folder,
 			Title:  title,
-			Texts:  []manifestText{{File: file, Title: title}},
+			Texts:  []manifestText{},
 		}})
 		if werr := writeManifest(m.files.dir, mani); werr != nil {
 			m.status = "chapitre créé mais échec de la mise à jour du manifeste : " + werr.Error()
 		}
 	}
 	m.files.SetDir(m.files.dir)
-	m.loadFile(dst)
-	m.focus = focusEditor
-	m.editor.Focus()
-	m.status = "nouveau chapitre " + title
+	m.files.selectName(folder)
+	m.focus = focusSidebar
+	m.editor.Blur()
+	m.status = "nouveau chapitre " + title + " — ajoutez une scène avec ctrl+n puis s"
 }
 
 // createResource makes an unlisted resource doc — loose at the manuscript root, or into a subfolder
@@ -2592,17 +2666,17 @@ func (m *model) confirmCreate() {
 	if folder {
 		dir := filepath.Join(m.files.dir, name)
 		if explicitFolder {
-			// New Project → a real manuscript (folder + manifest + first chapter you land in).
+			// New Project → a real manuscript with an empty first chapter container.
 			first, err := createManuscript(dir, name, "Pas encore de titre")
 			if err != nil {
 				m.status = "impossible de créer le projet : " + err.Error()
 				return
 			}
 			m.files.SetDir(dir)
-			m.loadFile(filepath.Join(dir, first))
-			m.focus = focusEditor
-			m.editor.Focus()
-			m.status = "nouveau projet " + name + " — commencez à écrire"
+			m.files.selectName(first)
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.status = "nouveau projet " + name + " — ajoutez une scène avec ctrl+n puis s"
 			return
 		}
 		// "name/" convention → a plain category folder; refresh and stay.

@@ -44,12 +44,18 @@ func TestCtrlNChapterAppendsToManifest(t *testing.T) {
 	m = nm.(model)
 	m = typeName(m, "the-fog")
 
-	if _, err := os.Stat(filepath.Join(dir, "the-fog", "the-fog.md")); err != nil {
-		t.Fatal("chapter folder + text file should be created")
+	if info, err := os.Stat(filepath.Join(dir, "the-fog")); err != nil || !info.IsDir() {
+		t.Fatal("chapter folder should be created")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "the-fog", "the-fog.md")); !os.IsNotExist(err) {
+		t.Fatal("chapter creation must not create an implicit text file")
 	}
 	mani, _, _ := readManifest(dir)
 	if len(mani.Items) != 2 || mani.Items[1].Chapter == nil || mani.Items[1].Chapter.Folder != "the-fog" {
 		t.Fatalf("chapter should be appended to the manifest: %+v", mani.Items)
+	}
+	if len(mani.Items[1].Chapter.Texts) != 0 {
+		t.Fatalf("new chapters should start as empty containers, got %+v", mani.Items[1].Chapter.Texts)
 	}
 }
 

@@ -350,6 +350,62 @@ func TestTextPickerCtrlNThenConfirmAddsScene(t *testing.T) {
 	}
 }
 
+func TestTextPickerAltDownReordersScenes(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":3,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.files.selectName("chapitre-un")
+	m.enterTextPicker()
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
+	mm := updated.(model)
+	got, _, _ := readManifest(dir)
+	texts := got.Items[0].Chapter.Texts
+	if texts[0].File != "scene-deux.md" || texts[1].File != "scene-un.md" {
+		t.Fatalf("alt+down should reorder Texts, got %+v", texts)
+	}
+	if mm.textPickerSel != 1 {
+		t.Fatalf("selection should follow moved scene, got %d", mm.textPickerSel)
+	}
+}
+
+func TestSidebarAltDownReordersExpandedChapterScene(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "chapitre-un"), 0o755)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-un.md"), []byte("un"), 0o644)
+	os.WriteFile(filepath.Join(dir, "chapitre-un", "scene-deux.md"), []byte("deux"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":3,"title":"N","items":[`+
+			`{"chapter":{"folder":"chapitre-un","title":"Chapitre Un","texts":[`+
+			`{"file":"scene-un.md","title":"Scène Un"},{"file":"scene-deux.md","title":"Scène Deux"}]}}]}`), 0o644)
+	if err := saveFolded(dir, map[string]bool{"chapitre-un": true}, map[string]bool{"chapitre-un": true}); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	m.sidebarVisible = true
+	m.focus = focusSidebar
+	m.files.selectName("scene-un.md")
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
+	_ = updated.(model)
+	got, _, _ := readManifest(dir)
+	texts := got.Items[0].Chapter.Texts
+	if texts[0].File != "scene-deux.md" || texts[1].File != "scene-un.md" {
+		t.Fatalf("alt+down on a child scene should reorder Texts, got %+v", texts)
+	}
+}
+
 func TestCreateStandaloneSceneCreatesFileAndManifestEntry(t *testing.T) {
 	dir := t.TempDir()
 	if err := writeManifest(dir, manifest{

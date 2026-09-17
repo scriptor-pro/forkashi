@@ -6,18 +6,38 @@ import (
 	"testing"
 )
 
+func addSceneToChapterForMoveTest(t *testing.T, dir, folder, file, title string) {
+	t.Helper()
+	if err := atomicWrite(filepath.Join(dir, folder, file), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := findChapterByFolder(&m, folder)
+	if ch == nil {
+		t.Fatalf("chapter %q not found", folder)
+	}
+	ch.Texts = append(ch.Texts, manifestText{File: file, Title: title})
+	if err := writeManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestMoveDocumentChapterBetweenManuscripts moves a chapter's sole text file out of its
 // folder (the mover only ever offers loose filesystem files — reachable by drilling into the
 // chapter folder and picking its text directly) into another manuscript as a new chapter.
 func TestMoveDocumentChapterBetweenManuscripts(t *testing.T) {
 	root := t.TempDir()
 	a := filepath.Join(root, "a")
-	first, _ := createManuscript(a, "A", "Alpha") // "alpha/alpha.md"
+	first, _ := createManuscript(a, "A", "Alpha")
+	addSceneToChapterForMoveTest(t, a, first, "alpha.md", "Alpha")
 	b := filepath.Join(root, "b")
-	createManuscript(b, "B", "Beta") // "beta/beta.md" (distinct name → no collision)
+	createManuscript(b, "B", "Beta") // distinct chapter folder, no implicit text
 
-	srcDir := filepath.Join(a, filepath.Dir(first)) // a/alpha
-	file := filepath.Base(first)                    // alpha.md
+	srcDir := filepath.Join(a, first) // a/alpha
+	file := "alpha.md"
 
 	if err := moveDocument(srcDir, file, b, true); err != nil {
 		t.Fatal(err)
@@ -115,7 +135,8 @@ func TestMoveDocumentLooseIntoManuscriptAsChapterDedupesFolderCollision(t *testi
 	proj := filepath.Join(root, "novel")
 	// createManuscript's first chapter is slugified from "Deleted scene", i.e.
 	// folder "deleted-scene" — matching the slug the moved file will derive.
-	createManuscript(proj, "Novel", "Deleted scene")
+	first, _ := createManuscript(proj, "Novel", "Deleted scene")
+	addSceneToChapterForMoveTest(t, proj, first, "deleted-scene.md", "Deleted scene")
 	os.WriteFile(filepath.Join(root, "deleted-scene.md"), []byte("x"), 0o644)
 
 	if err := moveDocument(root, "deleted-scene.md", proj, true); err != nil {
@@ -169,12 +190,13 @@ func TestMoveDocumentLooseIntoManuscriptAsResource(t *testing.T) {
 func TestMoveDocumentChapterOutRemovesFromManifest(t *testing.T) {
 	root := t.TempDir()
 	proj := filepath.Join(root, "novel")
-	first, _ := createManuscript(proj, "Novel", "Untitled") // first == "untitled/untitled.md"
+	first, _ := createManuscript(proj, "Novel", "Untitled")
+	addSceneToChapterForMoveTest(t, proj, first, "untitled.md", "Untitled")
 	cat := filepath.Join(root, "cat")
 	os.MkdirAll(cat, 0o755)
 
-	srcDir := filepath.Join(proj, filepath.Dir(first)) // proj/untitled
-	file := filepath.Base(first)                       // untitled.md
+	srcDir := filepath.Join(proj, first) // proj/untitled
+	file := "untitled.md"
 	if err := moveDocument(srcDir, file, cat, false); err != nil {
 		t.Fatal(err)
 	}
