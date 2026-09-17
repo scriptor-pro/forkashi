@@ -322,7 +322,7 @@ func TestMoveExportSelectSceneWithinSameChapterReordersTextsOnly(t *testing.T) {
 	}
 }
 
-func TestMoveExportSelectSceneAcceptsAltArrowFallback(t *testing.T) {
+func TestMoveExportSelectSceneAcceptsAsciiFallbacks(t *testing.T) {
 	dir := seedExportSelectManuscript(t)
 	m := model{}
 	m.files.dir = dir
@@ -332,14 +332,21 @@ func TestMoveExportSelectSceneAcceptsAltArrowFallback(t *testing.T) {
 	m2 := mm.(model)
 	mm2, _ := m2.updateExportSelect(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
 	m3 := mm2.(model)
+	mm3, _ := m3.updateExportSelect(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m4 := mm3.(model)
+	mm4, _ := m4.updateExportSelect(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m5 := mm4.(model)
 
 	got, _, _ := readManifest(dir)
 	ch := findChapterByFolder(&got, "ch1")
 	if ch == nil || ch.Texts[0].File != "scene-2.md" || ch.Texts[1].File != "scene-1.md" {
-		t.Fatalf("alt+down fallback must reorder manifest Texts[], got %+v", ch)
+		t.Fatalf("s/t fallbacks must reorder manifest Texts[], got %+v", ch)
 	}
-	if m3.exportSelect.entries[m3.exportSelect.sel].title != "Opening" {
-		t.Fatalf("selection should follow moved scene, got %+v", m3.exportSelect.entries[m3.exportSelect.sel])
+	if m5.exportSelect.entries[m5.exportSelect.sel].title != "Opening" {
+		t.Fatalf("selection should follow moved scene, got %+v", m5.exportSelect.entries[m5.exportSelect.sel])
+	}
+	if m4.exportSelect.entries[m4.exportSelect.sel].title != "Opening" {
+		t.Fatalf("t fallback should also follow moved scene, got %+v", m4.exportSelect.entries[m4.exportSelect.sel])
 	}
 }
 

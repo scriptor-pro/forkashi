@@ -131,9 +131,9 @@ func (m model) updateExportSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case " ":
 		m.toggleExportSelectAtCursor()
 		m.saveExportSelectState()
-	case "shift+up", "alt+up", "K":
+	case "shift+up", "alt+up", "K", "T", "t":
 		m.moveExportSelectEntry(-1)
-	case "shift+down", "alt+down", "J":
+	case "shift+down", "alt+down", "J", "S", "s":
 		m.moveExportSelectEntry(1)
 	}
 	return m, nil
@@ -750,7 +750,7 @@ func exportSelectView(m model) string {
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, body))
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, lipgloss.NewStyle().Foreground(accent).Render(footer)))
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ naviguer · espace inclure/exclure · shift+↑↓ déplacer · esc retour · F1 aide")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ naviguer · espace inclure/exclure · t/s déplacer · shift/alt+↑↓ aussi · esc retour · F1 aide")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
