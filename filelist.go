@@ -225,7 +225,7 @@ func (f filelist) View(editRow int, editField string) string {
 			case e.isChildScene:
 				content = "   " + renderIcon(g, true) + f.childSceneTitle(e)
 			default:
-				content = " " + renderIcon(g, true) + e.name
+				content = " " + renderIcon(g, true) + e.name + f.sceneResourceSuffix(e)
 			}
 			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(content, f.width, "…")))
 		case section:
@@ -240,11 +240,12 @@ func (f filelist) View(editRow int, editField string) string {
 		default:
 			ext := filepath.Ext(e.name)
 			icon := " " + renderIcon(g, false)
-			if ext != "" && lipgloss.Width(icon+e.name) <= f.width {
+			suffix := f.sceneResourceSuffix(e)
+			if ext != "" && lipgloss.Width(icon+e.name+suffix) <= f.width {
 				stem := icon + strings.TrimSuffix(e.name, ext)
-				b.WriteString(stem + lipgloss.NewStyle().Foreground(subtle).Render(ext))
+				b.WriteString(stem + lipgloss.NewStyle().Foreground(subtle).Render(ext+suffix))
 			} else {
-				b.WriteString(ansi.Truncate(icon+e.name, f.width, "…"))
+				b.WriteString(ansi.Truncate(icon+e.name+suffix, f.width, "…"))
 			}
 		}
 		if i < end-1 {
@@ -252,6 +253,28 @@ func (f filelist) View(editRow int, editField string) string {
 		}
 	}
 	return b.String()
+}
+
+// sceneResourceSuffix returns " S" for a root-level standalone scene, " R" for a root-level
+// Resource (an unlisted .md file), or "" otherwise — a plain-Category file (no manifest.json)
+// or any entry whose type is already visually unambiguous (a chapter, a folder, a scene
+// nested under its chapter). The distinction only exists inside a manifest manuscript (a
+// legacy numbered-file manuscript has no scene/Resource notion either). Reads f.view — already
+// resolved once per SetDir — rather than re-resolving the manuscript per row, keeping View() at
+// its required O(visible) cost.
+func (f filelist) sceneResourceSuffix(e fileEntry) string {
+	if f.view.source != sourceManifest {
+		return ""
+	}
+	if e.isScene {
+		return " S"
+	}
+	for _, l := range f.view.loose {
+		if l.name == e.name {
+			return " R"
+		}
+	}
+	return ""
 }
 
 // isChapterEntry reports whether e (an entry from f.entries, as built by SetDir) represents a

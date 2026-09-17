@@ -1260,3 +1260,60 @@ func TestSelectedEntryOutOfBoundsReturnsFalse(t *testing.T) {
 		t.Fatal("selectedEntry() ok = true for an out-of-bounds selection, want false")
 	}
 }
+
+// TestFilelistViewMarksStandaloneSceneWithS proves a root-level standalone scene in a
+// manuscript gets a trailing " S" suffix in View() — distinguishing it from a Resource, since
+// both otherwise render identically (a root .md file with the generic text icon).
+func TestFilelistViewMarksStandaloneSceneWithS(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"title":"Aparté","scene":true,"texts":[{"file":"aparte.md","title":"Aparté"}]}}
+	]}`)
+	f := newFilelist()
+	f.width, f.height = 40, 10
+	f.SetDir(dir)
+
+	view := f.View(-1, "")
+	if !strings.Contains(view, "aparte.md S") {
+		t.Fatalf("standalone scene row must be suffixed with %q, view=%q", " S", view)
+	}
+}
+
+// TestFilelistViewMarksResourceWithR proves a root-level Resource (an unlisted .md file) gets
+// a trailing " R" suffix in View() — the counterpart to the standalone-scene " S" suffix.
+func TestFilelistViewMarksResourceWithR(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-1.md"), []byte("x"), 0o644)
+	writeManifestRaw(t, dir, `{"schemaVersion":3,"title":"N","items":[
+		{"chapter":{"folder":"ch1","title":"Chapitre Un","texts":[{"file":"scene-1.md","title":"Scène"}]}}
+	]}`)
+	f := newFilelist()
+	f.width, f.height = 40, 10
+	f.SetDir(dir)
+
+	view := f.View(-1, "")
+	if !strings.Contains(view, "notes.md R") {
+		t.Fatalf("Resource row must be suffixed with %q, view=%q", " R", view)
+	}
+}
+
+// TestFilelistViewNoSuffixOutsideManuscript proves a plain Category folder (no manifest.json)
+// gets neither suffix — the scene/Resource distinction only exists inside a manuscript.
+func TestFilelistViewNoSuffixOutsideManuscript(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("x"), 0o644)
+	f := newFilelist()
+	f.width, f.height = 40, 10
+	f.SetDir(dir)
+
+	view := f.View(-1, "")
+	if strings.Contains(view, "notes.md S") || strings.Contains(view, "notes.md R") {
+		t.Fatalf("a plain Category file must get no S/R suffix, view=%q", view)
+	}
+}
