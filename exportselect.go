@@ -265,10 +265,19 @@ func exportSelectOrderSignature(entries []exportSelectEntry) string {
 func (m *model) moveTopLevelEntry(i, dir int) {
 	entries := m.exportSelect.entries
 	target := i + dir
-	if target < 0 || target >= len(entries) || entries[target].isHeader || entries[target].indent {
+	if target < 0 || target >= len(entries) {
 		return
 	}
 	movingIsScene := !entries[i].isHeader && !entries[i].indent && isStandaloneSceneFile(m.files.dir, entries[i].file)
+	if movingIsScene && (entries[target].isHeader || entries[target].indent) {
+		if folder := m.chapterFolderForTopLevelBoundary(target); folder != "" {
+			m.moveStandaloneSceneIntoChapter(entries[i].file, folder)
+		}
+		return
+	}
+	if entries[target].isHeader || entries[target].indent {
+		return
+	}
 	targetIsScene := !entries[target].isHeader && !entries[target].indent && isStandaloneSceneFile(m.files.dir, entries[target].file)
 
 	if movingIsScene && targetIsScene {
@@ -370,6 +379,70 @@ func (m *model) convertResourceToStandaloneScene(file string) {
 		return
 	}
 	m.reloadExportSelectAfterMove(followFile(file))
+}
+
+// moveStandaloneSceneIntoChapter converts a root-level Scene:true item into a scene inside
+// dstFolder: move file root → chapter folder, drop the Scene:true manifest item, append its
+// manifestText to the destination chapter, and migrate export-selection sidecar state.
+func (m *model) moveStandaloneSceneIntoChapter(file, dstFolder string) {
+	base := filepath.Base(file)
+	src := filepath.Join(m.files.dir, base)
+	dst := filepath.Join(m.files.dir, dstFolder, base)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "un fichier nommé " + base + " existe déjà dans le chapitre de destination"
+		return
+	}
+	if err := safeMove(src, dst); err != nil {
+		m.status = "échec du déplacement : " + err.Error()
+		return
+	}
+
+	mani, present, err := readManifest(m.files.dir)
+	if err != nil || !present {
+		m.status = "scène déplacée mais le manifeste est introuvable ou illisible"
+		return
+	}
+	var moved manifestText
+	found := false
+	var kept []manifestItem
+	for _, it := range mani.Items {
+		if it.Chapter != nil && it.Chapter.Scene && len(it.Chapter.Texts) > 0 && it.Chapter.Texts[0].File == base {
+			moved = it.Chapter.Texts[0]
+			found = true
+			continue
+		}
+		kept = append(kept, it)
+	}
+	if !found {
+		m.status = "scène déplacée mais introuvable dans le manifeste"
+		return
+	}
+	mani.Items = kept
+	dstCh := findChapterByFolder(&mani, dstFolder)
+	if dstCh == nil {
+		m.status = "scène déplacée mais le chapitre de destination est introuvable"
+		return
+	}
+	dstCh.Texts = append(dstCh.Texts, moved)
+	if err := writeManifest(m.files.dir, mani); err != nil {
+		m.status = "échec de la mise à jour du manifeste après déplacement : " + err.Error()
+		return
+	}
+	newKey := filepath.Join(dstFolder, base)
+	excluded := loadExportSelection(m.files.dir)
+	if excluded[base] {
+		delete(excluded, base)
+		excluded[newKey] = true
+		known := map[string]bool{newKey: true}
+		for k := range excluded {
+			known[k] = true
+		}
+		if err := saveExportSelection(m.files.dir, excluded, known); err != nil {
+			m.status = "scène déplacée mais échec de la migration de la sélection d'export : " + err.Error()
+			return
+		}
+	}
+	m.reloadExportSelectAfterMove(followFile(newKey))
 }
 
 // convertChapterSceneToStandalone drops file from its parent chapter's Texts[] (identified by
@@ -629,6 +702,26 @@ func (m *model) moveSceneBetweenChapters(srcFolder, file, dstFolder string) {
 		}
 	}
 	m.reloadExportSelectAfterMove(followFile(newKey))
+}
+
+// chapterFolderForTopLevelBoundary resolves the chapter folder a top-level (standalone
+// scene/Resource) row is about to cross into: target may itself be a chapter header, or one
+// of its indented child scenes — either way this walks up to the header and delegates to
+// chapterFolderForHeader.
+func (m model) chapterFolderForTopLevelBoundary(target int) string {
+	if target < 0 || target >= len(m.exportSelect.entries) {
+		return ""
+	}
+	headerIdx := target
+	if !m.exportSelect.entries[target].isHeader {
+		for headerIdx >= 0 && !m.exportSelect.entries[headerIdx].isHeader {
+			headerIdx--
+		}
+	}
+	if headerIdx < 0 {
+		return ""
+	}
+	return m.chapterFolderForHeader(headerIdx)
 }
 
 // chapterFolderForHeader re-resolves the manuscript to find the folder of the chapter whose

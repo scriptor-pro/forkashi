@@ -755,6 +755,57 @@ func TestMoveExportSelectResourceToStandaloneSceneSelFollowsEntry(t *testing.T) 
 	}
 }
 
+func TestMoveExportSelectStandaloneSceneIntoChapter(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
+	os.WriteFile(filepath.Join(dir, "ch1", "scene-1.md"), []byte("chapter scene"), 0o644)
+	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("standalone scene"), 0o644)
+	if err := writeManifest(dir, manifest{
+		Title: "N",
+		Items: []manifestItem{
+			{Chapter: &manifestChapter{Folder: "ch1", Title: "Chapter One", Texts: []manifestText{{File: "scene-1.md", Title: "Opening"}}}},
+			{Chapter: &manifestChapter{Title: "Aparté", Scene: true, Texts: []manifestText{{File: "aparte.md", Title: "Aparté"}}}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveExportSelection(dir, map[string]bool{"aparte.md": true}, map[string]bool{"aparte.md": true}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := model{}
+	m.files.dir = dir
+	m.enterExportSelect()
+	m.exportSelect.sel = 2 // standalone scene after the chapter block
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m2 := mm.(model)
+
+	if _, err := os.Stat(filepath.Join(dir, "aparte.md")); !os.IsNotExist(err) {
+		t.Fatal("standalone file must move out of the manuscript root")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ch1", "aparte.md")); err != nil {
+		t.Fatalf("standalone file should move into ch1: %v", err)
+	}
+	got, _, err := readManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSceneByFile(&got, "aparte.md") != nil {
+		t.Fatal("aparte.md must no longer be a standalone Scene item")
+	}
+	ch := findChapterByFolder(&got, "ch1")
+	if ch == nil || len(ch.Texts) != 2 || ch.Texts[1].File != "aparte.md" {
+		t.Fatalf("ch1 should append moved standalone scene, got %+v", ch)
+	}
+	if m2.exportSelect.entries[m2.exportSelect.sel].file != filepath.Join("ch1", "aparte.md") {
+		t.Fatalf("selection should follow moved scene into chapter, got %+v", m2.exportSelect.entries[m2.exportSelect.sel])
+	}
+	excluded := loadExportSelection(dir)
+	if excluded["aparte.md"] || !excluded[filepath.Join("ch1", "aparte.md")] {
+		t.Fatalf("export selection key should migrate to chapter path, got %+v", excluded)
+	}
+}
+
 func TestMoveExportSelectStandaloneSceneBecomesResourceCrossingBoundary(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "aparte.md"), []byte("x"), 0o644)
