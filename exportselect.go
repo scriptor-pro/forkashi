@@ -132,9 +132,9 @@ func (m model) updateExportSelect(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toggleExportSelectAtCursor()
 		m.saveExportSelectState()
 	case "shift+up", "alt+up", "K", "T", "t":
-		m.moveExportSelectEntry(-1)
+		m.moveExportSelectEntryWithFeedback(-1)
 	case "shift+down", "alt+down", "J", "S", "s":
-		m.moveExportSelectEntry(1)
+		m.moveExportSelectEntryWithFeedback(1)
 	}
 	return m, nil
 }
@@ -219,6 +219,40 @@ func (m *model) moveExportSelectEntry(dir int) {
 		return
 	}
 	m.moveTopLevelEntry(i, dir)
+}
+
+func (m *model) moveExportSelectEntryWithFeedback(dir int) {
+	before := exportSelectOrderSignature(m.exportSelect.entries)
+	prevStatus := m.status
+	m.moveExportSelectEntry(dir)
+	after := exportSelectOrderSignature(m.exportSelect.entries)
+	if before == after {
+		if m.status == prevStatus {
+			m.status = "déplacement impossible ici"
+		}
+		return
+	}
+	if m.status == prevStatus {
+		m.status = "entrée déplacée"
+	}
+}
+
+func exportSelectOrderSignature(entries []exportSelectEntry) string {
+	var b strings.Builder
+	for _, e := range entries {
+		if e.isHeader {
+			b.WriteString("H:")
+			b.WriteString(e.title)
+		} else {
+			b.WriteString("F:")
+			b.WriteString(e.file)
+		}
+		if e.indent {
+			b.WriteString(":i")
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // moveTopLevelEntry handles a standalone scene or a Resource crossing into the OTHER kind
@@ -747,10 +781,14 @@ func exportSelectView(m model) string {
 	words, chars := exportSelectTotals(a.entries)
 	footer := commafy(words) + " mots · " + commafy(chars) + " caractères (espaces comprises) inclus dans l'export"
 
+	status := m.status
+	if status == "" {
+		status = "↑↓ naviguer · espace inclure/exclure · t/s déplacer · shift/alt+↑↓ aussi · esc retour · F1 aide"
+	}
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, body))
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, lipgloss.NewStyle().Foreground(accent).Render(footer)))
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ naviguer · espace inclure/exclure · t/s déplacer · shift/alt+↑↓ aussi · esc retour · F1 aide")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(status)
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

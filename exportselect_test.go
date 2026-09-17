@@ -350,6 +350,22 @@ func TestMoveExportSelectSceneAcceptsAsciiFallbacks(t *testing.T) {
 	}
 }
 
+func TestMoveExportSelectAsciiFallbackReportsBlockedMove(t *testing.T) {
+	dir := seedExportSelectManuscript(t)
+	m := model{width: 80, height: 24}
+	m.files.dir = dir
+	m.enterExportSelect()
+
+	mm, _ := m.updateExportSelect(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m2 := mm.(model)
+	if m2.status != "déplacement impossible ici" {
+		t.Fatalf("blocked t move should be visible, status=%q", m2.status)
+	}
+	if !strings.Contains(exportSelectView(m2), "déplacement impossible ici") {
+		t.Fatalf("blocked move status should render in export screen")
+	}
+}
+
 func TestMoveExportSelectChapterHeaderMovesWholeBlock(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "ch1"), 0o755)
